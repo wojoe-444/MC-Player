@@ -79,12 +79,14 @@ module.exports = function makeSkills({ bot, api, log }) {
     for (const [dx, dy, dz] of SIX) { const b = S.block(v(p.x + dx, p.y + dy, p.z + dz)); if (b && b.boundingBox === 'empty' && !S.isLiquid(b)) return true }
     return false
   }
+  // water a tunnel must not open into: the liquid, bubble columns, underwater plants (always water-filled) and any waterlogged block
+  S.isWaterish = (b) => !!b && (/^(water|bubble_column|kelp|kelp_plant|seagrass|tall_seagrass)$/.test(b.name) || (typeof b.getProperties === 'function' && b.getProperties().waterlogged === true))
   S.hazardNear = (p, r = 1) => { // lava (or water for tunnels) next to a cell
     let lava = false, water = false, sculk = false
     for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) for (let dz = -r; dz <= r; dz++) {
       const b = S.block(v(p.x + dx, p.y + dy, p.z + dz)); if (!b) continue
       if (b.name === 'lava') lava = true
-      else if (b.name === 'water') water = true
+      else if (S.isWaterish(b)) water = true
       else if (/^sculk|^reinforced_deepslate/.test(b.name)) sculk = true
     }
     return { lava, water, sculk }
@@ -675,11 +677,11 @@ module.exports = function makeSkills({ bot, api, log }) {
     if (!b) return 'fail'
     if (S.passable(b)) return 'ok'
     if (b.name === 'lava') return 'lava'
-    if (b.name === 'water') return 'water'
+    if (S.isWaterish(b)) return 'water'
     const h = S.hazardNear(p, 1)
     if (h.lava) return 'lava'
     // water comes in through faces only: a diagonal neighbour stays put when this cell opens
-    if (h.water && SIX.some(([dx, dy, dz]) => { const n = S.block(v(p.x + dx, p.y + dy, p.z + dz)); return n && (n.name === 'water' || n.name === 'bubble_column' || (n.getProperties && n.getProperties().waterlogged === true)) })) return 'water'
+    if (h.water && SIX.some(([dx, dy, dz]) => S.isWaterish(S.block(v(p.x + dx, p.y + dy, p.z + dz))))) return 'water'
     if (!(await S.approach(b, { dig: false, tries: 2 }))) return 'fail'
     if (!(await S.digBlock(b, { force: !CANT_BREAK.test(b.name) }))) return 'fail'
     // a gravel/sand column above refills the cell as it falls: keep digging until the cell stays open (walking into falling gravel suffocated the bot 4 times)
