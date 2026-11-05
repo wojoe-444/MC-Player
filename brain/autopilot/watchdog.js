@@ -330,7 +330,8 @@ module.exports = function watchdog(ap, api, log) {
       try { scheduler.cancel('autopilot', 'cave-reflex') } catch {}
       if (first || (t !== 'safety' && t !== 'wd-retreat' && now - (W.lastRetreatAt || 0) > 15000)) {
         W.lastRetreatAt = now; W.reflexes = (W.reflexes || 0) + 1
-        const SH = new (require('vec3').Vec3)(-1051, 151, 2320)
+        // retreat to the bot's own home bed (the fixed -1051,151,2320 was a shelter in an earlier world: the walk went nowhere)
+        const hm = ap.G && ap.G.state && ap.G.state.home, SH = hm ? new (require('vec3').Vec3)(hm[0], hm[1], hm[2]) : new (require('vec3').Vec3)(-1051, 151, 2320)
         const filler = bot.inventory.items().filter(i => FILLER_RE.test(i.name)).reduce((s, i) => s + i.count, 0)
         const msg = `cave reflex #${W.reflexes}: ${seen.map(e => e.name).slice(0, 3).join('+') || 'ranged hit'} in sight underground at ${bot.entity.position.floored()} (hp ${Math.round(bot.health)}, filler ${filler}); task ${t} cancelled, retreating to shelter`
         log('REFLEX', msg)
