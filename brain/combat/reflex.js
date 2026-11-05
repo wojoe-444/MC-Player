@@ -51,7 +51,7 @@ function create(bot, overrides = {}, hooks = {}) {
   const items = () => bot.inventory.items()
   const find = (re) => items().find(i => re.test(i.name))
   // another layer is placing a block right now (nav pillar): switching to the sword made it try to place the sword (20:25)
-  const holdSlot = (it) => { if (!it) return false; if (bot._reflexes && bot._reflexes.heldByOther('hands', 'combat')) return false; if ((bot._placingUntil || 0) > Date.now() && /_sword$|_axe$/.test(it.name)) return false; const s = it.slot - 36; if (s >= 0 && s < 9) { if (bot.quickBarSlot !== s) bot.setQuickBarSlot(s); return true } return false }
+  const holdSlot = (it) => { if (!it) return false; { const h = bot._reflexes && bot._reflexes.heldByOther('hands', 'combat'); if (h && (h !== 'placer' || /_sword$|_axe$/.test(it.name))) return false }   /* safehand holds the slot: nothing; a placing job: no weapon swap */ if (!bot._reflexes && (bot._placingUntil || 0) > Date.now() && /_sword$|_axe$/.test(it.name)) return false; const s = it.slot - 36; if (s >= 0 && s < 9) { if (bot.quickBarSlot !== s) bot.setQuickBarSlot(s); return true } return false }
   const sword = () => find(/_sword$/)
   const bowItem = () => find(/^bow$/)
   const arrows = () => items().filter(i => /arrow$/.test(i.name)).reduce((s, i) => s + i.count, 0)

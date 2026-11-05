@@ -8,6 +8,7 @@
 // Fences and torches are established blocks (plan.js), so neither the bot nor the pathfinder breaks them; zone.json "allow" opens the box
 // for logs, leaves and the bot's own pillar block only. Tops out of reach: a one-block pillar in the stump's cell, taken down afterwards.
 const fs = require('fs')
+const { markPlacing } = require('../reflexes')
 
 module.exports = function site(G, S, M, api, log) {
   const bot = S.bot, { goals } = S, v = S.v
@@ -68,7 +69,7 @@ module.exports = function site(G, S, M, api, log) {
     await S.goto(new goals.GoalBlock(at.x, at.y, at.z), { dig: false, ms: 15000 })
     const me = S.flo(bot.entity.position); if (me.x !== at.x || me.z !== at.z) return null
     const ref = S.block(me.offset(0, -1, 0)); if (!ref || ref.boundingBox !== 'block') return null
-    await bot.equip(item, 'hand').catch(() => {}); bot._placingUntil = Date.now() + 4000
+    await bot.equip(item, 'hand').catch(() => {}); markPlacing(bot, 4000)
     await bot.look(bot.entity.yaw, -Math.PI / 2, true)
     bot.setControlState('jump', true)
     let placed = false
