@@ -51,4 +51,4 @@ module.exports = function register(api) {
     status: () => ({ stalls, worst, slow })
   }
 }
-module.exports.meta = { name: 'lag', version: 1 }
+module.exports.meta = require('./meta.json')

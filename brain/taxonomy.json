@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "note": "Single source for the vocabulary in brain/INTERFACE.md section 0. Read by brain/meta.js, test/taxonomy.test.js and dashboard/server.js. Descriptions only: nothing here changes behavior.",
+  "kinds": {
+    "reflex":    { "order": 1, "lane": "hooks (physicsTick, health, events); may take leases from brain/reflexes.js", "desc": "Automatic protection that acts in a tick or a few seconds, whatever the bot is doing: combat, drowning, safety retreat." },
+    "observer":  { "order": 2, "lane": "events only; never moves the bot or touches the world", "desc": "Watches and records: lag, hurt by cause, survival lives, standing views, the dashboard." },
+    "interface": { "order": 3, "lane": "chat routing (onChat, commands, fallback)", "desc": "Turns Walter's words into commands: exact commands, fuzzy match, decision router." },
+    "planner":   { "order": 4, "lane": "one scheduler task (autopilot) or a chat-lane session (manual)", "desc": "Chooses what to do next: the think-first autopilot, the fast-tier director, the manual driver." },
+    "job":       { "order": 5, "lane": "scheduler task or routine", "desc": "A bounded piece of work with a start and an end: mine, excavate, build, farm, light, clear a box." },
+    "service":   { "order": 6, "lane": "called by others through api.<name>", "desc": "Capability other modules use: navigation, crafting and finding, community plugins." },
+    "policy":    { "order": 7, "lane": "config and gates", "desc": "Decides what is allowed or on: the task or autonomous stance." }
+  },
+  "ladder": [
+    { "rung": "primitive", "desc": "One bot action with a result: dig a block, goto, place, equip, open a chest." },
+    { "rung": "skill",     "desc": "A named, reusable sequence of primitives the planner can pick from its menu (brain/autopilot/skills.js)." },
+    { "rung": "job",       "desc": "A scheduler task that owns the bot for a while and can be paused and resumed (mining, excavation, building)." },
+    { "rung": "goal",      "desc": "A standing aim with a success test that picks jobs and skills (brain/autopilot/goals.js)." },
+    { "rung": "planner",   "desc": "The chooser above goals: the think-first model, or the routine step list as fallback." }
+  ],
+  "claims": {
+    "body":           "walk/swim/jump controls and the pathfinder goal",
+    "melee":          "the right to swing at mobs (exactly one melee holder at a time)",
+    "hands":          "the held slot and block placing",
+    "danger":         "ownership of the current danger response (seal-in, heal, re-plan)",
+    "autopilot-gate": "whether the autopilot may play its own goals (set by the stance policy)"
+  }
+}

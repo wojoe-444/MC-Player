@@ -130,5 +130,5 @@ function register(api) {
 }
 
 module.exports = register
-module.exports.meta = { name: 'crafting', version: 1 }
+module.exports.meta = require('./meta.json')
 module.exports.normalize = normalize

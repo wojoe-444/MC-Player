@@ -69,5 +69,5 @@ function create(api, opts = {}) {
 
 module.exports = function register(api) { return create(api) }
 module.exports.create = create
-module.exports.meta = { name: 'dashboard', version: 1 }
+module.exports.meta = require('./meta.json')
 module.exports.DEFAULT_PORT = DEFAULT_PORT

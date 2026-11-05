@@ -18,6 +18,9 @@ const makeFurnace = require('./furnace')
 const util = require('./util')
 const los = require('./los')
 const makeBagRoom = require('./bagroom')
+const moduleMeta = require('./meta')
+const { createProfile } = require('./profile')
+const { createReflexes } = require('./reflexes')
 
 const MODULES = ['lag', 'safety', 'chat', 'pilot', 'router', 'excavation', 'nav', 'treefarm', 'routines', 'crafting', 'build', 'lighting', 'mining', 'villagers', 'dashboard', 'autopilot', 'combat', 'survival', 'mode', 'clearbox', 'breath', 'senses', 'plugins', 'hurt']
 const NORMALIZE_FILLER = /\b(hey|yo|claude|bot|ozogo444|please|pls|plz|can you|could you|would you|will you|can u|go ahead and|just|now|for me)\b/g
@@ -40,6 +43,11 @@ module.exports = function attach(deps) {
     try { fs.appendFileSync(logFile, line + '\n') } catch {}
   }
 
+  // who this bot is (name, role, stance, planner on/off, disabled modules): bots/<bot>/profile.json, with the older state files as fallback
+  const profile = deps.profile || createProfile({ stateDir, botName: bot.username || null, now })
+  // reflexes (breath, combat, safehand, night guard, cave) share bot resources through leases here; code that only has the bot reads bot._reflexes
+  const reflexes = deps.reflexes || createReflexes({ now, log: (m) => log('REFLEX', m) })
+  bot._reflexes = reflexes
   const scheduler = new Scheduler({ stateFile: statePath('scheduler.json'), focusFile: statePath('focus.json'), idleAfterMs: deps.idleAfterMs ?? 15000, safetyCooldownMs: deps.safetyCooldownMs ?? 20000, lingerMs: deps.lingerMs ?? 0, now })
   scheduler.on('log', (m) => log('SCHED', m))
   let lastSafetyAt = 0
@@ -55,7 +63,7 @@ module.exports = function attach(deps) {
   })
   scheduler.on('failed', (t, e) => { log('TASK_FAILED', `${t.name}: ${e && e.stack || e}`); events.emit('task', { event: 'failed', task: t }) })
 
-  const safehand = makeSafehand({ bot, log: (m) => log('SAFEHAND', m) })
+  const safehand = makeSafehand({ bot, log: (m) => log('SAFEHAND', m), reflexes })
   // the nav module (when loaded) finds a real stand cell with a clear view (the S1 input chest has none within GoalNear radius 3)
   const gotoNear = (o) => (api.nav && api.nav.gotoNear ? api.nav.gotoNear(o) : util.gotoNear({ bot, goals, tryGoto, stop: stopNav, ...o }))
   // Walter's survival-legit rule: a clear line from the eye before opening/clicking/hitting anything. Shared by every module.
@@ -372,7 +380,7 @@ module.exports = function attach(deps) {
   scheduler.addPreStart({ applies: (t) => BAG_TASKS.has(t.name) && !t.runs, run: (ctx, t) => bagroom.makeRoom(ctx, t) })
   // and whenever the bag drops below 6 free slots (checked every 20 s), not only when a job starts: priority just above mining/excavation, so it runs at the next gap
   scheduler.routine({
-    name: 'bag-room', priority: PRIORITY.EXCAVATE + 2, defaultEnabled: true, intervalMs: 20000,
+    name: 'bag-room', priority: PRIORITY.BAGROOM, defaultEnabled: true, intervalMs: 20000,
     due: () => !!(bot.entity && bot.inventory && bot.inventory.emptySlotCount() < 6 && !bot.isSleeping),
     make: () => ({ name: 'bag-room', onUserStop: 'cancel', run: (ctx) => bagroom.makeRoom(ctx, { name: 'bag-room' }) })
   })
@@ -382,7 +390,7 @@ module.exports = function attach(deps) {
 
   // ---------- modules ----------
   const handles = []
-  const api = { bagroom: { makeRoom: (ctx, t) => bagroom.makeRoom(ctx, t), plan: () => bagroom.plan() }, bot, PRIORITY, scheduler, say, goals, tryGoto, stopNav, safehand, gotoNear, canSee, ensureLineOfSight, depositSmeltables, outing, outingActions, smeltablesPlan: () => furnace.smeltablesPlan(), ownerName: deps.ownerName || 'OGWO', dir, statePath, log, now, commands, events,
+  const api = { profile, reflexes, bagroom: { makeRoom: (ctx, t) => bagroom.makeRoom(ctx, t), plan: () => bagroom.plan() }, bot, PRIORITY, scheduler, say, goals, tryGoto, stopNav, safehand, gotoNear, canSee, ensureLineOfSight, depositSmeltables, outing, outingActions, smeltablesPlan: () => furnace.smeltablesPlan(), ownerName: deps.ownerName || 'OGWO', dir, statePath, log, now, commands, events,
     status: { all: () => statusAll() } }
   // remove the built-in commands a module has taken over (only ones registered before the module loaded, i.e. built-ins)
   let builtinN = 0
@@ -391,17 +399,18 @@ module.exports = function attach(deps) {
     builtinN = commandList.length
     const entries = deps.moduleEntries || MODULES.map(n => ({ name: n, path: path.join(__dirname, n, 'index.js') }))
     // modules can be switched off without code changes: env BRAIN_DISABLE=chat,nav or brain/state/disabled-modules.json ["chat"]
-    let off = String(process.env.BRAIN_DISABLE || '').split(',').map(x => x.trim()).filter(Boolean)
-    try { off = off.concat(JSON.parse(fs.readFileSync(statePath('disabled-modules.json'), 'utf8'))) } catch {}
+    // (profile.json "disabledModules" first, then the old disabled-modules.json; profile.js merges in BRAIN_DISABLE)
+    const off = profile.get().disabledModules
     for (const { name, path: p } of entries) {
       if (off.includes(name)) { log('MODULE', `${name} disabled`); continue }
       if (!fs.existsSync(p)) continue
       try {
         loadingModule = name
-        const h = require(p)(api)
+        const mod = require(p)
+        const h = mod(api)
         loadingModule = null
         if (h) {
-          h.name = h.name || name; h._folder = name; handles.push(h); log('MODULE', `${h.name} registered`)
+          h.name = h.name || name; h._folder = name; h.meta = mod.meta || moduleMeta.readMeta(__dirname, name); handles.push(h); log('MODULE', `${h.name} registered`)
           if (!h.provides && (name === 'excavation' || name === 'nav')) h.provides = [name]   // the folder name implies what it replaces
           // a module that provides excavation replaces the built-in adapter commands (they would otherwise match first)
           if (h.provides && h.provides.includes('excavation')) dropBuiltin(c => /^excavate-/.test(c.name))
@@ -457,10 +466,12 @@ module.exports = function attach(deps) {
     const p = bot.entity ? bot.entity.position : null
     const modules = {}
     for (const h of handles) { try { if (h.status) modules[h.name] = h.status() } catch (e) { modules[h.name] = { error: e.message } } }
+    const meta = {}
+    for (const h of handles) if (h.meta) meta[h.name] = moduleMeta.brief(h.meta)
     return {
       at: new Date(now()).toISOString(),
       bot: p ? { x: Math.round(p.x), y: Math.round(p.y), z: Math.round(p.z), health: bot.health, food: bot.food, dimension: bot.game && bot.game.dimension, timeOfDay: bot.time && bot.time.timeOfDay, held: bot.heldItem ? bot.heldItem.name : null, sleeping: !!bot.isSleeping } : null,
-      scheduler: scheduler.status(), furnace: furnace.snapshot(), modules, chatTail: chatRing.length ? chatRing.slice(-20) : tail('chat.log', 20), logTail: ring.slice(-20), unhandledTail: tail('unhandled.log', 5)
+      scheduler: scheduler.status(), furnace: furnace.snapshot(), modules, moduleMeta: meta, profile: profile.get(), reflexes: reflexes.status(), chatTail: chatRing.length ? chatRing.slice(-20) : tail('chat.log', 20), logTail: ring.slice(-20), unhandledTail: tail('unhandled.log', 5)
     }
   }
 
@@ -478,6 +489,18 @@ module.exports = function attach(deps) {
   }
   let newsTimer = null, focusTimer = null
 
+  // brain/state/reflexes.json: who holds which lease, for the dashboard (a separate process). Written when it changes, at most every 2 s.
+  let reflexSnap = ''
+  const reflexTimer = setInterval(() => {
+    try {
+      const s = reflexes.status(), key = JSON.stringify(s.leases.map(l => [l.resource, l.holder])) + s.preemptions + s.reflexes.map(r => r.grants + ':' + r.refusals).join()
+      if (key === reflexSnap) return
+      reflexSnap = key
+      fs.writeFileSync(statePath('reflexes.json'), JSON.stringify({ at: new Date(now()).toISOString(), ...s }))
+    } catch {}
+  }, 2000)
+  if (reflexTimer.unref) reflexTimer.unref()
+
   // ---------- hot reload: new module code goes live in the running process, no rejoin (Walter 2026-11-02) ----------
   // Write module folder names (or "all") into brain/state/reload.txt; the result lands in brain/state/reload-out.txt. Also bot._brain.reload(name).
   // Only the core (brain/index.js, scheduler.js, util.js, safehand.js, join.js) still needs a restart.
@@ -490,10 +513,11 @@ module.exports = function attach(deps) {
     for (const k of Object.keys(require.cache)) if (k.startsWith(dir + path.sep)) delete require.cache[k]
     try {
       loadingModule = name
-      const h = require(p)(api)
+      const mod = require(p)
+      const h = mod(api)
       loadingModule = null
       if (!h) return `${name}: loaded (no handle)`
-      h.name = h.name || name; h._folder = name; handles.push(h)
+      h.name = h.name || name; h._folder = name; h.meta = mod.meta || moduleMeta.readMeta(__dirname, name); handles.push(h)
       try { h.start && h.start() } catch (e) { log('RELOAD', `${name}.start: ${e.message}`) }
       log('RELOAD', `${name} reloaded`)
       return `${name}: reloaded`
@@ -515,16 +539,27 @@ module.exports = function attach(deps) {
   }, 2000)
   if (reloadPoll.unref) reloadPoll.unref()
 
+  // module meta.json: a module whose "requires" is not loaded (disabled or failed) is logged once; never fatal
+  function checkRequires() {
+    const have = new Set(handles.map(h => h._folder || h.name))
+    for (const h of handles) {
+      const bad = moduleMeta.validate(h.meta)
+      if (bad.length) log('MODULE_META', `${h.name}: ${bad.join('; ')}`)
+      for (const r of (h.meta && h.meta.requires) || []) if (!have.has(r)) log('MODULE_META', `${h.name} requires ${r}, which is not loaded`)
+    }
+  }
+
   function start() {
     newsTimer = setTimeout(announceWhatsNew, 8000); if (newsTimer.unref) newsTimer.unref()
     focusTimer = setTimeout(requeueFocused, 12000); if (focusTimer.unref) focusTimer.unref()
     safehand.start()
     loadModules()
     for (const h of handles) { try { h.start && h.start() } catch (e) { log('BRAIN_MODULE_ERROR', `${h.name}.start: ${e.stack || e.message}`) } }
+    checkRequires()
     scheduler.start()
     log('BRAIN', `started; modules: ${handles.map(h => h.name).join(', ') || 'none'}; routines: ${scheduler.status().routines.map(r => r.name + (r.enabled ? '+' : '-')).join(' ')}`)
   }
-  function stop() { clearTimeout(newsTimer); clearTimeout(focusTimer); for (const h of handles) { try { h.stop && h.stop() } catch {} } clearInterval(eatGate); bot.removeListener('messagestr', onMsg); bot.noAutoEat = false; scheduler.stop(); safehand.stop() }
+  function stop() { clearTimeout(newsTimer); clearTimeout(focusTimer); for (const h of handles) { try { h.stop && h.stop() } catch {} } clearInterval(eatGate); clearInterval(reflexTimer); bot._reflexes = null; bot.removeListener('messagestr', onMsg); bot.noAutoEat = false; scheduler.stop(); safehand.stop() }
 
   start()
   return { route, navigate, userStop: () => scheduler.userStop(), scheduler, safehand, furnace, commands, api, status: statusAll, stop, normalize }

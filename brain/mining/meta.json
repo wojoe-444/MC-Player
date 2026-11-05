@@ -1,0 +1,14 @@
+{
+  "name": "mining",
+  "version": 1,
+  "kind": "job",
+  "summary": "Strip and shaft mining job with torches, storage runs and a safe way back up.",
+  "requires": [
+    "nav",
+    "crafting"
+  ],
+  "provides": [
+    "mining"
+  ],
+  "claims": []
+}

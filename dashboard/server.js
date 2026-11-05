@@ -159,11 +159,18 @@ function staticInfo() {
     let desc = '';
     for (const l of head) { const c = l.match(/^\/\/\s?(.*)$/); if (c) { desc = c[1].replace(/^brain\/[\w-]+:?\s*/, '').trim(); if (desc.length > 8) break; } }
     let files = []; try { files = fs.readdirSync(dir); } catch {}
-    return { name, desc: desc.slice(0, 260), files: files.length, readme: files.includes('README.md') };
+    // meta.json (kind, requires, provides, claims): the module's place in the shared vocabulary, see brain/INTERFACE.md section 0
+    const meta = readJson(path.join(dir, 'meta.json')) || {};
+    return { name, desc: (meta.summary || desc).slice(0, 260), files: files.length, readme: files.includes('README.md'),
+      kind: meta.kind || null, requires: meta.requires || [], provides: meta.provides || [], claims: meta.claims || [] };
   });
   const sk = readText(path.join(CODE, 'brain', 'autopilot', 'skills.js')) || '';
   const skills = [...new Set([...sk.matchAll(/^\s*S\.([a-zA-Z]+)\s*=\s*(?:async\s*)?(?:function|\()/gm)].map(x => x[1]))];
-  staticCache = { modules, skills };
+  // vocabulary, ladder catalog and priority bands come from the brain code itself (older code folders without them just omit the sections)
+  let taxonomy = readJson(path.join(CODE, 'brain', 'taxonomy.json')), ladder = null, bands = null;
+  try { ladder = require(path.join(CODE, 'brain', 'ladder.js')).catalog(path.join(CODE, 'brain')); } catch {}
+  try { const sc = require(path.join(CODE, 'brain', 'scheduler.js')); bands = { bands: sc.BANDS || null, priority: sc.PRIORITY || null }; } catch {}
+  staticCache = { modules, skills, taxonomy, ladder, bands };
   return staticCache;
 }
 
@@ -230,7 +237,10 @@ function listFiles(bot) {
 
 function structure(bot) {
   const b = BOTS[bot], sd = stateDirOf(b), info = staticInfo();
-  const disabled = readJson(path.join(sd, 'disabled-modules.json')) || [];
+  // the bot profile (profile.json, falling back to role.json / mode.json / think-off / disabled-modules.json)
+  let profile = null;
+  try { profile = require(path.join(CODE, 'brain', 'profile.js')).createProfile({ stateDir: sd, botName: b.name }).get(); } catch {}
+  const disabled = profile ? profile.disabledModules : (readJson(path.join(sd, 'disabled-modules.json')) || []);
   const seen = lastSeenByTag(bot);
   const now = Date.now();
   const modules = info.modules.map(m => {
@@ -238,16 +248,18 @@ function structure(bot) {
     const age = s && s.t ? now - new Date(s.t).getTime() : null;
     return { ...m, status: disabled.includes(m.name) ? 'disabled' : (age !== null && age < 600000 ? 'active' : 'loaded'), lastSeen: s ? s.t : null, lines: s ? s.n : 0 };
   });
-  let steps = (readJson(path.join(sd, 'role.json')) || {}).steps || null;
+  let steps = (profile ? profile.steps : (readJson(path.join(sd, 'role.json')) || {}).steps) || null;
   if (!steps) {
     const plan = [...state[bot].logs].reverse().find(e => e.kind === 'PLAN' && /processes loaded: /.test(e.text));
     if (plan) steps = plan.text.split('processes loaded: ')[1].split(' > ');
   }
-  const mode = readJson(path.join(sd, 'mode.json')) || {};
+  const mode = profile ? { mode: profile.stance, since: profile.stanceSince } : (readJson(path.join(sd, 'mode.json')) || {});
+  const reflexes = readJson(path.join(sd, 'reflexes.json'));      // written by the brain every 2 s when a lease changes
   return {
-    mode: { mode: mode.mode || 'unknown', since: mode.since || null, role: (readJson(path.join(sd, 'role.json')) || {}).role || null,
+    profile, taxonomy: info.taxonomy, ladder: info.ladder, bands: info.bands, reflexes,
+    mode: { mode: mode.mode || 'unknown', since: mode.since || null, role: profile ? profile.role : ((readJson(path.join(sd, 'role.json')) || {}).role || null),
       safety: (readJson(path.join(sd, 'safety-state.json')) || {}).mode || null,
-      thinkOff: fs.existsSync(path.join(sd, 'think-off')), goals: readJson(path.join(sd, 'goals.json')) },
+      thinkOff: profile ? !profile.planner.enabled : fs.existsSync(path.join(sd, 'think-off')), goals: readJson(path.join(sd, 'goals.json')) },
     scheduler: readJson(path.join(sd, 'scheduler.json')),
     tasks: taskStates(bot),
     modules, skills: info.skills, steps,

@@ -54,6 +54,7 @@ module.exports = function register(api) {
   const logPath = () => api.statePath(LOG_FILE)
 
   let mode = cfg.mode
+  try { const pm = api.profile && api.profile.get().router.mode; if (MODES.includes(pm)) mode = pm } catch { /* no profile */ }   // the profile's default; a saved choice and the env still win
   const envMode = String((hook.env || process.env).BOT_ROUTER_MODE || '').toLowerCase()
   try { const m = JSON.parse(fs.readFileSync(api.statePath(MODE_FILE), 'utf8')).mode; if (MODES.includes(m)) mode = m } catch { /* no saved mode */ }
   if (MODES.includes(envMode)) mode = envMode
@@ -338,7 +339,7 @@ module.exports = function register(api) {
     _setMode: setMode, _catalog: catalog, addTier, validate: hookApi.validate
   }
 }
-module.exports.meta = { name: 'router', version: 1 }
+module.exports.meta = require('./meta.json')
 module.exports.quickAck = quickAck
 module.exports.appendJsonl = appendJsonl
 module.exports.MODE_FILE = MODE_FILE

@@ -1,0 +1,13 @@
+{
+  "name": "mode",
+  "version": 1,
+  "kind": "policy",
+  "summary": "Task or autonomous stance switch: gates the autopilot.",
+  "requires": [
+    "autopilot"
+  ],
+  "provides": [],
+  "claims": [
+    "autopilot-gate"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "crafting",
+  "version": 1,
+  "kind": "service",
+  "summary": "Craft and find items: recipes, ingredients from the bag and indexed chests.",
+  "requires": [],
+  "provides": [
+    "crafting"
+  ],
+  "claims": []
+}

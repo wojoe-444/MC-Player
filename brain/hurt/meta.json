@@ -1,0 +1,9 @@
+{
+  "name": "hurt",
+  "version": 1,
+  "kind": "observer",
+  "summary": "Names every hit by damage type and keeps totals in hurt.json.",
+  "requires": [],
+  "provides": [],
+  "claims": []
+}

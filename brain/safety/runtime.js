@@ -30,11 +30,16 @@ const RUNTIME_DEFAULTS = {
 module.exports = function install({
   bot, say, goals, scheduler, PRIORITY = { SAFETY: 100, EAT: 70 }, safehand = null, stopNav = () => {}, ownerName = 'OGWO',
   stateFile = null, now = Date.now, log = () => {}, slog = () => {}, config = {}, eatNow = null, canSee = null, waypointsFile = null,
-  lessonsFile = null, tuningFile = null, commands = null
+  lessonsFile = null, tuningFile = null, commands = null, reflexes = null
 }) {
   const C = { ...DEFAULTS, ...HEALTH_DEFAULTS, ...RUNTIME_DEFAULTS, ...LIGHT_DEFAULTS, ...shelterMod.SHELTER_DEFAULTS, ...config }
   let healthCfg = { ...C, lowHealth: C.minFightHealth }
   let mode = C.defaultMode === 'warn' ? 'warn' : 'fight'
+  // The right to swing at mobs is the `melee` lease (brain/reflexes.js). The combat reflex holds it for good; while another reflex holds it this module
+  // behaves as in warn mode (retreat, no swings of its own) without touching the saved mode, which used to be overwritten by a fake "do not fight" command.
+  const reflex = reflexes ? reflexes.register({ name: 'safety', priority: 60, claims: ['melee'], desc: 'mob safety: retreat, fight back when allowed, wall in' }) : null
+  const meleeTakenBy = () => reflexes ? reflexes.heldByOther('melee', 'safety') : null
+  const effectiveMode = () => (mode === 'fight' && meleeTakenBy()) ? 'warn' : mode
   const chosen = {}                                        // settings Walter set himself: only these are saved, so a new default is never overridden by an old copy
   try { if (stateFile) { const st = JSON.parse(fs.readFileSync(stateFile, 'utf8')); mode = st.mode || mode; for (const k of ['creeperStrike', 'emergencyEntomb']) if (typeof st[k] === 'boolean' && st[k + 'Chosen'] === true) { C[k] = st[k]; chosen[k] = true } } } catch { /* first run */ }
   if (mode !== 'warn' && mode !== 'fight') mode = 'fight'
@@ -214,7 +219,7 @@ module.exports = function install({
     while (hits.length && t - hits[0] > C.hitWindowMs) hits.shift()
     const o = ownerEntity()
     return {
-      now: t, me: { pos: bot.entity.position }, health: bot.health, mode, hasWeapon: !!weapon(), hasBow, hasArrows, los,
+      now: t, me: { pos: bot.entity.position }, health: bot.health, mode: effectiveMode(), hasWeapon: !!weapon(), hasBow, hasArrows, los,
       creeper: { fuse, phase: cs.phase, sinceHitMs: cs.hitAt ? t - cs.hitAt : Infinity, cycles: cs.cycles },
       owner: o ? { pos: o.position } : null, mobs,
       hurtBy: t - lastHurtAt < 5000 ? hurtBy : null, hurtRecently: t - lastHurtAt < 4000, recentHits: hits.length,
@@ -436,6 +441,7 @@ module.exports = function install({
 
   async function melee(L, e, dist, w, d) {
     const t = now()
+    if (reflex && !reflex.claim('melee', 2000, `fighting ${e.name}`)) return        // another reflex (combat) holds the swings
     const ranged = PROFILES[e.name] && PROFILES[e.name].kind === 'ranged'
     if (L.key !== 'm' + e.id) { L.key = 'm' + e.id; L.progress = { t, d: dist }; L.anchor = bot.entity.position.clone() }
     if (L.anchor && bot.entity.position.distanceTo(L.anchor) > C.leashRange) {      // never chase far from where the fight began
@@ -599,9 +605,9 @@ module.exports = function install({
   }
 
   function start() { bind(); deaths.start(); if (!timer) { timer = setInterval(scan, C.scanMs); if (timer.unref) timer.unref() } }
-  function stop() { clearInterval(timer); timer = null; unbind(); deaths.stop() }
+  function stop() { clearInterval(timer); timer = null; unbind(); deaths.stop(); if (reflex) reflex.release('melee') }
   const status = () => ({
-    mode, creeperStrike: !!C.creeperStrike, narrow: env.narrow, unprepared: prep.unprepared ? prep.why : null, standing: now() < standUntil, loadout: loadout.summary(), torchesPlaced: light.stat.placed, deathsLogged: deaths.tuning().deaths.length, emergencyEntomb: !!C.emergencyEntomb, entombed, wantEntomb, action: latest ? latest.action : 'none', reason: latest ? latest.reason : '', health: bot.health, food: bot.food, recovering,
+    mode, meleeBy: meleeTakenBy(), creeperStrike: !!C.creeperStrike, narrow: env.narrow, unprepared: prep.unprepared ? prep.why : null, standing: now() < standUntil, loadout: loadout.summary(), torchesPlaced: light.stat.placed, deathsLogged: deaths.tuning().deaths.length, emergencyEntomb: !!C.emergencyEntomb, entombed, wantEntomb, action: latest ? latest.action : 'none', reason: latest ? latest.reason : '', health: bot.health, food: bot.food, recovering,
     creeper: { phase: cs.phase, cycles: cs.cycles }, night: env.night, outdoors: env.outdoors, shelter: env.shelter ? { name: env.shelter.name, dist: Math.round(env.shelter.dist) } : null, path: { evals: reach.stat.evals, suppressed: reach.stat.suppressed, timeouts: reach.stat.timeouts },
     threats: latest ? latest.threats.map(m => ({ name: m.name, dist: Math.round(m.dist), approaching: m.approaching })) : []
   })

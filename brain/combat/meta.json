@@ -1,0 +1,13 @@
+{
+  "name": "combat",
+  "version": 1,
+  "kind": "reflex",
+  "summary": "Always-on combat reflex hooked to physicsTick (arena winner). Holds the melee lease for good, so safety stands aside; respects the hands and body leases.",
+  "requires": [],
+  "provides": [
+    "combat"
+  ],
+  "claims": [
+    "melee"
+  ]
+}

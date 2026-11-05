@@ -801,10 +801,13 @@ bot.on('goal_reached', () => { if (!quietNav) say('Here.') })
 bot.on('path_update', (r) => { if (r.status === 'noPath') { try { require('fs').appendFileSync('narration.log', `${new Date().toISOString()} noPath
 `) } catch {} } })
 
+// the bot profile (bots/<bot>/profile.json in brain/state, with role.json etc. as fallback); read on demand, cached for 2 s
+let _botProfile = null
+const botProfile = () => _botProfile || (_botProfile = require('./brain/profile').createProfile({ stateDir: require('path').resolve('brain', 'state'), botName: bot.username }))
 function addressedToMe(t) {
   const ozo = /\bozo(go)?(444)?\b/i.test(t), smeo = /\bsmeo(444)?\b/i.test(t)
   if (ozo || smeo) return /^ozo/i.test(bot.username) ? ozo : smeo
-  try { return JSON.parse(require('fs').readFileSync('brain/state/role.json', 'utf8')).role === 'assistant' } catch { return false }
+  try { return botProfile().get().role === 'assistant' } catch { return false }
 }
 // Two-way chat: player messages go to chat.log (watched by Claude); lines Claude appends to outbox.txt are said in game.
 const fs = require('fs')

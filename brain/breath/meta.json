@@ -1,0 +1,11 @@
+{
+  "name": "breath",
+  "version": 1,
+  "kind": "reflex",
+  "summary": "Drowning reflex: swims to the nearest breathable cell when the air runs low.",
+  "requires": [],
+  "provides": [],
+  "claims": [
+    "body"
+  ]
+}

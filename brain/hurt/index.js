@@ -36,4 +36,4 @@ module.exports = function register(api) {
     status() { return totals }
   }
 }
-module.exports.meta = { name: 'hurt', version: 1 }
+module.exports.meta = require('./meta.json')

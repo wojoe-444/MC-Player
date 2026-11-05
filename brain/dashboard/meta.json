@@ -1,0 +1,9 @@
+{
+  "name": "dashboard",
+  "version": 1,
+  "kind": "observer",
+  "summary": "Read-only status page and dashboard-status.json for the live bot.",
+  "requires": [],
+  "provides": [],
+  "claims": []
+}

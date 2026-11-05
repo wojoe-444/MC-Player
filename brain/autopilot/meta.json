@@ -1,0 +1,17 @@
+{
+  "name": "autopilot",
+  "version": 1,
+  "kind": "planner",
+  "summary": "Think-first autopilot: the planner picks skills from a menu; routines are the fallback. Includes goals, the watchdog (cave reflex, night guard) and memory.",
+  "requires": [
+    "nav",
+    "safety"
+  ],
+  "provides": [
+    "autopilot"
+  ],
+  "claims": [
+    "danger",
+    "body"
+  ]
+}

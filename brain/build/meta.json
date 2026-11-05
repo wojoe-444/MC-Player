@@ -1,0 +1,11 @@
+{
+  "name": "build",
+  "version": 1,
+  "kind": "job",
+  "summary": "Blueprint building engine (tower plan): survey, place, pause and resume.",
+  "requires": [],
+  "provides": [
+    "build"
+  ],
+  "claims": []
+}

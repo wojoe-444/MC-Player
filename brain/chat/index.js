@@ -112,6 +112,6 @@ module.exports = function register(api) {
     }
   }
 }
-module.exports.meta = { name: 'chat', version: 1 }
+module.exports.meta = require('./meta.json')
 module.exports.appendJsonl = appendJsonl
 module.exports.quickAck = (text) => create({}).quickAck(text)

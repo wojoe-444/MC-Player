@@ -1,0 +1,11 @@
+{
+  "name": "chat",
+  "version": 1,
+  "kind": "interface",
+  "summary": "Fuzzy chat command matching and per-user topic memory (fallback after the exact commands).",
+  "requires": [],
+  "provides": [
+    "chat"
+  ],
+  "claims": []
+}
