@@ -18,7 +18,7 @@ The world rules in `CLAUDE.md` (no slash commands, no teleporting, play fair) ar
    node .claude/skills/trial-server/scripts/server.js setup --version 1.21.6 --port 25599 --ops TrialA,TrialB
    ```
    Options: `--dir` (default `.trial-server`, git-ignored), `--mode flat|default` (flat is quick and predictable; use default for real terrain).
-2. `node .claude/skills/trial-server/scripts/server.js start` (waits until the server is up), `status`, `log 30`.
+2. `node .claude/skills/trial-server/scripts/server.js start` (waits until the server is up), `status`, `log 30`. Built-in safety: the server runs at below-normal priority on 2 cores with a small view distance, only one trial server may run at a time (it refuses to start a second; `--force` overrides), and a watchdog stops it after 15 minutes (`--minutes N`, 0 = no limit). A trial server on a machine that is also running the real game and live bots can make everything freeze, so keep trials short and stop the server as soon as the results are in.
 3. Write a trial script from `scripts/example-trial.js`: connect with `mineflayer.createBot({ host: 'localhost', port, username: 'TrialA', version })`, and build the scenario with slash commands (the bot is op). Pace commands about 200 ms apart; the server kicks for spam.
 4. `node .claude/skills/trial-server/scripts/server.js stop` when done. It kills only the PID it started (`server.pid`). Never use `taskkill /IM java.exe` or `pkill java`, which could kill someone's real game or server.
 
