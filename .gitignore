@@ -63,3 +63,6 @@ plugin-eval/out/
 Thumbs.db
 .vscode/
 .idea/
+
+# throwaway trial server (jar, world, logs)
+.trial-server/
