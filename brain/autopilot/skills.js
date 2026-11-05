@@ -626,6 +626,8 @@ module.exports = function makeSkills({ bot, api, log }) {
   // ---------- eating ----------
   S.eat = async () => {
     if (bot.food >= 18) return false
+    // never bread in the hand with a mob in reach: fight first (today's cave deaths had food out while mobs hit point-blank)
+    if (S.hostilesNear(5).length || (bot._meleeClose && Date.now() - (bot._meleeCloseAt || 0) < 500)) return false
     let best = null
     for (const it of bot.inventory.items()) {
       const f = FOOD_VALUE[it.name]; if (!f || RAW_MEAT.includes(it.name)) continue
