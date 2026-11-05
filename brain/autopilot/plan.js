@@ -134,7 +134,7 @@ module.exports = function plan(G, S, M, api, log) {
       const tbl = S.tableNear(4.5)
       if (tbl) { const p = tbl.position; st.tables = [[p.x, p.y, p.z]].concat((st.tables || []).filter(q => q[0] !== p.x || q[2] !== p.z)).slice(0, 6) }
       if (!tbl && !S.has('crafting_table')) {
-        const known = (st.tables || []).map(q => v(q[0], q[1], q[2])).filter(q => { const b = S.block(q); return (!b || b.name === 'crafting_table') && (bot.entity.position.y < 56 || !home() || q.y >= home().y - 8) })   // from the surface, not a table down in the caves.sort((a, b) => S.dist(a) - S.dist(b))[0]
+        const known = (st.tables || []).map(q => v(q[0], q[1], q[2])).filter(q => { const b = S.block(q); return (!b || b.name === 'crafting_table') && (bot.entity.position.y < 56 || !home() || q.y >= home().y - 8) }).sort((a, b) => S.dist(a) - S.dist(b))[0]   // the nearest one; from the surface, not a table down in the caves.sort((a, b) => S.dist(a) - S.dist(b))[0]
         const target = known || (home() && bot.findBlock({ matching: ids(/^crafting_table$/), maxDistance: 48, point: home() })?.position)
         if (target) { const r = await S.goto(new goals.GoalNear(target.x, target.y, target.z, 2), { dig: false, ms: 150000 }); note('tool-kit: walked to the table at ' + target + ' ' + r.ok) }
       }
