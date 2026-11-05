@@ -26,6 +26,9 @@ bot.once('spawn', async () => {
     const api = { bot, events, goals, log: () => {}, now: Date.now, statePath: (f) => path.join(tmp, f), scheduler: { status: () => ({ running: { name: 'test-task' } }) } }
     const mod = register(api); mod.start()
     const kit = bot._kit
+    check('api.pilotkit is the same object as bot._kit', api.pilotkit === kit)
+    const metaJson = require('../brain/pilot-kit/meta.json')
+    check('manifest: kind service, provides pilotkit', metaJson.kind === 'service' && metaJson.provides.includes('pilotkit') && Array.isArray(metaJson.requires) && Array.isArray(metaJson.claims))
 
     await cmd('/gamemode survival'); await cmd('/gamerule doMobSpawning false'); await cmd('/gamerule doImmediateRespawn true'); await cmd('/time set 18000'); await cmd('/gamerule doDaylightCycle false')
     await cmd('/clear @s'); await cmd('/kill @e[type=!minecraft:player]')
@@ -51,7 +54,7 @@ bot.once('spawn', async () => {
     await cmd('/summon minecraft:zombie 6 ' + Y + ' 0 {PersistenceRequired:1b,NoAI:1b}')
     await sleep(500)
     const o2 = kit.observe({ since: o1.cursor })
-    check('observe: second call returns only the new chat event', o2.events.length === 1 && o2.events[0].type === 'chat' && o2.cursor === o1.cursor + 1, JSON.stringify(o2.events.map(e => e.type)))
+    check('observe: second call returns only the new chat event', o2.events.length === 1 && o2.events[0].kind === 'chat' && o2.cursor === o1.cursor + 1, JSON.stringify(o2.events.map(e => e.kind)))
     check('observe: zombie in line of sight is listed', o2.nearby.hostiles.some(h => h.name === 'zombie'), JSON.stringify(o2.nearby.hostiles))
     const o3 = kit.observe({ since: o2.cursor })
     check('observe: nothing new means empty events', o3.events.length === 0)
@@ -117,14 +120,18 @@ bot.once('spawn', async () => {
     await cmd('/damage @s 12 minecraft:generic'); await sleep(7000)    // big hit: saved after the 5 s post-roll
     files = fs.readdirSync(dir).filter(f => f.endsWith('big_hit.json'))
     check('dashcam: big hit saves a clip after the post-roll', files.length === 1)
-    if (files.length) { const c2 = JSON.parse(fs.readFileSync(path.join(dir, files[0]), 'utf8')); check('dashcam: big hit clip contains the damage event', c2.events.some(e => e.type === 'damage'), JSON.stringify(c2.events.filter(e => e.type === 'damage'))) }
+    if (files.length) { const c2 = JSON.parse(fs.readFileSync(path.join(dir, files[0]), 'utf8')); check('dashcam: big hit clip contains the damage event', c2.events.some(e => e.kind === 'damage'), JSON.stringify(c2.events.filter(e => e.kind === 'damage'))) }
     await cmd('/effect give @s minecraft:instant_health 1 10'); await sleep(800)
     await cmd('/kill @s'); await sleep(1500)
     files = fs.readdirSync(dir).filter(f => f.endsWith('death.json'))
     check('dashcam: death saves a clip at once', files.length === 1)
-    const dEvents = kit.observe({ since: 0 }).events.map(e => e.type)
+    const dEvents = kit.observe({ since: 0 }).events.map(e => e.kind)
     check('observe: death and damage reached the cursor stream', dEvents.includes('death') && dEvents.includes('damage'), dEvents.join(','))
+    const seqBefore = kit.observe({}).cursor
     mod.stop()
+    const saved = JSON.parse(fs.readFileSync(path.join(tmp, 'observe-events.json'), 'utf8'))
+    check('observe: ring saved atomically on stop with src and kind', saved.seq === seqBefore && saved.ring.length > 0 && saved.ring.every(e => e.src && e.kind), JSON.stringify(saved.ring[0]))
+    check('api.pilotkit and bot._kit are removed on stop', api.pilotkit === undefined && bot._kit === undefined)
   } catch (e) { console.log('FATAL', e.stack); failN++ }
   console.log(`\n${pass} passed, ${failN} failed`)
   bot.quit(); setTimeout(() => process.exit(failN ? 1 : 0), 500)

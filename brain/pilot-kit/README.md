@@ -5,7 +5,7 @@ A service-style module: it never creates scheduler tasks and never moves the bot
 
 ## Wiring (integrator edit, one line)
 
-Add `'pilot-kit'` to `MODULES` in `brain/index.js`. After the next restart `bot._kit` exists and the dashcam records by itself.
+Add `'pilot-kit'` to `MODULES` in `brain/index.js`. After the next restart `api.pilotkit` (and `bot._kit`, the same object) exists and the dashcam records by itself. Manifest: `meta.json`, kind `service`, provides `pilotkit`; callers only need `api.pilotkit.wrap(name, fn)`, so the envelope can move into the P5 registry unchanged.
 
 ## What is in it
 
@@ -20,7 +20,7 @@ Add `'pilot-kit'` to `MODULES` in `brain/index.js`. After the next restart `bot.
 
 ### Observation cursor
 
-`observe({ since })` returns `{ cursor, vitals, pos, time, doing, inventory, nearby, events, dropped }`. Keep the returned `cursor` and pass it as `since` next time: you get only new events (`chat`, `task`, `park`, `damage`, `death`, `spawn`, `kicked`, `ate`) and `dropped: true` if you fell more than 400 events behind. The first call (no `since`) returns state and no events. `nearby` lists only hostile mobs, players and dropped items in line of sight within 24 blocks. Other modules can add events with `bot._kit.note(type, extra)`. Everything is plain JSON, so it works as the text output of the eval channel.
+`observe({ since })` returns `{ cursor, vitals, pos, time, doing, inventory, nearby, events, dropped }`. Keep the returned `cursor` and pass it as `since` next time: you get only new events (kind `chat`, `task`, `park`, `damage`, `death`, `spawn`, `kicked`, `ate`) and `dropped: true` if you fell more than 400 events behind. The first call (no `since`) returns state and no events. `nearby` lists only hostile mobs, players and dropped items in line of sight within 24 blocks. Each event is `{ seq, t, src, kind, ... }` where `src` is the producing module (`chat`, `scheduler`, `bot`, or the name a module passes to `note`). The ring is kept in memory and saved atomically (capped at 400) to `brain/state/observe-events.json` only so a hot reload keeps the cursor; `observe()` is read-only. Other modules can add events with `api.pilotkit.note(kind, extra, src)`. Everything is plain JSON, so it works as the text output of the eval channel.
 
 ### Result envelope
 
@@ -28,7 +28,7 @@ Add `'pilot-kit'` to `MODULES` in `brain/index.js`. After the next restart `bot.
 { ok, cmd, note, data?, error?: { code, message, hint? }, ms, level? }
 ```
 
-`note` is the human line a skill returns today. Extra keys of a legacy `{ ok, note, ...extra }` result move to `data`. `error.code` is one of `NO_PATH NO_ITEM UNSAFE ABORTED TIMEOUT BAD_ARGS NOT_READY FAILED`, guessed from the message when the skill did not set one. `level` is optional (`primitive`, `skill`, `job`) so it can line up with a skill registry. `AbortError` is never swallowed. `result.line(r)` gives a one-line summary.
+`note` is the human line a skill returns today. Extra keys of a legacy `{ ok, note, ...extra }` result move to `data`. `error.code` is one of a closed list, `NO_PATH NO_ITEM UNSAFE ABORTED TIMEOUT BAD_ARGS NOT_READY FAILED UNKNOWN`, guessed from the message when the skill did not set one (`UNKNOWN` when the message fits nothing). `level` is optional (`primitive`, `skill`, `job`) so it can line up with a skill registry. `AbortError` is never swallowed. `result.line(r)` gives a one-line summary.
 
 ### Dashcam clip format v1
 
@@ -36,7 +36,7 @@ Add `'pilot-kit'` to `MODULES` in `brain/index.js`. After the next restart `bot.
 { v:1, bot, reason, savedAt, hz, t0, t1, pos:{x,y,z},
   map:{ x0, z0, size:41, y0, palette:[block names], cells:[ paletteIndex*64 + (y - y0), or -1 ] },
   samples:[{ t, x,y,z, yaw, pit, hp, fd, h, a, m:[[name,x,y,z,id], ...] }],
-  events:[{ t, type, ... }] }
+  events:[{ t, src, kind, ... }] }
 ```
 
 `t` is milliseconds since `t0`. `h` is the held item, `a` is what the bot was doing (`task: step`), `m` is hostile mobs and players within 24 blocks. `map` is a top-down terrain snapshot taken when the clip is saved. Clips are written atomically (`.tmp` then rename), the newest 40 are kept. Cost: about 38 KB for 30 s, one sample every 100 ms from `physicsTick`, no rendering. Frames could be rendered from a clip afterwards by the first-person raycaster; see the evaluation in the PR description.
