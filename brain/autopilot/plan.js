@@ -897,6 +897,9 @@ module.exports = function plan(G, S, M, api, log) {
     return (st.placed || []).filter(q => now - q[4] > 10 * 60000 && SCAFFOLD.test(q[3])).map(q => v(q[0], q[1], q[2])).filter(p => {
       const b = S.block(p); if (!b || !SCAFFOLD.test(b.name)) return false
       if (inBox(p, hb) || nearList(p, st.farm, 1) || nearList(p, st.grove, 1)) return false
+      // surface scaffold only: blocks below ground are tunnel plugs, cave walls and pillars that keep the mine closed. Tidy walked down into
+      // the cave under home to take them apart and the bot died there at 20:43 (fell in, two zombies)
+      { const h0 = home(); if (h0 && p.y < h0.y - 4) return false }
       if (st.mine && st.mine.entry && Math.abs(p.x - st.mine.entry[0]) <= 3 && Math.abs(p.z - st.mine.entry[2]) <= 3) return false
       const below = S.block(p.offset(0, -1, 0)), above = S.block(p.offset(0, 1, 0))
       if (below && below.name === 'water') return false                         // sea paths: taking them apart from on top of them means swimming
