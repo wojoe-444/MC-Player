@@ -29,7 +29,9 @@ module.exports = function site(G, S, M, api, log) {
     for (const p of logs) { const k = p.x + ',' + p.z; if (!cols.has(k)) cols.set(k, v(p.x, cfg.box.y0, p.z)) }
     return [...cols.values()]
   }
-  const inside = (cfg) => inBox(S.flo(bot.entity.position), { ...cfg.box, y0: cfg.box.y0 - 2, y1: cfg.box.y1 })
+  // by the exact position: standing against the inner side of the fence (z 418.9) floors to the fence row and read as "outside", so the bot
+  // walked back and forth trying to come in through the gate for 36 minutes (07:13-07:49)
+  const inside = (cfg) => { const p = bot.entity.position, b = cfg.box; return p.x >= b.x0 - 0.2 && p.x <= b.x1 + 1.2 && p.z >= b.z0 - 0.2 && p.z <= b.z1 + 1.2 && p.y >= b.y0 - 2 && p.y <= b.y1 }
   // in through the gate: the gate cell first (the pathfinder may not path through fence gates on its own), then the target
   async function enter(cfg) {
     if (inside(cfg)) return true
@@ -172,6 +174,16 @@ module.exports = function site(G, S, M, api, log) {
       try { for (const it of box.containerItems().filter(i => /^(bread|baked_potato|carrot|potato|sweet_berries|apple|beetroot)$/.test(i.name))) { await box.withdraw(it.type, null, Math.min(it.count, 16)); if (S.foodPoints() >= 16) break } } catch {} finally { try { box.close() } catch {} }
     }
   }
+  // a crafting table set down for a craft is picked up again: one left right in front of the farm gate locked the bot out for 25 minutes (07:24)
+  async function takeBackTables() {
+    for (const q of (st.placed || []).filter(q => q[3] === 'crafting_table' && Date.now() - q[4] < 5 * 60000)) {
+      const p = v(q[0], q[1], q[2]), b = S.block(p); if (!b || b.name !== 'crafting_table') continue
+      if (eyeDist(p) > 4.2) await S.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { dig: false, ms: 20000 })
+      const axe = S.items().find(i => /_axe$/.test(i.name)); if (axe) await bot.equip(axe, 'hand').catch(() => {})
+      try { await bot.lookAt(p.offset(0.5, 0.5, 0.5), true); await bot.dig(b, true); note(`${'site'}: took back the crafting table at ${p}`) } catch {}
+    }
+    await S.pickup(5, 3000)
+  }
   async function axe(cfg) {
     if (S.count(cfg.pillar || 'cobblestone') < 4) await cobble(cfg, 16)
     if (S.items().some(i => /_axe$/.test(i.name))) return true
@@ -179,13 +191,14 @@ module.exports = function site(G, S, M, api, log) {
     if (S.count('stick') < 2 && S.planks() < 2 && S.logs()) await S.craft(S.items().find(i => /_log$/.test(i.name)).name.replace('_log', '_planks'), 4)
     if (S.count('stick') < 2) await S.craft('stick', 4)
     await S.craft('stone_axe', 1)
+    await takeBackTables()
     return S.items().some(i => /_axe$/.test(i.name))
   }
 
   // anything of ours left in the farm: a pillar block in a stump cell, a crafting table set down while crafting (Walter's screenshot, 00:57)
   async function cleanup(cfg) {
     const strays = bot.findBlocks({ matching: ids(new RegExp('^(' + (cfg.pillar || 'cobblestone') + '|crafting_table)$')), point: v((cfg.box.x0 + cfg.box.x1) >> 1, cfg.box.y0, (cfg.box.z0 + cfg.box.z1) >> 1), maxDistance: 24, count: 50 })
-      .filter(p => inBox(p, { ...cfg.box, y1: cfg.box.y0 + 1 }))
+      .filter(p => inBox(p, { ...cfg.box, y1: cfg.box.y0 + 1 }) || (p.y === cfg.box.y0 + 1 && inBox(p, { x0: cfg.box.x0 - 1, x1: cfg.box.x1 + 1, y0: p.y, y1: p.y, z0: cfg.box.z0 - 1, z1: cfg.box.z1 + 1 }) && /fence/.test((S.block(p.offset(0, -1, 0)) || {}).name || '')))   // and on top of the fence: the pathfinder's scaffold left cobblestone on it
     let n = 0
     for (const p of strays) {
       if (eyeDist(p) > 4.2) await S.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { dig: false, ms: 20000 })
