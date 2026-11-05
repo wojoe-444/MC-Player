@@ -70,17 +70,19 @@ bot.once('spawn', async () => {
     const hp0 = bot.health
     for (const [dx, dz] of [[6, 0], [-6, 0], [0, 6]]) await cmd(`/summon minecraft:zombie ${p.x + dx} ${p.y} ${p.z + dz} {PersistenceRequired:1b,IsBaby:0b}`)
     const zombies = () => Object.values(bot.entities).filter(e => e.name === 'zombie' && e.position.distanceTo(bot.entity.position) < 30).length
-    await sleep(500)
+    let seen = 0
+    await until(() => { seen = Math.max(seen, zombies()); return seen >= 3 }, 10000)         // non-vacuous: all three must really have appeared
     const killed = await until(() => zombies() === 0, 40000)
     const safetyGrants = R.status().reflexes.find(r => r.name === 'safety').grants
-    check('B combat kills the 3 zombies', killed && bot.health > 0, { hp0, hp: bot.health, left: zombies() })
+    check('B combat kills the 3 zombies', seen >= 3 && killed && bot.health > 0, { seen, hp0, hp: bot.health, left: zombies() })
     check('B safety never swung (no melee grants) and combat still holds melee', safetyGrants === 0 && R.holder('melee') === 'combat', { safetyGrants, holder: R.holder('melee') })
 
     // ---- C: breath in deep water (7x7 glass pool, 5 deep, open top); bot teleported to the bottom
     await cmd('/kill @e[type=!minecraft:player]'); await cmd('/effect clear @s')
     const g = p.y
-    await cmd(`/fill ${p.x + 20} ${g - 1} ${p.z + 20} ${p.x + 28} ${g + 7} ${p.z + 28} minecraft:glass`)
+    await cmd(`/fill ${p.x + 20} ${g - 1} ${p.z + 20} ${p.x + 28} ${g + 5} ${p.z + 28} minecraft:glass`)      // walls only up to the water surface: open top, there must be air to reach
     await cmd(`/fill ${p.x + 21} ${g} ${p.z + 21} ${p.x + 27} ${g + 5} ${p.z + 27} minecraft:water`)
+    await cmd(`/fill ${p.x + 20} ${g + 6} ${p.z + 20} ${p.x + 28} ${g + 9} ${p.z + 28} minecraft:air`)
     await sleep(1500)
     await cmd(`/tp @s ${p.x + 24} ${g} ${p.z + 24}`)
     let sawBreath = false
@@ -101,10 +103,10 @@ bot.once('spawn', async () => {
     check('D safehand stowed the lava bucket and was granted hands', !!lava && !(bot.heldItem && bot.heldItem.name === 'lava_bucket') && sh.grants > before, { held: bot.heldItem && bot.heldItem.name, grants: sh.grants })
 
     // ---- E (second half): autonomous opens the gate and the stance is saved in profile.json
-    brain.commands.dispatch(NAME, 'autonomous mode')
+    const handled = brain.commands.dispatch(NAME, 'autonomous mode')
     const on = await until(() => ap.active() && running() === 'autopilot', 15000)
     const saved = JSON.parse(fs.readFileSync(path.join(stateDir, 'profile.json'), 'utf8'))
-    check('E autonomous stance: the autopilot runs and profile.json keeps the stance', on && saved.stance === 'autonomous' && saved.name === NAME, { running: running(), saved })
+    check('E autonomous stance: the "autonomous mode" chat command is handled, the autopilot runs and profile.json keeps the stance', handled === true && on && saved.stance === 'autonomous' && saved.name === NAME, { running: running(), saved })
     brain.commands.dispatch(NAME, 'task mode')
     const off = await until(() => !ap.active() && running() !== 'autopilot', 15000)
     check('E back to task stance: the autopilot stops', off, { running: running() })

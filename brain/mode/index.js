@@ -55,7 +55,7 @@ module.exports = function register(api) {
   try {
     api.commands.add({
       name: 'mode', help: 'mode | task mode | autonomous mode', risk: 'low',
-      match: (t) => SWITCH.test(String(t || '').trim()),
+      match: (u, t) => SWITCH.test(String(t || '').trim()),
       run(user, text) {
         const m = SWITCH.exec(String(text || '').trim()), w = String((m && (m[1] || m[2])) || '').toLowerCase()
         if (!w) return say(describe())
