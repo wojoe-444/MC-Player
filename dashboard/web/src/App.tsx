@@ -8,7 +8,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { AppSidebar } from "@/components/AppSidebar"
 import { DashboardProvider } from "@/DashboardContext"
-import { BotBehavior, BotInventory, BotLayout, BotLive, BotStructure, Logs, Memory, Overview } from "@/pages"
+import { BotBehavior, BotInventory, BotLayout, BotLive, BotReplay, BotStructure, Logs, Memory, Overview } from "@/pages"
 
 const NAMES: Record<string, string> = { ozo: "OzoGo444", smeo: "Smeo444", logs: "Logs", memory: "Memory and data" }
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
@@ -64,6 +64,7 @@ export default function App() {
                   <Route path="live" element={<BotLive />} />
                   <Route path="inventory" element={<BotInventory />} />
                   <Route path="behavior" element={<BotBehavior />} />
+                  <Route path="replay" element={<BotReplay />} />
                   <Route path="structure" element={<BotStructure />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />

@@ -103,7 +103,7 @@ function readStatus(bot) {
     if (raw === s.statusJson) return;
     s.statusJson = raw; s.status = JSON.parse(raw);
     const imgs = {};
-    for (const k of ['top', 'pov']) { try { imgs[k] = fs.statSync(path.join(VIEWS(b), k + '-latest.png')).mtimeMs; } catch {} }
+    for (const k of ['top', 'pov', 'slice']) { try { imgs[k] = fs.statSync(path.join(VIEWS(b), k + '-latest.png')).mtimeMs; } catch {} }
     s.status._img = imgs; s.status._mtime = st.mtimeMs;
   } catch {}
 }
@@ -271,6 +271,30 @@ function structure(bot) {
 // Behavior tree / state graph. Contract (written by the bot, read here): brain/state/behavior-tree.json
 //   { updatedAt, machine, nodes:[{id,label,parent?,entry?,type?}], transitions:[{from,to,label?}], active:[ids], history:[{at,from,to}] }
 // Until that file exists, a placeholder graph is derived from the autopilot plan steps and the latest "GOAL step X" log lines.
+// Dashcam clips (brain/pilot-kit, format v1) in brain/state/clips/*.json. Listing reads a small summary of each, cached by mtime.
+const clipSummary = new Map();
+function listClips(bot) {
+  const dir = path.join(stateDirOf(BOTS[bot]), "clips");
+  let names = []; try { names = fs.readdirSync(dir).filter(f => /^[\w.-]+\.json$/.test(f)).sort().reverse(); } catch {}
+  const out = [];
+  for (const name of names) {
+    const p = path.join(dir, name); let st; try { st = fs.statSync(p); } catch { continue; }
+    let c = clipSummary.get(p);
+    if (!c || c.m !== st.mtimeMs) {
+      const j = readJson(p);
+      if (!j || !Array.isArray(j.samples)) continue;
+      const kinds = {}; for (const e of j.events || []) kinds[e.kind] = (kinds[e.kind] || 0) + 1;
+      const hp = j.samples.map(x => x.hp).filter(x => typeof x === "number");
+      c = { m: st.mtimeMs, v: { name, size: st.size, reason: j.reason || name.replace(/^.*-(\w+)\.json$/, "$1"), savedAt: j.savedAt || null,
+        durationMs: j.samples.length ? j.samples[j.samples.length - 1].t : 0, samples: j.samples.length, minHp: hp.length ? Math.min(...hp) : null,
+        events: kinds, hasMap: !!j.map, version: j.v } };
+      clipSummary.set(p, c);
+    }
+    out.push(c.v);
+  }
+  return out;
+}
+
 function behavior(bot) {
   const sd = stateDirOf(BOTS[bot]);
   const file = path.join(sd, 'behavior-tree.json');
@@ -366,6 +390,8 @@ http.createServer((req, res) => {
     return sendFile(res, f, { "Cache-Control": "max-age=86400" });
   }
   if ((sm = p.match(/^\/api\/structure\/(ozo|smeo)$/))) return send(res, 200, JSON.stringify(structure(sm[1])), 'application/json');
+  if ((sm = p.match(/^\/api\/clips\/(ozo|smeo)$/))) return send(res, 200, JSON.stringify(listClips(sm[1])), 'application/json');
+  if ((sm = p.match(/^\/api\/clip\/(ozo|smeo)\/([\w.-]+\.json)$/))) return sendFile(res, path.join(stateDirOf(BOTS[sm[1]]), 'clips', sm[2]));
   if ((sm = p.match(/^\/api\/behavior\/(ozo|smeo)$/))) return send(res, 200, JSON.stringify(u.searchParams.get('sample') ? SAMPLE_TREE : behavior(sm[1])), 'application/json');
   if ((sm = p.match(/^\/api\/file\/(ozo|smeo)\/(state|root)\/([\w.-]+)$/))) {
     const r = fileContent(sm[1], sm[2], sm[3]);
@@ -373,7 +399,7 @@ http.createServer((req, res) => {
   }
   if (p === '/api/snapshot') return send(res, 200, JSON.stringify(snapshot()), 'application/json');
   let m;
-  if ((m = p.match(/^\/img\/(ozo|smeo)\/(top|pov)$/))) {
+  if ((m = p.match(/^\/img\/(ozo|smeo)\/(top|pov|slice)$/))) {
     return sendFile(res, path.join(VIEWS(BOTS[m[1]]), m[2] + '-latest.png'));
   }
   if ((m = p.match(/^\/api\/history\/(ozo|smeo)\/(top|pov)$/))) {
