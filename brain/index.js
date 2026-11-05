@@ -45,6 +45,7 @@ module.exports = function attach(deps) {
 
   // who this bot is (name, role, stance, planner on/off, disabled modules): bots/<bot>/profile.json, with the older state files as fallback
   const profile = deps.profile || createProfile({ stateDir, botName: bot.username || null, now })
+  require('./botname').set(profile.get().name || bot.username)
   // reflexes (breath, combat, safehand, night guard, cave) share bot resources through leases here; code that only has the bot reads bot._reflexes
   const reflexes = deps.reflexes || createReflexes({ now, log: (m) => log('REFLEX', m) })
   bot._reflexes = reflexes

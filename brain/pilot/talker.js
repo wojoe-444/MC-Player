@@ -3,6 +3,7 @@
 // Pure parts (prompt, parse, sanitize, skip rules) are exported for tests; createTalker() adds the network call.
 // It never runs commands and never claims work: a statement is not an order (Walter's rule).
 const fs = require('fs')
+const botname = require('../botname')
 const path = require('path')
 const { createClient } = require('../fastlane/client')
 const { parseModelJson, commandList, looksLikeOrder, interpret: interpretCommand } = require('../fastlane/decide')
@@ -80,7 +81,7 @@ function buildMessages({ text, state, notes, history, recentBot, lessons, catalo
     `<chat>${line}</chat>`
   ].join('\n')
   const cmds = catalog && catalog.options ? '\n\n' + commandList(catalog, [...SLOT_FORMS_DEFAULT, MINE_FORM]) : ''
-  return [{ role: 'system', content: SYSTEM + cmds }, { role: 'user', content: user }]
+  return [{ role: 'system', content: botname.forName(SYSTEM + cmds) }, { role: 'user', content: user }]
 }
 
 // ---- output checks ----

@@ -3,6 +3,7 @@
 // gitignored file (brain/fastlane/openrouter.key, else the router's brain/router/openrouter.key), is held only in memory and is
 // scrubbed from every string this module returns. Nothing here logs.
 const fs = require('fs')
+const botname = require('../botname')
 const path = require('path')
 
 const KEY_FILES = [path.join(__dirname, 'openrouter.key'), path.join(__dirname, '..', 'router', 'openrouter.key')]
@@ -77,7 +78,7 @@ function createClient(opts = {}) {
     try {
       let res
       try {
-        res = await doFetch(url, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key, 'X-Title': 'OzoGo444 bot' }, body: JSON.stringify(body) })
+        res = await doFetch(url, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key, 'X-Title': botname.get() + ' bot' }, body: JSON.stringify(body) })
       } catch (e) {
         return fail(ctl.signal.aborted ? 'timeout' : 'network', { message: e && e.message })
       }

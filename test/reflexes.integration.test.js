@@ -123,3 +123,16 @@ test('night guard: holds the body lease at priority 40, below breath', () => {
   assert.ok(guard.claim('body', 100000)); assert.ok(breath.claim('body', 1500)); assert.strictEqual(guard.claim('body', 100000), false)
   assert.strictEqual(reflexes.holder('body'), 'breath')
 })
+
+test('markPlacing: takes hands as the placer, blocks only weapon swaps, safehand outranks it, flag still written', () => {
+  const { markPlacing } = require('../brain/reflexes')
+  const reflexes = createReflexes()
+  const bot = mockBot({ pos: [0, 64, 0] }); bot._reflexes = reflexes
+  markPlacing(bot, 4000)
+  assert.strictEqual(reflexes.holder('hands'), 'placer'); assert.ok(bot._placingUntil > Date.now())
+  const hand = reflexes.register({ name: 'safehand', priority: 95, claims: ['hands'] })
+  assert.ok(hand.claim('hands', 1000)); assert.strictEqual(reflexes.holder('hands'), 'safehand')
+  const bare = mockBot({ pos: [0, 64, 0] }); markPlacing(bare, 1000); assert.ok(bare._placingUntil > Date.now())    // no registry: only the flag
+  const src = fs.readFileSync(path.join(__dirname, '..', 'brain', 'combat', 'reflex.js'), 'utf8')
+  assert.match(src, /h !== 'placer' \|\| \/_sword\$\|_axe\$\//)
+})

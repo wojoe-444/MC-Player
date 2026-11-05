@@ -4,7 +4,7 @@
 const { Vec3 } = require('vec3')
 const { Movements, goals } = require('mineflayer-pathfinder')
 const los = require('../los')
-const { holderOf } = require('../reflexes')
+const { holderOf, markPlacing } = require('../reflexes')
 
 const AIR = /^(air|cave_air|void_air)$/
 const LOG_RE = /_(log|stem|hyphae|wood)$/
@@ -406,7 +406,7 @@ module.exports = function makeSkills({ bot, api, log }) {
   S.placeAgainst = async (ref, face, itemName) => {
     const it = bot.inventory.items().find(i => i.name === itemName)
     if (!it) return false
-    bot._placingUntil = Date.now() + 2500
+    markPlacing(bot, 2500)
     await bot.equip(it, 'hand').catch(() => {})
     try { await bot.lookAt(v(ref.position.x + 0.5 + face.x * 0.5, ref.position.y + 0.5 + face.y * 0.5, ref.position.z + 0.5 + face.z * 0.5), true) } catch {}
     try { await bot.placeBlock(ref, face); return true } catch (e) { log('PLACE_FAIL', `${itemName}: ${e.message}`); return false }

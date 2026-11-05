@@ -89,4 +89,14 @@ function createReflexes({ now = Date.now, log = () => {} } = {}) {
 // For code that only has the bot: who holds a resource (null when there is no registry).
 const holderOf = (bot, resource) => { const r = bot && bot._reflexes; return r ? r.holder(resource) : null }
 
-module.exports = { createReflexes, holderOf }
+// Jobs that place blocks (nav/reach, the autopilot's placing, site work) keep the held slot for a few seconds so combat does not switch to a weapon in the
+// middle of a placement: `markPlacing(bot, ms)` takes the `hands` lease as 'placer' (a low-priority claimant, below safehand) and still writes the old
+// bot._placingUntil flag for code without a registry.
+function markPlacing(bot, ms) {
+  bot._placingUntil = Date.now() + ms
+  const r = bot && bot._reflexes
+  if (!r) return
+  try { r.register({ name: 'placer', priority: 30, claims: ['hands'], desc: 'a job placing blocks keeps the held slot (combat will not swap to a weapon meanwhile)' }); r.claim('placer', 'hands', ms, 'placing blocks') } catch { /* registry gone */ }
+}
+
+module.exports = { createReflexes, holderOf, markPlacing }

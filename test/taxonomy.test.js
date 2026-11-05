@@ -57,3 +57,14 @@ test('INTERFACE.md carries the glossary and names every kind', () => {
   assert.match(md, /## 0\. Vocabulary/)
   for (const k of meta.KINDS) assert.ok(md.includes('`' + k + '`'), `glossary lacks ${k}`)
 })
+
+test('botname: prompts keep the default name for Ozo and take the profile name for the other bot', () => {
+  const botname = require('../brain/botname')
+  const talker = require('../brain/pilot/talker'), decide = require('../brain/fastlane/decide')
+  assert.match(botname.forName(talker.SYSTEM), /quick voice of OzoGo444/)
+  botname.set('Smeo444')
+  try {
+    assert.match(botname.forName(talker.SYSTEM), /quick voice of Smeo444/); assert.ok(!/OzoGo444/.test(decide.systemPrompt())); assert.match(decide.systemPrompt(), /command picker for Smeo444/)
+  } finally { botname.set('OzoGo444') }
+  assert.match(decide.systemPrompt(), /OzoGo444/)
+})

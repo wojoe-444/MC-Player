@@ -14,6 +14,7 @@
 const { Vec3 } = require('vec3')
 const B = require('./blocks')
 const los = require('../los')
+const { markPlacing } = require('../reflexes')
 
 const AIR = /^(air|cave_air|void_air)$/
 const HAZARD = /^(lava|fire|soul_fire|cactus|magma_block|campfire|soul_campfire|sweet_berry_bush|powder_snow|pointed_dripstone|cobweb|wither_rose|tripwire)$/
@@ -541,7 +542,7 @@ class Reach {
     const ref = this.blk(f.x, f.y - 1, f.z)
     if (!ref || ref.boundingBox !== 'block') return false
     try {
-      bot._placingUntil = Date.now() + 4000
+      markPlacing(bot, 4000)
       await bot.equip(it, 'hand')
       await bot.look(bot.entity.yaw, -Math.PI / 2, true)
       bot.setControlState('jump', true)

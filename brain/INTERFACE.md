@@ -264,13 +264,13 @@ Who holds what today: `breath` (p90) `body` while it swims out, digs a buried he
 `combat` (p70) `melee` for good, so `safety` (p60, claims `melee` only when it swings) stands aside without a fake "do not fight" command and without touching the saved
 fight/warn mode; `danger-reflex` (the planner's seal-in, p60) and `cave` (watchdog, p50) share `danger`, the planner winning; `night-guard` (p40) `body` during the shelter walk,
 which tells the watchdog not to start a second one. Code that has no registry (arena harness, old tests) keeps the old flags (`bot._ashoreUntil`, `ap.dangerHandled`), which
-are still written. Not moved yet: `bot._placingUntil` (set by nav/reach and the autopilot's placing, read by combat's weapon switch). Status: `status.all().reflexes` and `brain/state/reflexes.json`.
+are still written. Jobs that place blocks call `markPlacing(bot, ms)` (brain/reflexes.js): it takes `hands` as the low-priority `placer`, so combat will not swap to a sword or axe mid-placement (`bot._placingUntil` is still written for code without a registry). Status: `status.all().reflexes` and `brain/state/reflexes.json`.
 
 ## 14. Ladder and behavior graphs
 
 `brain/ladder.js` `catalog()` lists the rungs from the code (primitives = `S.*` in `skills.js`, skills = the planner's `def('...')` menu in `think.js`, jobs = modules of kind `job`,
-goals = step ids in `goals.js`/`plan.js`). A new planner action or goal step shows up there on its own; `test/behavior.test.js` checks that each action is documented.
+goals = step ids in `goals.js`/`plan.js`). A new planner action or goal step shows up there on its own; `test/graph.test.js` checks that each action is documented.
 
-`brain/behavior.js` `createGraph({ name, nodes, edges, file })` writes down what ONE job does as a state graph, exports it in the Behavior tab's contract (`brain/state/behavior-tree.json`)
+`brain/graph.js` `createGraph({ name, nodes, edges, file })` writes down what ONE job does as a state graph, exports it in the Behavior tab's contract (`brain/state/behavior-tree.json`)
 and runs inside that job's scheduler task (`g.run(ctx)`: `ctx.checkpoint()` between states, a resumed task continues in its node). It never submits tasks and has no priority: a graph is
 not another arbiter. mineflayer-statemachine graphs (plugin-eval) export through the same contract.
