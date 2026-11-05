@@ -39,7 +39,7 @@ module.exports = function makeLight(bot, Vec3) {
         const k = key(nx, ny, nz); if ((lvl.get(k) || 0) >= nl) continue
         lvl.set(k, nl); buckets[nl].push([nx, ny, nz])
       }
-      if (++n % 4000 === 0) await new Promise(r => setImmediate(r))
+      if (++n % 800 === 0) await new Promise(r => setImmediate(r))   // short slices: combat must keep ticking during a big light flood
     }
     const level = (p) => lvl.get(key(p.x, p.y, p.z)) || 0
     const spawnable = (p) => { const b = bot.blockAt(p), up = bot.blockAt(p.offset(0, 1, 0)), g = bot.blockAt(p.offset(0, -1, 0))

@@ -265,7 +265,8 @@ module.exports = function plan(G, S, M, api, log) {
       const L = require('./light')(bot, v(0, 0, 0).constructor)
       const lm = await L.compute(h, R, 20)
       const surfaceCells = []
-      for (let dx = -R; dx <= R; dx += 2) for (let dz = -R; dz <= R; dz += 2) { if (Math.hypot(dx, dz) > R) continue; const p = surface(h.x + dx, h.z + dz); if (p) surfaceCells.push(p) }
+      // in slices: scanning ~3000 columns in one go froze the event loop for 2-3 s, and nothing (combat included) runs meanwhile
+      for (let dx = -R; dx <= R; dx += 2) { for (let dz = -R; dz <= R; dz += 2) { if (Math.hypot(dx, dz) > R) continue; const p = surface(h.x + dx, h.z + dz); if (p) surfaceCells.push(p) } await new Promise(r => setImmediate(r)) }
       // the farm sits in a hollow below home (y62) that the top-down scan never reaches; three skeletons stood there at 20:26.
       // Cells around the plots, at the plots' level, count as ground to light too.
       const seenCell = new Set(surfaceCells.map(p => p.x + ',' + p.y + ',' + p.z))
