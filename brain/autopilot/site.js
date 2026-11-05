@@ -140,10 +140,14 @@ module.exports = function site(G, S, M, api, log) {
       // still holding plenty: the chests are full, so a new chest beside the last one
       if (!S.has('chest') && S.planks() + S.logs() * 4 >= 8) await S.craft('chest', 1)
       if (S.has('chest')) {
+        // where a new chest may go: the spots site.json lists (newChestSpots), else beside the last chest; never in the walkway through the
+        // gate (a chest set between the two farm chests filled the passage and locked the bot out, 11:39)
+        const g0 = v(...cfg.gate), passage = (p) => Math.abs(p.x - g0.x) <= 0 && Math.abs(p.z - g0.z) <= 4
         const last = v(...cfg.chests[cfg.chests.length - 1])
-        for (const [dx, dz] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-2, 0], [2, 0]]) {
-          const p = last.offset(dx, 0, dz), b = S.block(p), g = S.block(p.offset(0, -1, 0))
-          if (!b || !S.isAir(b) || !g || g.boundingBox !== 'block' || inBox(p, cfg.box)) continue
+        const cands = (cfg.newChestSpots || []).map(q => v(...q)).concat([[-1, 0], [1, 0], [0, -1], [0, 1], [-2, 0], [2, 0]].map(([dx, dz]) => last.offset(dx, 0, dz)))
+        for (const p of cands) {
+          const b = S.block(p), g = S.block(p.offset(0, -1, 0))
+          if (!b || !S.isAir(b) || !g || g.boundingBox !== 'block' || passage(p) || (!(cfg.newChestSpots || []).some(q => q[0] === p.x && q[2] === p.z) && inBox(p, cfg.box))) continue
           if (await S.placeAgainst(g, v(0, 1, 0), 'chest')) { cfg.chests.push([p.x, p.y, p.z]); fs.writeFileSync(api.statePath('site.json'), JSON.stringify(cfg, null, 1)); note(`${cfg.name}: chests full, added one at ${p}`); return moved + await deposit(cfg) }
         }
       }
