@@ -73,7 +73,15 @@ module.exports = function plan(G, S, M, api, log) {
     { id: 'night-home', budget: 660000, need: () => S.isNight() && !bot.isSleeping && !!home() && Date.now() > (st.noSleepUntil || 0) && Math.floor(bot.entity.position.y) > 50 && (!st.waitBedForOthers || othersAsleep()), cool: 30000, run: async () => {
       st.waitBedForOthers = false
       const h = home()
-      const r = await S.goto(new goals.GoalNear(h.x, h.y, h.z, 2), { dig: false, ms: 90000 })
+      // with a shelter round the bed: to the cell outside its door first, then in through the door to a floor cell beside the bed.
+      // A plain go-to near the bed ended on the shelter roof twice (13:01, 14:48: 'cannot sleep: the bed is too far').
+      let r
+      if (st.shelterDoor && G.role !== 'assistant') {
+        const d = v(...st.shelterDoor), out = d.offset(Math.sign(d.x - h.x), 0, Math.sign(d.z - h.z))
+        if (S.dist(h) > 3) await S.goto(new goals.GoalNear(out.x, out.y, out.z, 1), { dig: false, ms: 90000 })
+        r = await S.goto(new goals.GoalNear(h.x, h.y, h.z, 1.5), { dig: false, ms: 30000, escalate: false })
+        if (!r.ok) r = await S.goto(new goals.GoalNear(h.x, h.y, h.z, 2), { dig: false, ms: 60000 })
+      } else r = await S.goto(new goals.GoalNear(h.x, h.y, h.z, 2), { dig: false, ms: 90000 })
       const bed = bot.findBlock({ matching: ids(/_bed$/), maxDistance: 4 })
       if (!bed) { st.noSleepUntil = Date.now() + 120000; return !!r.ok }
       try { await bot.sleep(bed); note('sleeping at home') } catch (e) { note('cannot sleep: ' + e.message); st.noSleepUntil = Date.now() + 5 * 60000; return true }
