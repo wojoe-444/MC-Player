@@ -138,7 +138,13 @@ module.exports = function site(G, S, M, api, log) {
     }
     if (S.items().some(it => wanted(it) && S.count(it.name) > (KEEP[it.name] || 0) + 8) && (cfg.chests || []).length) {
       // still holding plenty: the chests are full, so a new chest beside the last one
-      if (!S.has('chest') && S.planks() + S.logs() * 4 >= 8) await S.craft('chest', 1)
+      // planks of the farm's own wood first: with none in the bag S.craft('chest') returned false every time (chests full at 13:33 and
+      // 16:45, logs piling up in the bag, no new chest)
+      if (!S.has('chest') && S.planks() + S.logs() * 4 >= 8) {
+        if (S.planks() < 8) await S.craft((cfg.log || 'oak_log').replace(/_log$/, '_planks'), Math.ceil((8 - S.planks()) / 4)).catch(() => false)
+        await S.craft('chest', 1).catch(() => false)
+        if (!S.has('chest')) note(`${cfg.name}: chests full and no chest could be crafted (planks ${S.planks()}, logs ${S.logs()})`)
+      }
       if (S.has('chest')) {
         // where a new chest may go: the spots site.json lists (newChestSpots), else beside the last chest; never in the walkway through the
         // gate (a chest set between the two farm chests filled the passage and locked the bot out, 11:39)
