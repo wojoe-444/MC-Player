@@ -98,7 +98,11 @@ module.exports = function makeGoals(S, M, api, log) {
 
   // ---------- the steps ----------
   const steps = [
-    { id: 'eat', need: () => bot.food <= 14 && S.foodPoints() > 0, run: async () => { for (let i = 0; i < 3 && bot.food < 19 && S.foodPoints() > 0; i++) { if (!(await S.eat())) break; await S.wait(300) } return true } },
+    // hurt with a hunger bar under 18 does not heal at all: eat then too, and bake bread from carried wheat when there is no food
+    // (17:25-17:40 OzoGo444 sat at 2 hp, food 15-16, 11 wheat in the bag and nothing to eat)
+    { id: 'eat', need: () => (bot.food <= 14 || (bot.health < 14 && bot.food < 18)) && (S.foodPoints() > 0 || S.count('wheat') >= 3), run: async () => {
+      if (S.foodPoints() <= 0 && S.count('wheat') >= 3) await S.craft('bread', Math.min(4, Math.floor(S.count('wheat') / 3))).catch(() => false)
+      let ate = 0; for (let i = 0; i < 3 && bot.food < 19 && S.foodPoints() > 0; i++) { if (!(await S.eat())) break; ate++; await S.wait(300) } return ate > 0 } },
 
     { id: 'recover', need: () => process.env.AUTO_RECOVER === '1' && st.death && Date.now() - st.death.t < 8 * 60000 && !st.death.done, run: async () => {
       const d = st.death; note(`recovering items at ${d.x},${d.y},${d.z}`)
