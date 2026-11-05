@@ -19,6 +19,7 @@ module.exports = function register(api) {
       const kind = typeName(p.sourceTypeId)
       const by = p.sourceCauseId > 0 ? bot.entities[p.sourceCauseId - 1] : null
       const who = by ? (by.username || by.name || by.type) : null
+      if (!who) bot._lastEnvHurtAt = Date.now()   // no mob behind it: thorns, falls, drowning, fire (the cave reflex ignores these)
       const hp0 = bot.health
       setTimeout(() => {
         const lost = Math.max(0, +(hp0 - bot.health).toFixed(1))
