@@ -437,6 +437,7 @@ function create(bot, overrides = {}, hooks = {}) {
   }
 
   function doAttack(e, crit) {
+    if (bot._thornsMobs && bot._thornsMobs.has(e.id)) { stats.thornsSkips = (stats.thornsSkips || 0) + 1; return }   // Thorns armor (threat.js already drops it as a target; belt and braces)
     try { pendingSwings.push({ tick: tickN, id: e.id, hp: e.metadata && typeof e.metadata[9] === 'number' ? e.metadata[9] : null, reach: 0 }); bot.attack(e); stats.swings++; if (crit) stats.crits++; recentHit.set(e.id, tickN) } catch (err) { ev('attack-error', { m: String(err.message).slice(0, 80) }) }
   }
 
