@@ -60,7 +60,7 @@ test('the shipped bot profiles are valid and match the seeds they replaced', () 
   for (const [bot, role] of [['ozo', 'hillclimber'], ['smeo', 'assistant']]) {
     const d = tmp(); fs.copyFileSync(path.join(__dirname, '..', 'bots', bot, 'profile.json'), path.join(d, 'profile.json'))
     const p = createProfile({ stateDir: d }).get()
-    assert.strictEqual(p.role, role); assert.strictEqual(p.stance, 'autonomous'); assert.deepStrictEqual(p.disabledModules, ['mining', 'build', 'villagers', 'dashboard'])
+    assert.strictEqual(p.role, role); assert.strictEqual(p.stance, 'autonomous'); assert.deepStrictEqual(p.disabledModules, ['treefarm', 'excavation', 'build', 'villagers', 'mining', 'routines', 'dashboard']); assert.strictEqual(p.planner.enabled, false)
     assert.strictEqual(p.name, bot === 'ozo' ? 'OzoGo444' : 'Smeo444')
   }
   assert.ok(createProfile({ stateDir: (() => { const d = tmp(); fs.copyFileSync(path.join(__dirname, '..', 'bots', 'smeo', 'profile.json'), path.join(d, 'profile.json')); return d })() }).get().steps.includes('berries'))
@@ -116,4 +116,12 @@ test('the stance command matches through the integrator signature match(user, te
   for (const t of ['autonomous mode', 'task mode', 'mode', 'switch to autonomous', 'back to task mode']) assert.ok(c.match('OGWO', t), t)
   for (const t of ['hello there', 'what mode is the farm in today']) assert.ok(!c.match('OGWO', t), t)
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'brain', 'clearbox', 'index.js'), 'utf8'), /match: \(u, t\) => STARTRE\.test\(t\)/)
+})
+
+test('the seed profiles ship with the planner off and the digging/building modules disabled', () => {
+  for (const b of ['ozo', 'smeo']) {
+    const pf = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'bots', b, 'profile.json'), 'utf8'))
+    assert.strictEqual(pf.planner.enabled, false, b)
+    for (const m of ['treefarm', 'excavation', 'build', 'villagers', 'mining', 'routines']) assert.ok(pf.disabledModules.includes(m), b + ' ' + m)
+  }
 })
