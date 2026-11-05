@@ -678,7 +678,8 @@ module.exports = function makeSkills({ bot, api, log }) {
     if (b.name === 'water') return 'water'
     const h = S.hazardNear(p, 1)
     if (h.lava) return 'lava'
-    if (h.water) return 'water'
+    // water comes in through faces only: a diagonal neighbour stays put when this cell opens
+    if (h.water && SIX.some(([dx, dy, dz]) => { const n = S.block(v(p.x + dx, p.y + dy, p.z + dz)); return n && (n.name === 'water' || n.name === 'bubble_column' || (n.getProperties && n.getProperties().waterlogged === true)) })) return 'water'
     if (!(await S.approach(b, { dig: false, tries: 2 }))) return 'fail'
     if (!(await S.digBlock(b, { force: !CANT_BREAK.test(b.name) }))) return 'fail'
     // a gravel/sand column above refills the cell as it falls: keep digging until the cell stays open (walking into falling gravel suffocated the bot 4 times)
