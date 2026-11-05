@@ -9,7 +9,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { ago, useNow } from "@/useDashboard"
 import type { BotId, BotSnap } from "@/types"
 
-function Frame({ src, pixelated, alt }: { src: string; pixelated?: boolean; alt: string }) {
+export function Frame({ src, pixelated, alt }: { src: string; pixelated?: boolean; alt: string }) {
   const [state, setState] = useState<"loading" | "ok" | "error">("loading")
   useEffect(() => setState("loading"), [src])
   return (

@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import type { LogEntry } from "@/types"
 
-const KEY = ["GOAL", "PLAN", "DIED", "REFLEX", "ALARM", "IDLE", "KNOWN", "CRAFT_FAIL", "PLACE_FAIL", "chat", "conn"]
+export const KEY = ["GOAL", "PLAN", "DIED", "REFLEX", "ALARM", "IDLE", "KNOWN", "CRAFT_FAIL", "PLACE_FAIL", "chat", "conn"]
 const FILTERS: Record<string, { label: string; test: (e: LogEntry) => boolean }> = {
   key: { label: "Key", test: (e) => KEY.includes(e.kind) },
   chat: { label: "Chat", test: (e) => ["chat", "server", "DIED"].includes(e.kind) },
@@ -17,22 +17,22 @@ const FILTERS: Record<string, { label: string; test: (e: LogEntry) => boolean }>
 }
 const QUIET = ["SCHED", "nav", "safety", "breath", "RELOAD", "router", "lag"]
 
-function badgeVariant(kind: string) {
+export function badgeVariant(kind: string) {
   if (["DIED", "ALARM", "CRAFT_FAIL", "PLACE_FAIL"].includes(kind)) return "destructive" as const
   if (["GOAL", "PLAN"].includes(kind)) return "default" as const
   if (kind === "chat") return "secondary" as const
   return "outline" as const
 }
-function clean(e: LogEntry) {
+export function clean(e: LogEntry) {
   return e.text
     .replace(/^(autopilot )?(GOAL|PLAN|REFLEX|ALARM|IDLE|KNOWN|CRAFT_FAIL|PLACE_FAIL)\s*/, "")
     .replace(/^\d{4}-\d\d-\d\dT[\d:.]+Z\s*/, "")
 }
-function clock(iso: string | null) {
+export function clock(iso: string | null) {
   return iso ? new Date(iso).toLocaleTimeString([], { hour12: false }) : ""
 }
 
-export function LogPanel({ entries }: { entries: LogEntry[] }) {
+export function LogPanel({ entries, height = "h-80", showBot = false }: { entries: LogEntry[]; height?: string; showBot?: boolean }) {
   const [filter, setFilter] = useState("key")
   const [q, setQ] = useState("")
   const [follow, setFollow] = useState(true)
@@ -85,7 +85,7 @@ export function LogPanel({ entries }: { entries: LogEntry[] }) {
       </div>
       <div ref={wrap} className="rounded-lg border">
         {rows.length === 0 ? (
-          <Empty className="h-80">
+          <Empty className={height}>
             <EmptyHeader>
               <EmptyMedia variant="icon"><ScrollTextIcon /></EmptyMedia>
               <EmptyTitle>No log lines</EmptyTitle>
@@ -93,11 +93,12 @@ export function LogPanel({ entries }: { entries: LogEntry[] }) {
             </EmptyHeader>
           </Empty>
         ) : (
-          <ScrollArea className="h-80">
+          <ScrollArea className={`${height} [&>[data-slot=scroll-area-viewport]>div]:!block`}>
             <div className="flex flex-col py-1 font-mono text-xs">
               {rows.map((e) => (
-                <div key={e.id} className="grid grid-cols-[3.75rem_5.5rem_1fr] items-start gap-2 px-3 py-0.5 hover:bg-muted/50">
+                <div key={`${e.bot}${e.id}`} className={`grid ${showBot ? "grid-cols-[3.75rem_5rem_5.5rem_1fr]" : "grid-cols-[3.75rem_5.5rem_1fr]"} items-start gap-2 px-3 py-0.5 hover:bg-muted/50`}>
                   <span className="text-muted-foreground">{clock(e.t)}</span>
+                  {showBot && <span className="font-semibold">{e.bot === "ozo" ? "Ozo" : "Smeo"}</span>}
                   <Badge variant={badgeVariant(e.kind)} className="max-w-full justify-self-start"><span className="truncate">{e.kind}</span></Badge>
                   <span className={`break-words whitespace-pre-wrap ${QUIET.includes(e.kind) ? "text-muted-foreground" : ""}`}>{clean(e)}</span>
                 </div>

@@ -375,5 +375,7 @@ http.createServer((req, res) => {
   const rel = p === '/' ? 'index.html' : p.slice(1);
   const file = path.normalize(path.join(WEB, rel));
   if (!file.startsWith(WEB)) return send(res, 403, 'no');
+  // SPA routes (no file extension) fall back to index.html
+  if (!path.extname(file) && !fs.existsSync(file)) return sendFile(res, path.join(WEB, 'index.html'));
   sendFile(res, file);
 }).listen(PORT, '127.0.0.1', () => console.log(`Bot Dashboard on http://localhost:${PORT}`));
