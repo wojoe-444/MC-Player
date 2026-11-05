@@ -3,6 +3,6 @@
   "name": "OzoGo444",
   "role": "hillclimber",
   "stance": "autonomous",
-  "planner": { "enabled": true },
-  "disabledModules": ["mining", "build", "villagers", "dashboard"]
+  "planner": { "enabled": false },
+  "disabledModules": ["treefarm", "excavation", "build", "villagers", "mining", "routines", "dashboard"]
 }
