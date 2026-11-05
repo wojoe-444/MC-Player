@@ -612,7 +612,7 @@ module.exports = function plan(G, S, M, api, log) {
   const loopTimer = setInterval(() => {
     try {
       // a reflex task that never ends holds everything: safety ran 29 minutes at y20 (19:30-19:58) with the bot standing still and the log silent
-      try { const run = api.scheduler.status().running; if (run && /^(safety|wd-retreat)$/.test(run.name) && run.runningS > 180 && !S.hostilesNear(8).length) { log('PLAN', `loop breaker: ${run.name} ran ${run.runningS}s, cancelled`); api.scheduler.cancel(run.name, 'stuck') } } catch {}
+      try { const run = api.scheduler.status().running; if (run && /^(safety|wd-retreat)$/.test(run.name) && ((run.runningS > 180 && !S.hostilesNear(8).length) || run.runningS > 360)) { log('PLAN', `loop breaker: ${run.name} ran ${run.runningS}s, cancelled`); api.scheduler.cancel(run.name, 'stuck') } } catch {}
       if (!bot.entity || !st.home) return
       // logged in or respawned at world spawn, hundreds of blocks from home (Smeo444 on its first days): back home by the reset
       if (bot.entity.position.distanceTo(home()) > 400 && G.forceReset) G.forceReset('far from home (' + Math.round(bot.entity.position.distanceTo(home())) + ' blocks)')
