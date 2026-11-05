@@ -173,7 +173,7 @@ function create(bot, overrides = {}, hooks = {}) {
     if (shielding && tickN % 3 === 0) { const f = bot.entity.metadata && bot.entity.metadata[8]; stats.shieldChecks++; if (typeof f === 'number' && !(f & 1)) { stats.shieldDrops++; if (P.shieldVerify) bot.activateItem(true) } else if (typeof f !== 'number') stats.shieldNoMeta++ }
     const { threats, arrows: inbound } = P.assess(bot, tracks, P)
     const live = threats.filter(t => t.canHurt)
-    meleeClose = live.some(t => t.kind !== 'ranged' && t.d < 3.5)
+    meleeClose = live.some(t => t.kind !== 'ranged' && t.d < 3.5); bot._meleeClose = meleeClose
     behTicks[beh] = (behTicks[beh] || 0) + 1
     // ---- flight recorder ----
     const ar = inbound.length
