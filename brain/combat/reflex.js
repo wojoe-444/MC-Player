@@ -328,10 +328,11 @@ function create(bot, overrides = {}, hooks = {}) {
     }
 
     // ---- creeper fusing: shield and hold (or hit it if it is in reach and we are not raising) ----
-    if (fusing && P.creeperOnFuse !== 'shield' && fusing.d < P.creeperFuseReact) {
+    // with no shield to raise, a fusing creeper means run (it held still with nothing in the off hand and was blown up at 18:21 and 17:46)
+    if (fusing && (P.creeperOnFuse === 'hitflee' || (P.creeperOnFuse !== 'shield' && fusing.d < P.creeperFuseReact) || !hasShield()) && fusing.d < (P.creeperFuseReact || 5)) {
       beh = 'creeper-flee'
-      // get out of the blast: damage falls off to nothing by ~6 blocks, and the fuse is only 1.5 s
-      if (P.creeperOnFuse === 'hitflee' && fusing.reach <= P.reach && ready && !shielding) { doAttack(fusing.e, false); lastSwing = tickN }
+      // get out of the blast: damage falls off to nothing by ~6 blocks, and the fuse is only 1.5 s; a hit first when it is in reach knocks it back
+      if (fusing.reach <= P.reach && tickN - lastSwing >= P.attackTicks && !shielding) { doAttack(fusing.e, false); lastSwing = tickN }
       shield(false); stats.fuseFlees++
       const dx = pos.x - fusing.e.position.x, dz = pos.z - fusing.e.position.z, n = Math.hypot(dx, dz) || 1
       bot.look(Math.atan2(-(dx / n), -(dz / n)), 0, true); c.forward = true; c.sprint = true

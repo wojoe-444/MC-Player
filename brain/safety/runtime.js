@@ -425,7 +425,9 @@ module.exports = function install({
             // skeleton, 17:13 zombies and a creeper) the bot fled with a pickaxe in hand and bread in its mouth while mobs hit it point-blank
             await equipWeapon()
             if (!d.urgent && nearestThreatDist() > 8) await maybeEat()
-            await retreat(L, e, d)
+            // a creeper is the combat reflex's: it hits it as it comes and runs from the fuse by itself. A pathfinder flee on top of that
+            // pulled the controls the other way and the bot stood still while the creeper walked up and blew (18:21, 20 hp on the surface)
+            if (!(e.name === 'creeper' && bot._combat)) await retreat(L, e, d)
           }
         } else if (!active) {
           if (recovering && latest && latest.retreat === 'shelter') await goShelter(L)
