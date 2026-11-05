@@ -462,7 +462,7 @@ module.exports = function plan(G, S, M, api, log) {
           if (!r.ok && Math.floor(bot.entity.position.y) > 56) { st.mine.fails = (st.mine.fails || 0) + 1; if (st.mine.fails >= 3) { note('mine: the shaft is lost, a new one will be dug'); st.mine = null } G.save(); return false }
         } else {
           // the first shaft: next to home (not inside the house), away from places where the bot died
-          const OFF = [[6, 6], [-10, 6], [10, -10], [-10, -10], [0, 16], [16, 0], [-16, 0], [0, -16]], near = (x, z) => (st.avoid || []).some(q => Math.hypot(q[0] - x, q[2] - z) < 12)
+          const OFF = [[6, 6], [-10, 6], [10, -10], [-10, -10], [0, 16], [16, 0], [-16, 0], [0, -16]], near = (x, z) => (st.avoid || []).some(q => Math.hypot(q[0] - x, q[2] - z) < 12) || (st.avoidMines || []).some(q => Math.hypot(q[0] - x, q[2] - z) < 48)   // and no new shaft within reach of a deadly old one
           let k = 0; while (k < OFF.length && near(h.x + OFF[(st.mineSpot || 0) % OFF.length][0], h.z + OFF[(st.mineSpot || 0) % OFF.length][1])) { st.mineSpot = (st.mineSpot || 0) + 1; k++ }
           // a chosen site (st.mineSite: the land spot farthest from open water, 2026-11-05; every shaft dug by the sea flooded) comes first
           const o = st.mineSite && !near(st.mineSite[0], st.mineSite[2]) ? [st.mineSite[0] - h.x, st.mineSite[2] - h.z] : OFF[(st.mineSpot || 0) % OFF.length]
@@ -494,9 +494,13 @@ module.exports = function plan(G, S, M, api, log) {
         } catch (e) { log('PLAN', 'mine lighting: ' + e.message) }
       }
       st.mineDir = ((st.mineDir || 0) + 1) % 4
+      { const here = S.flo(bot.entity.position), D = [[1, 0], [0, 1], [-1, 0], [0, -1]]   // the order M.tunnel uses
+        const bad = (d) => (st.avoidMines || []).some(q => Math.hypot(here.x + D[d][0] * 40 - q[0], here.z + D[d][1] * 40 - q[2]) < 48)
+        for (let k = 0; k < 4 && bad(st.mineDir); k++) st.mineDir = (st.mineDir + 1) % 4 }
       const before = ironUnits()
       const t = await M.tunnel(st.mineDir, 40, { targets: /^(deepslate_)?(iron|coal|copper|gold|diamond|redstone|lapis)_ore$/, torchEvery: 6, stop: () => S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 })
       note(`mine: tunnel ${t.len} blocks, mined ${t.mined}, iron +${ironUnits() - before} (${t.reason})`)
+      if (ironUnits() - before >= 3) st.mineDeaths = 0   // a good haul: the shaft is worth keeping
       // the four tunnels from this bottom are dug out: walking them again mines nothing (06:56, "tunnel 40 blocks, mined 0" in 11 s).
       // Two empty walks in a row: a new level 8 blocks further down the same shaft, which becomes the shaft bottom
       if (t.mined === 0 && t.len >= 30) st.mineEmpty = (st.mineEmpty || 0) + 1; else if (t.mined > 0) st.mineEmpty = 0
@@ -830,8 +834,9 @@ module.exports = function plan(G, S, M, api, log) {
       // a shaft whose tunnels open into a mob-filled cave: the bot died four times around (223-231, 22-27, -313..-338) in five hours. Two deaths
       // within 48 blocks of the shaft bottom and the shaft is given up; the next one is dug at another spot around home
       if (p.y < 60 && st.mine && st.mine.bottom && p.distanceTo(v(...st.mine.bottom)) < 48) {
-        st.mineDeaths = (st.mineDeaths || 0) + 1
-        if (st.mineDeaths >= 2) { log('PLAN', `mine: ${st.mineDeaths} deaths around the shaft bottom ${st.mine.bottom}, giving the shaft up`); st.mine = null; st.mineSite = null; st.mineDeaths = 0 }
+        if (Date.now() - (st.mineDeathAt || 0) > 30 * 60000) st.mineDeaths = 0   // one death long ago does not count toward a deadly shaft
+        st.mineDeaths = (st.mineDeaths || 0) + 1; st.mineDeathAt = Date.now()
+        if (st.mineDeaths >= 2) { log('PLAN', `mine: ${st.mineDeaths} deaths around the shaft bottom ${st.mine.bottom}, giving the shaft up`); st.avoidMines = (st.avoidMines || []).concat([st.mine.bottom]).slice(-8); st.mine = null; st.mineSite = null; st.mineDeaths = 0 }
       }
       st.restockAt = 0   // the bag is empty now: the home chests are the first stop
       G.save(); log('PLAN', `death at ${p.floored()} remembered; mine spot now ${st.mineSpot || 0}`)
