@@ -475,6 +475,23 @@ module.exports = function plan(G, S, M, api, log) {
           G.save()
         }
       }
+      // the shaft bottom is where the tunnels meet caves: light every spawnable cell around it before tunnelling (OzoGo444 died there to a
+      // zombie, a skeleton and a spider in one minute, 06:59; light from light.js, the server's light data is scrambled)
+      if (bot.entity.position.y < 56 && cnt('torch') >= 8) {
+        try {
+          delete require.cache[require.resolve('./light')]
+          const here = S.flo(bot.entity.position), lm = await require('./light')(bot, v(0, 0, 0).constructor).compute(here, 12, 6)
+          const cells = []
+          for (let dx = -10; dx <= 10; dx++) for (let dz = -10; dz <= 10; dz++) for (let dy = -3; dy <= 3; dy++) { const p = here.offset(dx, dy, dz); if (lm.spawnable(p)) cells.push(p) }
+          let lit = 0; const done = []
+          for (const p of cells.sort((a, b) => S.dist(a) - S.dist(b))) {
+            if (lit >= 6 || done.some(q => q.distanceTo(p) < 7)) continue
+            if (S.dist(p) > 4) { const r = await S.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { dig: false, ms: 15000 }); if (!r.ok) continue }
+            const g = S.block(p.offset(0, -1, 0)); if (g && await S.placeAgainst(g, v(0, 1, 0), 'torch')) { lit++; done.push(p) }
+          }
+          if (lit) note(`mine: lit ${lit} dark spots around the shaft bottom (${cells.length} spawnable)`)
+        } catch (e) { log('PLAN', 'mine lighting: ' + e.message) }
+      }
       st.mineDir = ((st.mineDir || 0) + 1) % 4
       const before = ironUnits()
       const t = await M.tunnel(st.mineDir, 40, { targets: /^(deepslate_)?(iron|coal|copper|gold|diamond|redstone|lapis)_ore$/, torchEvery: 6, stop: () => S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 })
