@@ -24,7 +24,8 @@ function register(api) {
     dashcam, result, slice,
     observe: (o) => observe.observe(o),
     observeText: (o) => observe.observeText(o),
-    note: (type, extra) => observe.push(type, extra),          // other modules can add events to the cursor stream
+    wrap: result.wrap,
+    note: (kind, extra, src) => observe.push(kind, extra, src || 'module'),   // other modules can add events to the cursor stream
     placeAnyFace: (o) => placeAnyFace(bot, Object.assign({ goals: api.goals, approach: true }, o)),
     slice: (o = {}) => {
       const s = slice.capture(bot, o)
@@ -38,12 +39,13 @@ function register(api) {
     }
   }
   bot._kit = kit
+  api.pilotkit = kit        // the capability the manifest provides ('pilotkit'); callers only need api.pilotkit.wrap(name, fn)
   return {
     name: 'pilot-kit',
     start() { observe.start(); dashcam.start() },
-    stop() { try { dashcam.stop() } catch {} try { observe.stop() } catch {} if (bot._kit === kit) delete bot._kit },
+    stop() { try { dashcam.stop() } catch {} try { observe.stop() } catch {} if (bot._kit === kit) delete bot._kit; if (api.pilotkit === kit) delete api.pilotkit },
     status() { return { cursor: observe.cursor(), dashcam: dashcam.status() } }
   }
 }
 module.exports = register
-module.exports.meta = { name: 'pilot-kit', version: 1 }
+module.exports.meta = require('./meta.json')

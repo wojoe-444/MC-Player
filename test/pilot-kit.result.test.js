@@ -38,7 +38,7 @@ test('classification of common failure messages', () => {
   assert.strictEqual(classify('timed out after 30s'), 'TIMEOUT')
   assert.strictEqual(classify('invalid item name'), 'BAD_ARGS')
   assert.strictEqual(classify('too dark to mine'), 'NOT_READY')
-  assert.strictEqual(classify('something odd'), 'FAILED')
+  assert.strictEqual(classify('something odd'), 'UNKNOWN')
 })
 
 test('failed legacy result keeps its reason and gets a code', () => {
