@@ -289,7 +289,7 @@ module.exports = function attach(deps) {
     match: /^(clear|drop|end|cancel) (the )?(focus|priorities|priority)\b|^back to (the )?normal (order|priorities)\b/,
     run() { const n = scheduler.clearFocus(); say(n ? 'OK, back to the normal order.' : 'There was no special focus.') } })
   commands.add({ name: 'queue', help: 'what are you doing',
-    match: /^(what are you (doing|up to|working on)|tasks?|queue|task queue|what.?s (queued|next))\b/,
+    match: /^(what are you (doing|up to|working on)|tasks?(?!\s+mode)|queue|task queue|what.?s (queued|next))\b/,   // "task mode" belongs to the mode module
     run() { say(queueLine().slice(0, 235)) } })
   commands.add({ name: 'resume', help: 'resume tasks', risk: 'high',
     match: /^(resume|carry on|continue|go on)( tasks?| what you were doing| everything)?$|^(resume|continue) (the )?(furnace|farm|everything|tasks?)\b/,
