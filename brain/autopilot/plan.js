@@ -647,6 +647,11 @@ module.exports = function plan(G, S, M, api, log) {
     // and keep a margin: walking along the edge of a bush row the bot's body grazes the thorns (53 bush hits by the farm gate, 03:30)
     if (!Mv._origExStep) Mv._origExStep = Mv.exclusionStep
     Mv.exclusionStep = function (block) { let w = Mv._origExStep.call(this, block); try { const p = block.position; if (p && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => { const n = bot.blockAt(p.offset(dx, 0, dz), false); return n && n.name === 'sweet_berry_bush' })) w += 6 } catch {} return w }
+    // the shelter roof is no place to walk: three times tonight a path home ended up standing on it and the bot stalled there
+    // (13:01, 14:48, 15:20 'cannot sleep: the bed is too far'). A heavy cost on the cells on top of it; the box is cached for a minute.
+    if (!Mv._origExStep2) { Mv._origExStep2 = Mv.exclusionStep
+      Mv.exclusionStep = function (block) { let w = Mv._origExStep2.call(this, block); try { const r = bot._roofBox && bot._roofBox(), p = block.position
+        if (r && p && p.y >= r.y && p.y <= r.y + 1 && p.x >= r.x0 && p.x <= r.x1 && p.z >= r.z0 && p.z <= r.z1) w += 60 } catch {} return w } }
     if (!Mv._origGetBlock) Mv._origGetBlock = Mv.getBlock
     Mv.getBlock = function (pos, dx, dy, dz) { const b = Mv._origGetBlock.call(this, pos, dx, dy, dz); if (b && b.name === 'sweet_berry_bush') { b.safe = false; b.physical = false } return b }
   } catch (e) { log('PLAN', 'exclusions not installed: ' + e.message) }
@@ -720,6 +725,13 @@ module.exports = function plan(G, S, M, api, log) {
   // Blocks inside the box around the home bed already count as established (isEstablished, homeBox), so neither the bot nor the pathfinder
   // takes them down. Chests are never built over (a block on top seals a chest). ----
   const CONTAINER = /chest|barrel|shulker|furnace|smoker/
+  // the cells above the shelter roof (the roof is at floor + 2), cached: the pathfinder asks for every step it weighs
+  var _roof = { at: 0, box: null }
+  function roofBox() {
+    if (G.role === 'assistant' || !st.shelterDoor) return null
+    if (Date.now() - _roof.at > 60000) { _roof.at = Date.now(); const pl = shelterPlan(); _roof.box = pl ? { x0: pl.box.x0 - 1, x1: pl.box.x1 + 1, z0: pl.box.z0 - 1, z1: pl.box.z1 + 1, y: pl.box.y + 3 } : null }
+    return _roof.box }
+  bot._roofBox = roofBox        // the Movements patch (installed once per process) calls the current plan's version
   function shelterPlan() {
     const h = home(); if (!h) return null
     const cells = [h, ...[[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dz]) => h.offset(dx, 0, dz))].filter(p => { const b = S.block(p); return b && /_bed$/.test(b.name) })
