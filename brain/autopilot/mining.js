@@ -125,7 +125,9 @@ module.exports = function makeMining(S, api, log) {
       if (h0.sculk || h1.sculk) { reason = 'sculk'; break }
       if (c0.y < minY) { reason = 'minY'; break }
       if (h0.lava || h1.lava) { reason = 'lava'; break }
-      if (h0.water || h1.water) { reason = 'water'; break }
+      // water only matters where opening the two cells lets it in: a face of c0 or c1. Water flows through faces only, so a pocket two
+      // blocks off or on a diagonal stays behind its wall (the old 2-block box gave up three shafts in a row at y20, 2026-11-05)
+      if ((h0.water || h1.water) && [c0, c1].some(c => [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]].some(([x, y, z]) => { const n = S.block(c.offset(x, y, z)); return n && (n.name === 'water' || n.name === 'bubble_column' || (n.getProperties && n.getProperties().waterlogged === true)) }))) { reason = 'water'; break }
       let r = await S.clearCell(c1); if (r !== 'ok') { reason = 'clear-' + r; break }
       r = await S.clearCell(c0); if (r !== 'ok') { reason = 'clear-' + r; break }
       if (!floorOk(c0)) { const f = await M.fill(c0.offset(0, -1, 0)); if (!f) { reason = 'nofloor'; break } }
