@@ -162,7 +162,7 @@ function register(api) {
     torches, darkSpots, run, state, routes
   }
 }
-register.meta = { name: 'lighting', version: 1 }
+register.meta = require('./meta.json')
 
 module.exports = register
 module.exports.meta = register.meta

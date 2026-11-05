@@ -1,0 +1,13 @@
+{
+  "name": "treefarm",
+  "version": 1,
+  "kind": "job",
+  "summary": "Birch tree farm upkeep: plant, harvest, replant and clear the canopy.",
+  "requires": [
+    "nav"
+  ],
+  "provides": [
+    "treefarm"
+  ],
+  "claims": []
+}

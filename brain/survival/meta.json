@@ -1,0 +1,9 @@
+{
+  "name": "survival",
+  "version": 1,
+  "kind": "observer",
+  "summary": "Survival metric: lives, causes of death and milestone times. Observation only.",
+  "requires": [],
+  "provides": [],
+  "claims": []
+}

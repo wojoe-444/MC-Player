@@ -1,0 +1,9 @@
+{
+  "name": "senses",
+  "version": 1,
+  "kind": "observer",
+  "summary": "Standing views for the driver: top-down map and first-person contact sheet on a cadence.",
+  "requires": [],
+  "provides": [],
+  "claims": []
+}

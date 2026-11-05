@@ -1,0 +1,11 @@
+{
+  "name": "villagers",
+  "version": 1,
+  "kind": "job",
+  "summary": "Villager finding, trading and upkeep (plan only until approved).",
+  "requires": [],
+  "provides": [
+    "villagers"
+  ],
+  "claims": []
+}

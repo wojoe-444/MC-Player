@@ -6,6 +6,7 @@ const perceive = require('./perceive')
 const trades = require('./trades')
 const createTrader = require('./trade')
 const baseConfig = require('./config.json')
+const { PRIORITY: SCHED } = require('../scheduler')
 
 const P = {
   FIND: /\b(find|look for|locate|search for|spot|where (are|is) (the |any )?)\s*(some |any |the )?villagers?\b|\bvillagers? (nearby|around|near me|near here)\b|\bany villagers?\b/,
@@ -97,7 +98,7 @@ function register(api) {
 
   // ---------- idle upkeep (off until Walter says "villager upkeep on") ----------
   scheduler.routine({
-    name: 'villager-upkeep', priority: 35, idleOnly: true, intervalMs: config.upkeep.intervalMs, defaultEnabled: false, enabledFn: () => !!state.upkeep.enabled,
+    name: 'villager-upkeep', priority: SCHED.UPKEEP, idleOnly: true, intervalMs: config.upkeep.intervalMs, defaultEnabled: false, enabledFn: () => !!state.upkeep.enabled,
     due: () => state.upkeep.enabled && api.now() - (state.upkeep.lastRun || 0) > config.upkeep.intervalMs,
     make: () => ({
       name: 'villager-upkeep', key: 'villagers', abort: () => trader.abort(),
@@ -120,7 +121,7 @@ function register(api) {
     onChat, trader, state
   }
 }
-register.meta = { name: 'villagers', version: 1 }
+register.meta = require('./meta.json')
 
 module.exports = register
 module.exports.meta = register.meta

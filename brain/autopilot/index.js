@@ -4,13 +4,14 @@ const fs = require('fs')
 const path = require('path')
 const util = require('util')
 const { Vec3 } = require('vec3')
+const { PRIORITY: SCHED } = require('../scheduler')
 
 const FILES = ['hallway.js', 'skills.js', 'mining.js', 'goals.js', 'plan.js', 'memory.js', 'think.js', 'watchdog.js']
 
 function register(api) {
   const { bot, scheduler, PRIORITY } = api
   const log = (tag, msg) => api.log('autopilot', `${tag} ${msg}`)
-  const ap = { enabled: true, S: null, M: null, G: null, api, bot, lastError: null, started: Date.now() }
+  const ap = { enabled: true, gate: null, S: null, M: null, G: null, api, bot, lastError: null, started: Date.now() }
   let taskKey = 'autopilot', timers = [], disposers = []
 
   function build() {
@@ -27,12 +28,16 @@ function register(api) {
     if (plan) plan(G, S, M, api, (t, m) => log(t, m))
     // the mind: a model plans every step from what it sees and remembers (think.js); G.step falls back to the routine steps above only when it cannot
     // brain/state/think-off: skip the model planner layer (no model credit; its per-step observation work only costs time). Claude drives from outside instead.
-    if (fs.existsSync(api.statePath('think-off'))) ap.thinkOff = true
+    if (api.profile ? !api.profile.get().planner.enabled : fs.existsSync(api.statePath('think-off'))) ap.thinkOff = true
     if (!ap.thinkOff) { try { require('./think')(G, S, M, api, (t, m) => log(t, m)) } catch (e) { log('THINK_LOAD_ERR', e.stack || e.message) } }
     ap.S = S; ap.M = M; ap.G = G
     if (ap.W && ap.reloadWatchdog) { try { ap.W.dispose() } catch {} ap.W = null; ap.reloadWatchdog = false }
     if (!ap.W) { try { ap.W = require('./watchdog')(ap, api, (t, m) => log(t, m)) } catch (e) { log('WD_LOAD_ERR', e.message) } }
   }
+  // ap.enabled is the on/off switch (chat "autopilot on|off", the watchdog kick may set it). ap.gate is installed by the stance policy (brain/mode):
+  // while it says no (task stance) the autopilot does not run, whoever sets ap.enabled. Replaces the old defineProperty pin on ap.enabled.
+  ap.allowed = () => { try { return !ap.gate || !!ap.gate() } catch { return true } }
+  ap.active = () => !!ap.enabled && ap.allowed()
   bot._ap = ap
   ap.reload = () => { build(); return 'reloaded' }
   build()
@@ -40,7 +45,7 @@ function register(api) {
   async function run(ctx) {
     ap.S.ctx = ctx
     try {
-      while (ap.enabled) {
+      while (ap.active()) {
         ctx.checkpoint()
         try { await ap.G.step() } catch (e) {
           if (e && e.name === 'AbortError') throw e
@@ -57,13 +62,13 @@ function register(api) {
 
   function ensureTask() {
     if (ap.keepTaskOff) return
-    if (!ap.enabled) return
+    if (!ap.active()) return
     try {
       const s = scheduler.status()
       const has = (s.running && s.running.key === taskKey) || (s.running && s.running.name === 'autopilot') ||
         (s.queue || []).some(t => t.name === 'autopilot' || t.key === taskKey) || (s.parked || []).some(t => t.name === 'autopilot' || t.key === taskKey)
       if (has) return
-      scheduler.submit({ name: 'autopilot', key: taskKey, priority: 45, onUserStop: 'park', run, abort: () => { try { ap.S.stopMoving() } catch {} } })
+      scheduler.submit({ name: 'autopilot', key: taskKey, priority: SCHED.AUTOPILOT, onUserStop: 'park', run, abort: () => { try { ap.S.stopMoving() } catch {} } })
     } catch (e) { log('SUBMIT_ERR', e.message) }
   }
 
@@ -94,18 +99,18 @@ function register(api) {
   api.commands.add({ name: 'autopilot', help: 'autopilot on|off|status', match: /\bauto-?pilot\b/, run(user, text) {
     const t = String(text).toLowerCase()
     if (/\b(off|stop|disable|pause)\b/.test(t)) { ap.enabled = false; scheduler.cancel && scheduler.cancel(taskKey); api.say('Autopilot off. Say "autopilot on" and I will go back to playing on my own.'); return }
-    if (/\b(on|start|enable|resume)\b/.test(t)) { ap.enabled = true; ensureTask(); api.say('Autopilot on.'); return }
+    if (/\b(on|start|enable|resume)\b/.test(t)) { ap.enabled = true; ensureTask(); api.say(ap.allowed() ? 'Autopilot on.' : 'Autopilot is switched on, but I am in task mode, so it waits. Say "autonomous mode" to let it play.'); return }
     const G = ap.G
-    api.say(`Autopilot ${ap.enabled ? 'on' : 'off'}; doing: ${G.lastStep || 'nothing yet'}. Bag: ${ap.S.logs()} logs, ${ap.S.count(/^(cobblestone|cobbled_deepslate)$/)} cobble.`.slice(0, 200))
+    api.say(`Autopilot ${ap.active() ? 'on' : (ap.enabled ? 'waiting for autonomous mode' : 'off')}; doing: ${G.lastStep || 'nothing yet'}. Bag: ${ap.S.logs()} logs, ${ap.S.count(/^(cobblestone|cobbled_deepslate)$/)} cobble.`.slice(0, 200))
   } })
 
   return {
     name: 'autopilot',
     start() { ensureTask(); timers.push(setInterval(ensureTask, 5000)) },
     stop() { ap.enabled = false; for (const t of timers) clearInterval(t); timers = []; try { ap.W && ap.W.dispose() } catch {} try { ap.G && ap.G.dispose && ap.G.dispose() } catch {} try { api.scheduler.cancel(taskKey, 'reload') } catch {} },
-    status() { return { enabled: ap.enabled, step: ap.G && ap.G.lastStep, lastError: ap.lastError && String(ap.lastError).slice(0, 200), log: ap.G && ap.G.log.slice(-8), stats: ap.S && ap.S.stats } },
+    status() { return { enabled: ap.active(), switchedOn: ap.enabled, step: ap.G && ap.G.lastStep, lastError: ap.lastError && String(ap.lastError).slice(0, 200), log: ap.G && ap.G.log.slice(-8), stats: ap.S && ap.S.stats } },
     ap,
   }
 }
 module.exports = register
-module.exports.meta = { name: 'autopilot', version: 1 }
+module.exports.meta = require('./meta.json')

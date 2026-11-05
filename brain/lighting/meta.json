@@ -1,0 +1,11 @@
+{
+  "name": "lighting",
+  "version": 1,
+  "kind": "job",
+  "summary": "Torch placement upkeep around the base.",
+  "requires": [],
+  "provides": [
+    "lighting"
+  ],
+  "claims": []
+}

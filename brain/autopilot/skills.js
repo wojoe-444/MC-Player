@@ -4,6 +4,7 @@
 const { Vec3 } = require('vec3')
 const { Movements, goals } = require('mineflayer-pathfinder')
 const los = require('../los')
+const { holderOf } = require('../reflexes')
 
 const AIR = /^(air|cave_air|void_air)$/
 const LOG_RE = /_(log|stem|hyphae|wood)$/
@@ -145,7 +146,7 @@ module.exports = function makeSkills({ bot, api, log }) {
     // event loop for two minutes at 14:23 and again at 14:51 (no evals, no reflex timers)
     await new Promise(r => setImmediate(r))
     // the breath reflex owns the movement keys while the bot is out of air (a dig under water drowned it at 14:50): wait for it
-    for (let i = 0; i < 40 && (bot._breathBusyUntil || 0) > Date.now(); i++) await new Promise(r => setTimeout(r, 500))
+    for (let i = 0; i < 40 && (bot._reflexes ? holderOf(bot, 'body') === 'breath' : (bot._breathBusyUntil || 0) > Date.now()); i++) await new Promise(r => setTimeout(r, 500))
     try { await api.safehand.ensureSafeForMove() } catch {}
     S.stats.goto++
     const nav = api.nav && api.nav.goto && api.nav.reach ? api.nav : null        // old nav (no reach.js loaded yet): the legacy path below

@@ -1,0 +1,13 @@
+{
+  "name": "clearbox",
+  "version": 1,
+  "kind": "job",
+  "summary": "Clear a box of terrain with the autopilot movement primitives.",
+  "requires": [
+    "autopilot"
+  ],
+  "provides": [
+    "clearbox"
+  ],
+  "claims": []
+}

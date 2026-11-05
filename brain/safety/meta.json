@@ -1,0 +1,14 @@
+{
+  "name": "safety",
+  "version": 1,
+  "kind": "reflex",
+  "summary": "Mob safety: threat assessment, retreat or fight (the melee claim is combat's when it is loaded), low-health holds, wall-in, night-guard shelter walk, descent loadout guard.",
+  "requires": [],
+  "provides": [
+    "safety"
+  ],
+  "claims": [
+    "melee",
+    "body"
+  ]
+}

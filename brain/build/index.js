@@ -139,7 +139,7 @@ function register(api) {
     engine, state, go, pause, resume
   }
 }
-register.meta = { name: 'build', version: 1 }
+register.meta = require('./meta.json')
 
 module.exports = register
 module.exports.meta = register.meta

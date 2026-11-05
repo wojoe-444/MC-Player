@@ -32,4 +32,4 @@ module.exports = function register(api) {
     status() { return ok }
   }
 }
-module.exports.meta = { name: 'plugins', version: 1 }
+module.exports.meta = require('./meta.json')

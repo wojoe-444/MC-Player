@@ -1,0 +1,11 @@
+{
+  "name": "nav",
+  "version": 1,
+  "kind": "service",
+  "summary": "Navigation: waypoints, escalating go-to (reach), doors, ladders and nether travel. Replaces the built-in scheduled navigation.",
+  "requires": [],
+  "provides": [
+    "nav"
+  ],
+  "claims": []
+}

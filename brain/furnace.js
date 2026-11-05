@@ -513,9 +513,9 @@ module.exports = function install({ bot, say, goals, tryGoto, safehand, stopNav 
     const interval = () => (state.lastResult && state.lastResult.noop ? Math.max(T.noopBackoffMinutes, T.checkIntervalMinutes) : T.checkIntervalMinutes) * 60000
     const overdue = () => now() - (state.lastRunAt || 0) > T.overdueMinutes * 60000
     return {
-      name: 'furnace', priority: PRIORITY.EXCAVATE - 1, idleOnly: true, intervalMs: 30000, defaultEnabled: false,
+      name: 'furnace', priority: PRIORITY.FURNACE_IDLE, idleOnly: true, intervalMs: 30000, defaultEnabled: false,
       due: () => dimOf(bot) === 'overworld' && bot.health >= T.minHealth && now() - (state.lastRunAt || 0) >= interval() && now() - (state.lastAttemptAt || 0) >= T.minAttemptGapMinutes * 60000,
-      make: () => ({ name: 'furnace', priority: overdue() ? PRIORITY.FURNACE : PRIORITY.EXCAVATE - 1, run })
+      make: () => ({ name: 'furnace', priority: overdue() ? PRIORITY.FURNACE : PRIORITY.FURNACE_IDLE, run })
     }
   }
 

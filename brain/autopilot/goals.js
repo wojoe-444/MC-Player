@@ -172,9 +172,9 @@ module.exports = function makeGoals(S, M, api, log) {
     // trips away from home are day work: woken in the night, the bot went for wood 30 blocks out and died to the mobs there (16:19).
     // At night it stays with what can be done at home (crafting, smelting, storage, the shaft, lighting close by).
     const night = S.isNight() && !!st.home
-    // role (brain/state/role.json, per bot): Walter 2026-11-04: Smeo444 is a personal assistant on a fixed routine (base upkeep and his
+    // role (bot profile, falling back to brain/state/role.json, per bot): Walter 2026-11-04: Smeo444 is a personal assistant on a fixed routine (base upkeep and his
     // chat requests); OzoGo444 is the hillclimber with the full step list. Missing file = hillclimber.
-    if (Date.now() - (G.roleAt || 0) > 10000) { G.roleAt = Date.now(); try { const rj = JSON.parse(require('fs').readFileSync(api.statePath('role.json'), 'utf8')); G.role = rj.role; G.roleSteps = Array.isArray(rj.steps) ? new Set(rj.steps) : null } catch { G.role = 'hillclimber'; G.roleSteps = null } }
+    if (Date.now() - (G.roleAt || 0) > 10000) { G.roleAt = Date.now(); try { const pr = api.profile ? api.profile.get() : JSON.parse(require('fs').readFileSync(api.statePath('role.json'), 'utf8')); G.role = pr.role || 'hillclimber'; G.roleSteps = Array.isArray(pr.steps) ? new Set(pr.steps) : null } catch { G.role = 'hillclimber'; G.roleSteps = null } }
     const assistant = G.role === 'assistant'
     for (const s of steps) {
       if (night && NIGHT_SKIP.has(s.id)) continue
