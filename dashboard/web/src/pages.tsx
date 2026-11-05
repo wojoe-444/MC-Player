@@ -10,6 +10,7 @@ import { BagBadges, BotBadges, dayClock, GoalBox, StaleAlert, Vitals } from "@/c
 import { BehaviorPanel } from "@/components/BehaviorPanel"
 import { InventoryPanel } from "@/components/InventoryPanel"
 import { badgeVariant, clean, clock, KEY, LogPanel } from "@/components/LogPanel"
+import { ReplayPanel } from "@/components/ReplayPanel"
 import { MemoryView, StructureView } from "@/components/StructurePanel"
 import { Frame, ViewPanel } from "@/components/ViewPanel"
 import { useData } from "@/DashboardContext"
@@ -153,6 +154,16 @@ export function BotBehavior() {
     <div className="flex flex-col gap-6">
       <BotTitle page="Behavior" description="State graph with the active state highlighted." />
       <Card><CardContent><BehaviorPanel id={bot.id} /></CardContent></Card>
+    </div>
+  )
+}
+
+export function BotReplay() {
+  const bot = useBot()
+  return (
+    <div className="flex flex-col gap-6">
+      <BotTitle page="Replay" description="Dashcam clips: the last seconds before a death or big hit, animated top-down." />
+      <Card><CardContent><ReplayPanel id={bot.id} /></CardContent></Card>
     </div>
   )
 }

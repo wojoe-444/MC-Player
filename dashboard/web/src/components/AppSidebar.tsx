@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom"
 import {
-  BoxesIcon, BrainCircuitIcon, DatabaseIcon, EyeIcon, LayoutDashboardIcon, NetworkIcon, PackageIcon, ScrollTextIcon,
+  BoxesIcon, ClapperboardIcon, BrainCircuitIcon, DatabaseIcon, EyeIcon, LayoutDashboardIcon, NetworkIcon, PackageIcon, ScrollTextIcon,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -13,6 +13,7 @@ import { BOT_IDS } from "@/types"
 const BOT_PAGES = [
   { slug: "live", label: "Live", icon: EyeIcon },
   { slug: "inventory", label: "Inventory", icon: PackageIcon },
+  { slug: "replay", label: "Replay", icon: ClapperboardIcon },
   { slug: "behavior", label: "Behavior", icon: NetworkIcon },
   { slug: "structure", label: "Structure", icon: BrainCircuitIcon },
 ]
