@@ -738,7 +738,12 @@ module.exports = function plan(G, S, M, api, log) {
   G.enterShelter = async () => {
     const h = home(); if (!h || !st.shelterDoor) return { ok: false, err: 'no shelter' }
     const d = v(...st.shelterDoor), out = d.offset(Math.sign(d.x - h.x), 0, Math.sign(d.z - h.z))
-    if (S.dist(h) > 2.2) await S.goto(new goals.GoalNear(out.x, out.y, out.z, 1), { dig: false, ms: 90000, escalate: S.dist(h) > 12 })
+    if (S.dist(h) > 2.2) {
+      const g = new goals.GoalNear(out.x, out.y, out.z, 1), far = S.dist(h) > 12
+      const w = await S.goto(g, { dig: false, ms: 90000, escalate: far })
+      // stuck in a hole or on a ledge more than 6 out: then dig or bridge after all (still never right at the walls)
+      if (!w.ok && !far && S.dist(h) > 6) await S.goto(g, { dig: false, ms: 90000, escalate: true })
+    }
     let r = await S.goto(new goals.GoalNear(h.x, h.y, h.z, 1.5), { dig: false, ms: 30000, escalate: false })
     if (!r.ok) r = await S.goto(new goals.GoalNear(h.x, h.y, h.z, 2), { dig: false, ms: 60000, escalate: false })
     return r
