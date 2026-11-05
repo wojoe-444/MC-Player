@@ -2,7 +2,8 @@
 //   { ok, cmd, note, data?, error?: { code, message, hint? }, ms, level? }
 // Backwards compatible with what skills return today ({ ok, note, ...extra }): extra keys are kept under `data`, `note` stays the human line.
 // AbortError is never swallowed, so scheduler aborts still stop the skill.
-const CODES = ['NO_PATH', 'NO_ITEM', 'UNSAFE', 'ABORTED', 'TIMEOUT', 'BAD_ARGS', 'NOT_READY', 'FAILED']
+// closed list; UNKNOWN = a failure whose message we could not classify (so wrapping a legacy return never throws)
+const CODES = ['NO_PATH', 'NO_ITEM', 'UNSAFE', 'ABORTED', 'TIMEOUT', 'BAD_ARGS', 'NOT_READY', 'FAILED', 'UNKNOWN']
 const RULES = [
   ['ABORTED', /abort|cancel/i],
   ['TIMEOUT', /timeout|timed out|too long/i],
@@ -12,7 +13,7 @@ const RULES = [
   ['BAD_ARGS', /bad arg|invalid|unknown (item|block|place|name)|missing arg|required|expected/i],
   ['NOT_READY', /not ready|readiness|gate|night|too dark|low health|hungry/i]
 ]
-const classify = (msg) => { const m = String(msg || ''); for (const [code, re] of RULES) if (re.test(m)) return code; return 'FAILED' }
+const classify = (msg) => { const m = String(msg || ''); for (const [code, re] of RULES) if (re.test(m)) return code; return 'UNKNOWN' }
 
 function normalize(cmd, raw, ms, level) {
   const out = { ok: true, cmd, note: '', ms }

@@ -5,41 +5,59 @@
 //   const o = bot._kit.observe({ since: lastCursor })   ->  { cursor, t, vitals, pos, doing, inventory, nearby, events, dropped }
 //   bot._kit.observeText({ since })                      ->  the same as a short text block
 //
+// Events are { seq, t, src, kind, ... }: src is the module or source that produced the event, so a dashboard can group them.
+// The ring lives in memory. It is also saved atomically to brain/state/observe-events.json (capped) only so a hot reload keeps the cursor.
+// observe() is pure and read-only: it never touches scheduler state.
 // Honest-play rule: nearby entities are limited to ones the bot has line of sight to (a clear ray to the entity's body), plus
 // anything that hit it (see sight.js). No seeing through walls.
 const sight = require('./sight')
 const MAX_EVENTS = 400
 const NEAR = 24
 
+const fs = require('fs')
+
 module.exports = function createObserve(api, opts = {}) {
   const { bot } = api
   const now = api.now || Date.now
   const ring = []
-  let seq = 0, dropped = 0
-  const listeners = []
-  const push = (type, extra) => {
-    const e = Object.assign({ seq: ++seq, t: now(), type }, extra)
+  let seq = 0, dropped = 0, dirty = false, saveTimer = null
+  const file = opts.persist === false || !api.statePath ? null : api.statePath('observe-events.json')
+  const load = () => {
+    if (!file) return
+    try {
+      const d = JSON.parse(fs.readFileSync(file, 'utf8'))
+      if (Array.isArray(d.ring)) { for (const e of d.ring.slice(-MAX_EVENTS)) ring.push(e); seq = Number.isFinite(d.seq) ? d.seq : (ring.length ? ring[ring.length - 1].seq : 0) }
+    } catch (e) {}
+  }
+  const save = () => {
+    if (!file || !dirty) return
+    dirty = false
+    try { const tmp = file + '.tmp'; fs.writeFileSync(tmp, JSON.stringify({ seq, ring })); fs.renameSync(tmp, file) } catch (e) {}
+  }
+  const push = (kind, extra, src = 'observe') => {
+    const e = Object.assign({ seq: ++seq, t: now(), src, kind }, extra)
     ring.push(e); if (ring.length > MAX_EVENTS) { ring.shift(); dropped++ }
+    dirty = true
     return e
   }
   const r1 = (n) => Math.round(n * 10) / 10
 
   const hear = {
-    chat: (x) => push('chat', { user: x.user, text: String(x.text).slice(0, 160) }),
-    task: (x) => push('task', { event: x.event, name: x.task && x.task.name }),
-    park: (x) => push('park', { module: x.module, reason: String(x.reason || '').slice(0, 100) })
+    chat: (x) => push('chat', { user: x.user, text: String(x.text).slice(0, 160) }, 'chat'),
+    task: (x) => push('task', { event: x.event, name: x.task && x.task.name }, 'scheduler'),
+    park: (x) => push('park', { module: x.module, reason: String(x.reason || '').slice(0, 100) }, 'scheduler')
   }
-  const onDeath = () => push('death', { pos: bot.entity ? [Math.round(bot.entity.position.x), Math.round(bot.entity.position.y), Math.round(bot.entity.position.z)] : null })
-  const onSpawn = () => push('spawn')
-  const onKicked = (r) => push('kicked', { reason: String(JSON.stringify(r)).slice(0, 120) })
-  const onEat = () => push('ate', { food: bot.food })
+  const onDeath = () => push('death', { pos: bot.entity ? [Math.round(bot.entity.position.x), Math.round(bot.entity.position.y), Math.round(bot.entity.position.z)] : null }, 'bot')
+  const onSpawn = () => push('spawn', {}, 'bot')
+  const onKicked = (r) => push('kicked', { reason: String(JSON.stringify(r)).slice(0, 120) }, 'bot')
+  const onEat = () => push('ate', { food: bot.food }, 'bot')
   const onDamage = (p) => {
     try {
       if (!bot.entity || p.entityId !== bot.entity.id) return
       const types = bot._damageTypes || null
       const by = p.sourceCauseId > 0 ? bot.entities[p.sourceCauseId - 1] : null
       const hp0 = bot.health
-      setTimeout(() => push('damage', { amount: r1(Math.max(0, hp0 - bot.health)), kind: (types && types[p.sourceTypeId]) || ('type#' + p.sourceTypeId), by: by ? (by.username || by.name || by.type) : null, hp: r1(bot.health) }), 60)
+      setTimeout(() => push('damage', { amount: r1(Math.max(0, hp0 - bot.health)), cause: (types && types[p.sourceTypeId]) || ('type#' + p.sourceTypeId), by: by ? (by.username || by.name || by.type) : null, hp: r1(bot.health) }, 'bot'), 60)
     } catch (e) {}
   }
 
@@ -103,7 +121,7 @@ module.exports = function createObserve(api, opts = {}) {
     if (x.error) return x.error
     const inv = Object.entries(x.inventory.counts).sort((a, b) => b[1] - a[1]).slice(0, 14).map(([k, v]) => `${k}:${v}`).join(' ')
     const near = x.nearby.hostiles.map(h => `${h.name}@${h.d}`).concat(x.nearby.players.map(h => `player ${h.name}@${h.d}`)).join(', ')
-    const ev = x.events.map(v => `[${v.seq}] ${v.type}${v.user ? ' ' + v.user + ': ' + v.text : ''}${v.kind ? ' ' + v.kind + ' -' + v.amount + (v.by ? ' by ' + v.by : '') : ''}${v.event ? ' ' + v.event + ' ' + (v.name || '') : ''}`).join('\n')
+    const ev = x.events.map(v => `[${v.seq}] ${v.kind}${v.user ? ' ' + v.user + ': ' + v.text : ''}${v.cause ? ' ' + v.cause + ' -' + v.amount + (v.by ? ' by ' + v.by : '') : ''}${v.event ? ' ' + v.event + ' ' + (v.name || '') : ''}`).join('\n')
     return [
       `cursor ${x.cursor} hp ${x.vitals.hp} food ${x.vitals.food} at ${x.pos.x},${x.pos.y},${x.pos.z} (${x.time.day ? 'day' : 'night'}) doing ${x.doing.task || 'idle'}${x.doing.step ? ' / ' + x.doing.step : ''}`,
       `hand ${x.inventory.hand || 'empty'} free slots ${x.inventory.free}; bag ${inv || 'empty'}`,
@@ -115,16 +133,20 @@ module.exports = function createObserve(api, opts = {}) {
 
   return {
     start() {
+      load()
+      if (file) { saveTimer = setInterval(save, 5000); if (saveTimer.unref) saveTimer.unref() }
       for (const k of Object.keys(hear)) if (api.events) api.events.on(k, hear[k])
       bot.on('death', onDeath); bot.on('spawn', onSpawn); bot.on('kicked', onKicked); bot.on('entityEat', onEat)
       try { bot._client.on('damage_event', onDamage) } catch (e) {}
     },
     stop() {
+      if (saveTimer) { clearInterval(saveTimer); saveTimer = null }
+      save()
       for (const k of Object.keys(hear)) if (api.events) api.events.removeListener(k, hear[k])
       bot.removeListener('death', onDeath); bot.removeListener('spawn', onSpawn); bot.removeListener('kicked', onKicked); bot.removeListener('entityEat', onEat)
       try { bot._client.removeListener('damage_event', onDamage) } catch (e) {}
     },
-    observe, observeText, push,   // push(type, extra) lets other modules add events (e.g. a skill reporting "ore_found")
+    observe, observeText, push,   // push(kind, extra, src) lets other modules add events (e.g. a skill reporting "ore_found")
     cursor: () => seq
   }
 }

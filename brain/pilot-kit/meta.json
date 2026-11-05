@@ -1,0 +1,11 @@
+{
+  "name": "pilot-kit",
+  "version": 1,
+  "kind": "service",
+  "summary": "Driver helpers: cursor observation, 10 Hz state dashcam, one result envelope, any-face placement, line-of-sight slice map.",
+  "requires": [],
+  "provides": [
+    "pilotkit"
+  ],
+  "claims": []
+}

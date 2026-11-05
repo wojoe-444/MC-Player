@@ -4,9 +4,9 @@
 //
 // Clip format v1 (also documented in README.md):
 //   { v:1, bot, reason, savedAt, hz, t0, t1, pos:{x,y,z}, map:{x0,z0,size,palette:[names],cells:[idx|-1,...]}|null,
-//     samples:[{t, x,y,z, yaw, pit, hp, fd, h, a, m:[[name,x,y,z,id],...]}], events:[{t, type, ...}] }
+//     samples:[{t, x,y,z, yaw, pit, hp, fd, h, a, m:[[name,x,y,z,id],...]}], events:[{t, src, kind, ...}] }
 //   t is milliseconds since t0. samples are 10 Hz. m = hostile mobs and players within RADIUS blocks. h = held item, a = what the bot is doing.
-//   events: damage {amount, kind, by}, death, chat {user,text}, task {event,name}, eat, respawn.
+//   events: kind = damage {amount, cause, by} | death | chat {user,text} | task {event,name} | respawn; src = chat | scheduler | bot.
 const fs = require('fs')
 const path = require('path')
 
@@ -65,9 +65,9 @@ module.exports = function createDashcam(api, opts = {}) {
     hpHist.push([t, bot.health ?? 20]); while (hpHist.length && t - hpHist[0][0] > 2500) hpHist.shift()
   }
 
-  const evt = (type, extra) => {
+  const evt = (kind, extra, src = 'bot') => {
     const t = now()
-    events.push(Object.assign({ t, type }, extra)); while (events.length && t - events[0].t > windowMs + post + 5000) events.shift()
+    events.push(Object.assign({ t, src, kind }, extra)); while (events.length && t - events[0].t > windowMs + post + 5000) events.shift()
   }
 
   function mapSnapshot() {
@@ -145,7 +145,7 @@ module.exports = function createDashcam(api, opts = {}) {
     else if (hp <= 6 && hp > 0) save('low_health')
   }
   const onDeath = () => { evt('death'); save('death') }
-  const onChat = (user, text) => { if (user !== bot.username) evt('chat', { user, text: String(text).slice(0, 120) }) }
+  const onChat = (user, text) => { if (user !== bot.username) evt('chat', { user, text: String(text).slice(0, 120) }, 'chat') }
   const onSpawn = () => evt('respawn')
   const onDamage = (p) => {
     try {
@@ -153,10 +153,10 @@ module.exports = function createDashcam(api, opts = {}) {
       const types = bot._damageTypes || null
       const by = p.sourceCauseId > 0 ? bot.entities[p.sourceCauseId - 1] : null
       const hp0 = bot.health
-      setTimeout(() => { evt('damage', { amount: r1(Math.max(0, hp0 - bot.health)), kind: (types && types[p.sourceTypeId]) || ('type#' + p.sourceTypeId), by: by ? (by.username || by.name || by.type) : null }) }, 60)
+      setTimeout(() => { evt('damage', { amount: r1(Math.max(0, hp0 - bot.health)), cause: (types && types[p.sourceTypeId]) || ('type#' + p.sourceTypeId), by: by ? (by.username || by.name || by.type) : null }) }, 60)
     } catch (e) {}
   }
-  const onTask = (x) => { try { evt('task', { event: x.event, name: x.task && x.task.name }) } catch (e) {} }
+  const onTask = (x) => { try { evt('task', { event: x.event, name: x.task && x.task.name }, 'scheduler') } catch (e) {} }
   let timer = null
   const onTick = () => { if (++tickN % Math.round(20 / hz) === 0) sample() }
 
