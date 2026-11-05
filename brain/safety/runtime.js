@@ -534,7 +534,7 @@ module.exports = function install({
     if (entombBusy) return
     // zombies already at arm's length: walling in (stopped, cobblestone in hand) let three of them kill OzoGo444 at 09:34. Fight (combat) instead;
     // walling in is for the moment the melee mobs are not yet in reach (creepers and archers still allow it)
-    if (bot._meleeClose && Date.now() - (bot._meleeCloseAt || 0) < 500) { slog('entomb skipped: melee mob in reach, fighting'); return }
+    if (bot._meleeClose && Date.now() - (bot._meleeCloseAt || 0) < 500) { slogOnce('entomb-skip', 'entomb skipped: melee mob in reach, fighting', 5000); return }
     entombBusy = true
     try { await doEntombInner(L) } finally { entombBusy = false }
   }
