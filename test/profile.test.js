@@ -108,3 +108,12 @@ test('BOT_MODE sets the start stance only; a bot with the old mode.json and no p
   assert.strictEqual(r.h.get(), 'autonomous'); assert.strictEqual(r.ap.active(), true)
   r.h.set('task', 'chat'); assert.strictEqual(JSON.parse(fs.readFileSync(path.join(d, 'mode.json'), 'utf8')).mode, 'task'); r.h.stop()
 })
+
+test('the stance command matches through the integrator signature match(user, text) (it used to take only text and never matched)', () => {
+  const d = tmp(); write(d, 'profile.json', { name: 'A', stance: 'task' })
+  const { cmds, h } = modeFixture(d); h.stop()
+  const c = cmds.find(x => x.name === 'mode')
+  for (const t of ['autonomous mode', 'task mode', 'mode', 'switch to autonomous', 'back to task mode']) assert.ok(c.match('OGWO', t), t)
+  for (const t of ['hello there', 'what mode is the farm in today']) assert.ok(!c.match('OGWO', t), t)
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'brain', 'clearbox', 'index.js'), 'utf8'), /match: \(u, t\) => STARTRE\.test\(t\)/)
+})

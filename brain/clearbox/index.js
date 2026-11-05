@@ -255,7 +255,7 @@ module.exports = function register(api) {
   const STOPRE = /^\W*clearbox\s+(?:stop|pause)\W*$|\b(?:stop|pause)\b.*\b(?:clearing|box|excavat)/i
   try {
     api.commands.add({ name: 'clearbox', help: 'clear box | clearbox status | clearbox stop', risk: 'low',
-      match: (t) => STARTRE.test(t) || STATUSRE.test(t) || STOPRE.test(t) || TORCHRE.test(t),
+      match: (u, t) => STARTRE.test(t) || STATUSRE.test(t) || STOPRE.test(t) || TORCHRE.test(t),
       run(user, text) {
         const tm = TORCHRE.exec(text); if (tm && !STOPRE.test(text) && !STATUSRE.test(text)) { st.torchChest = [Number(tm[1]), Number(tm[2]), Number(tm[3])]; st.torchAt = 0; save(); return say('Torch chest noted at ' + st.torchChest.join(' ') + '. I will fetch torches from it.') }
         if (STATUSRE.test(text)) return say(`Box: ${st.dug} dug, layer y${st.layer} ${st.idx}/${layerSize()}, ${st.chests.length} chests, ${st.active ? 'active' : st.done ? 'done' : 'stopped'}${st.status ? ' (' + st.status + ')' : ''}.`)
