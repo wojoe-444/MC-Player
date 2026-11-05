@@ -220,11 +220,14 @@ module.exports = function site(G, S, M, api, log) {
       return st._siteTrees >= 3 || st._siteSaplingSpots > 0 || S.items().some(i => /_log$/.test(i.name) && S.count(i.name) >= 32) },
     run: async () => {
       const cfg = read(); if (!cfg) return false
+      G.sitePhase = 'stock'   // phases for the behavior view (brain/behavior)
       await food(cfg); if (S.foodPoints() < 4) st._siteNoFoodAt = Date.now()
       if (!(await axe(cfg))) note(`${cfg.name}: no axe yet (cobblestone ${S.count('cobblestone')}), chopping by hand`)
       if (S.count(cfg.pillar || 'cobblestone') < 4) note(`${cfg.name}: few ${cfg.pillar} for reaching tree tops`)
       await saplings(cfg, Math.max(8, (cfg.spots || []).length + 8))
-      if (!(await enter(cfg))) { note(`${cfg.name}: could not get in through the gate at ${cfg.gate}`); return false }
+      G.sitePhase = 'enter'
+      if (!(await enter(cfg))) { G.sitePhase = null; note(`${cfg.name}: could not get in through the gate at ${cfg.gate}`); return false }
+      G.sitePhase = 'cleanup'
       let cleaned = await cleanup(cfg)
       const spots = new Set((cfg.spots || []).map(q => q.join(',')))
       let felled = 0, logs = 0, leaves = 0, planted = 0
@@ -235,17 +238,23 @@ module.exports = function site(G, S, M, api, log) {
         if (S.freeSlots() <= 3) break
         if (bot.food < 10 && S.foodPoints() < 4) { note(`${cfg.name}: hungry, stopping for food`); break }
         const t = ts[0]; spots.add([t.x, t.y, t.z].join(','))
+        G.sitePhase = 'fell'
         const r = await fell(cfg, t); logs += r.logs; leaves += r.leaves; if (!r.left) felled++; else if (!r.logs) failed.add(t.x + ',' + t.z)   // no retry of the same tree this round
         await wait(1500); await S.pickup(7, 8000)
+        G.sitePhase = 'replant'
         if (await replant(cfg, t)) planted++
       }
       // stumps from earlier passes that are still bare
+      G.sitePhase = 'cleanup'
       cleaned += await cleanup(cfg)
       for (const k of spots) { const q = k.split(',').map(Number); if (await replant(cfg, v(...q))) planted++ }
       await S.pickup(10, 15000)
       cfg.spots = [...spots].map(k => k.split(',').map(Number)); fs.writeFileSync(api.statePath('site.json'), JSON.stringify(cfg, null, 1))
+      G.sitePhase = 'leave'
       await leave(cfg)
+      G.sitePhase = 'store'
       const moved = await deposit(cfg)
+      G.sitePhase = null
       note(`${cfg.name}: felled ${felled} trees (${logs} logs, ${leaves} leaves punched), replanted ${planted}, cleared ${cleaned} stray blocks, stored ${moved} items; ${trees(cfg).length} trees left, ${bareSpots(cfg).length} bare spots`)
       return felled + planted + moved > 0
     }
