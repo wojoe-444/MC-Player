@@ -755,7 +755,10 @@ module.exports = function plan(G, S, M, api, log) {
     const walls = [], roof = []
     for (let x = x0 - 1; x <= x1 + 1; x++) for (let z = z0 - 1; z <= z1 + 1; z++) {
       const edge = x === x0 - 1 || x === x1 + 1 || z === z0 - 1 || z === z1 + 1
-      if (edge && !(x === door.x && z === door.z)) { walls.push(v(x, y, z)); walls.push(v(x, y + 1, z)) }
+      // corner columns close nothing (no mob gets through a diagonal between two wall blocks) and one at 187,71,-295 could not be
+      // placed from inside (the only neighbour face points outward), so the step came back for it every ten minutes
+      const corner = (x === x0 - 1 || x === x1 + 1) && (z === z0 - 1 || z === z1 + 1)
+      if (edge && !corner && !(x === door.x && z === door.z)) { walls.push(v(x, y, z)); walls.push(v(x, y + 1, z)) }
       roof.push(v(x, y + 2, z))
     }
     return { walls: walls.filter(p => !sealsChest(p)), roof: roof.filter(p => !sealsChest(p)), door, inside: v(midX, y, midZ), box: { x0, x1, z0, z1, y } }
