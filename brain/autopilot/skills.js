@@ -602,12 +602,17 @@ module.exports = function makeSkills({ bot, api, log }) {
       const fuelItem = mcData.itemsByName[fuel.name]
       await f.putFuel(fuelItem.id, null, Math.min(need + (fuel.per < 2 ? 1 : 0), fuel.have))
       await f.putInput(inItem.id, null, n)
+      // the nominal time (10 s an item) and on while the output keeps growing: on a lagging server 8 raw iron gave 1 ingot in the
+      // nominal 99 s and the rest went back to the bag (17:04); give up only after 30 s with no new item, or three times the nominal time
       const t0 = now(), limit = n * 10500 + 15000
-      while (now() - t0 < limit) {
+      let lastCount = 0, lastGain = now()
+      while (now() - t0 < limit * 3) {
         await S.wait(1000)
-        const out = f.outputItem()
-        if (out && out.count >= n) break
-        S.progress(`smelting ${input} ${out ? out.count : 0}/${n}`)
+        const out = f.outputItem(), c = out ? out.count : 0
+        if (c >= n) break
+        if (c > lastCount) { lastCount = c; lastGain = now() }
+        if (now() - t0 > limit && now() - lastGain > 30000) break
+        S.progress(`smelting ${input} ${c}/${n}`)
       }
       const out = f.outputItem()
       if (out) { produced = out.count; await f.takeOutput() }
