@@ -6,6 +6,7 @@
 // Both bots run the same code (this repo's join.js + brain/). What differs is per-bot config in bots/<bot>/:
 //   bot.json            name, viewer port, extra env
 //   bot.local.env       KEY=VALUE lines, NOT committed (MC_EMAIL, optionally MC_PORT); copy from bot.local.env.example
+//   profile.json        who the bot is: name, role, stance, planner on/off, disabled modules (copied to brain/state/profile.json the first time)
 //   seed/               files copied into the runtime folder the first time (never overwritten afterwards)
 // Everything the bot writes (logs, brain/state, auth-cache, waypoints, chat files) lives in runtime/<bot>/ (gitignored).
 // Set BOT_RUNTIME_DIR to point at an existing runtime folder instead (e.g. a bot folder that is already running).
@@ -43,6 +44,11 @@ function copySeed(from, to) {
 const runtime = process.env.BOT_RUNTIME_DIR ? path.resolve(process.env.BOT_RUNTIME_DIR) : path.join(repo, 'runtime', bot)
 fs.mkdirSync(runtime, { recursive: true })
 if (fs.existsSync(path.join(cfgDir, 'seed'))) copySeed(path.join(cfgDir, 'seed'), runtime)
+// the bot profile (name, role, stance, planner, disabled modules) lives in brain/state/profile.json of the runtime folder: seeded once, then the bot itself
+// updates it (the stance switch). A runtime folder that already has the old role.json / mode.json / disabled-modules.json files and no profile.json keeps using those.
+const profileSeed = path.join(cfgDir, 'profile.json'), profileDest = path.join(runtime, 'brain', 'state', 'profile.json')
+const legacyState = ['role.json', 'mode.json', 'disabled-modules.json'].some(f => fs.existsSync(path.join(runtime, 'brain', 'state', f)))
+if (fs.existsSync(profileSeed) && !fs.existsSync(profileDest) && !legacyState) { fs.mkdirSync(path.dirname(profileDest), { recursive: true }); fs.copyFileSync(profileSeed, profileDest) }
 
 const env = { ...process.env, ...(cfg.env || {}), ...readEnvFile(path.join(cfgDir, 'bot.local.env')) }
 if (cfg.viewerPort && !env.VIEWER_PORT) env.VIEWER_PORT = String(cfg.viewerPort)

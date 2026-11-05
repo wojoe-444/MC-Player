@@ -13,7 +13,40 @@
 const EventEmitter = require('events')
 const fs = require('fs')
 
-const PRIORITY = { SAFETY: 100, SLEEP: 80, EAT: 70, CHAT: 50, OUTING: 45, FARM: 40, FURNACE: 30, EXCAVATE: 10, IDLE: 1 }
+// Priority numbers, named. Every number the brain uses has a name here and keeps its old value (P2 of the taxonomy: no behavior change).
+// The first nine keys are the original ones; the rest used to be bare literals in safety/, autopilot/, pilot/ and villagers/.
+const PRIORITY = {
+  SAFETY: 100,       // safety tasks: never stopped by chat, preempt everything
+  RETREAT: 90,       // watchdog cave retreat (wd-retreat)
+  SLEEP: 80,         // go to bed
+  EAT: 70,           // eating
+  SHELTER: 70,       // watchdog forced shelter walk (wd-shelter)
+  NIGHT: 60,         // night-shelter routine; also the default priority of a focus
+  FOCUS: 60,         // default effective priority of scheduler.focus()
+  CHAT: 50,          // anything Walter asked for in chat
+  MANUAL: 49,        // the manual driver session (CHAT - 1)
+  MANUAL_FOCUS: 48,  // the focus the manual driver takes while it runs
+  OUTING: 45,        // visit-and-look trips
+  AUTOPILOT: 45,     // the autopilot's own goals (autonomous stance)
+  FARM: 40,          // idle farm / treefarm routines
+  UPKEEP: 35,        // villager upkeep
+  FURNACE: 30,       // furnace upkeep
+  BAGROOM: 12,       // bag-room routine, runs at the next gap above mining (EXCAVATE + 2)
+  EXCAVATE: 10,      // excavation, mining, lighting
+  MINING_ORDER: 11,  // mining started by an explicit order (EXCAVATE + 1)
+  FURNACE_IDLE: 9,   // idle furnace upkeep when not overdue (EXCAVATE - 1)
+  IDLE: 1
+}
+// Coarse bands for display and reasoning ("reflex-grade", "needs", ...). Only names: the scheduler still compares plain numbers.
+const BANDS = [
+  { name: 'reflex', min: 90, desc: 'safety-grade tasks that protect the bot; chat cannot stop them' },
+  { name: 'needs', min: 60, desc: 'sleep, eat, shelter at night' },
+  { name: 'request', min: 46, desc: 'what Walter asked for in chat, and the manual driver' },
+  { name: 'play', min: 41, desc: 'the autopilot playing its own goals, outings' },
+  { name: 'routine', min: 11, desc: 'idle routines: farm, villager upkeep, furnace' },
+  { name: 'background', min: 0, desc: 'excavation, mining, lighting and idle chores' }
+]
+const bandOf = (p) => { const n = Number(p) || 0; return (BANDS.find(b => n >= b.min) || BANDS[BANDS.length - 1]).name }
 
 class AbortError extends Error {
   constructor(reason) { super(`aborted: ${reason}`); this.name = 'AbortError'; this.reason = reason }
@@ -136,7 +169,7 @@ class Scheduler extends EventEmitter {
     if (until === 'done') { untilDone = true; until = now + (o.maxMs || 30 * 60000) }
     else if (typeof until === 'number') until = until > 1e12 ? until : now + until
     else throw new Error('until must be "done", an epoch time or a duration in ms')
-    const f = { id: ++this.focusSeq, task: String(o.task), priority: Math.min(PRIORITY.SAFETY - 1, o.priority ?? 60), until, untilDone, note: o.note || '', suppress: o.suppress || [], createdAt: now, seen: false, command: o.command || null, then: (o.then || []).map(e => ({ ...e })) }
+    const f = { id: ++this.focusSeq, task: String(o.task), priority: Math.min(PRIORITY.SAFETY - 1, o.priority ?? PRIORITY.FOCUS), until, untilDone, note: o.note || '', suppress: o.suppress || [], createdAt: now, seen: false, command: o.command || null, then: (o.then || []).map(e => ({ ...e })) }
     f.seen = this.tasks.some(t => this._matches(f, t))
     this.focuses.push(f)
     this._log(`focus on ${f.task} p${f.priority}${f.note ? ' ("' + String(f.note).slice(0, 60) + '")' : ''}`)
@@ -435,7 +468,7 @@ class Scheduler extends EventEmitter {
 
   status() {
     const now = this.now()
-    const view = (t) => ({ name: t.name, priority: this._prio(t), status: t.status, progress: t.progress, runs: t.runs, parkReason: t.parkReason, ageS: Math.round((now - t.createdAt) / 1000) })
+    const view = (t) => ({ name: t.name, priority: this._prio(t), band: bandOf(this._prio(t)), status: t.status, progress: t.progress, runs: t.runs, parkReason: t.parkReason, ageS: Math.round((now - t.createdAt) / 1000) })
     return {
       running: this.running ? { ...view(this.running), runningS: Math.round((now - this.running.startedAt) / 1000) } : null,
       queue: this.tasks.filter(t => t !== this.running && (t.status === 'queued' || t.status === 'paused')).sort((a, b) => this._prio(b) - this._prio(a)).map(view),
@@ -450,4 +483,4 @@ class Scheduler extends EventEmitter {
   }
 }
 
-module.exports = { Scheduler, AbortError, PRIORITY }
+module.exports = { Scheduler, AbortError, PRIORITY, BANDS, bandOf }

@@ -5,6 +5,10 @@
 module.exports = function register(api) {
   const { bot } = api
   const Vec3 = require('vec3').Vec3
+  // the movement controls belong to this reflex while it works: it leases `body` (brain/reflexes.js) so combat and the autopilot's goto stand aside.
+  // The old flags on the bot are still written for code that has not moved to the registry.
+  const reflex = api.reflexes ? api.reflexes.register({ name: 'breath', priority: 90, claims: ['body'], desc: 'drowning and suffocation: swim to air, break out of a buried head, get ashore' }) : null
+  const holdBody = (ms, why) => { if (reflex) reflex.claim('body', ms, why) }
   let active = false, since = 0, wetSince = 0, saves = 0, target = null, lastScan = 0, lastAir = null, lastAirAt = 0
   const blk = (p) => { try { return bot.blockAt(p) } catch { return null } }
   const isWater = (b) => !!b && (b.name === 'water' || b.name === 'bubble_column' || b.name === 'kelp' || b.name === 'kelp_plant' || b.name === 'seagrass' || b.name === 'tall_seagrass')
@@ -39,7 +43,7 @@ module.exports = function register(api) {
     // the pathfinder (and whatever task drives it) aborts digs it did not start ('Digging aborted' while gravel kept the head buried): stop it first
     try { bot.pathfinder && bot.pathfinder.setGoal(null) } catch {}
     try { bot.stopDigging() } catch {}
-    bot._breathBusyUntil = Date.now() + 3000
+    bot._breathBusyUntil = Date.now() + 3000; holdBody(3000, 'breaking out of a block')
     Promise.resolve(tool ? bot.equip(tool, 'hand').catch(() => {}) : null).then(() => bot.dig(b, 'ignore')).then(() => { unburied++ }).catch((e) => { if (Date.now() - (lastErrAt || 0) > 3000) { lastErrAt = Date.now(); api.log('breath', 'break-out dig failed: ' + e.message) } try { bot.setControlState('back', true); setTimeout(() => { try { bot.setControlState('back', false) } catch {} }, 400) } catch {} }).finally(() => { digging = false })
   }
   // ashore: in the water with mobs close or health low, the way out is land, not a fight (drowned pulled it down at night: 18:37 death).
@@ -57,12 +61,12 @@ module.exports = function register(api) {
   }
   function ashore(now) {
     const inWater = !!bot.entity.isInWater || isWater(blk(bot.entity.position))
-    if (!inWater) { wetFeetSince = 0; if (ashoreTarget) { ashoreTarget = null; bot._ashoreUntil = 0; api.log('breath', 'ashore: on land') } return }
+    if (!inWater) { wetFeetSince = 0; if (ashoreTarget) { ashoreTarget = null; bot._ashoreUntil = 0; if (reflex) reflex.release('body'); api.log('breath', 'ashore: on land') } return }
     if (!wetFeetSince) wetFeetSince = now
     const me = bot.entity.position
     const threat = Object.values(bot.entities).some(e => e && e !== bot.entity && HOSTILE_RE.test(e.name || '') && e.position.distanceTo(me) < 10)
     if (now - wetFeetSince < 4000 || !(threat || bot.health < 12)) return
-    bot._ashoreUntil = now + 2000; bot._breathBusyUntil = Math.max(bot._breathBusyUntil || 0, now + 2000)
+    bot._ashoreUntil = now + 2000; bot._breathBusyUntil = Math.max(bot._breathBusyUntil || 0, now + 2000); holdBody(2000, 'getting ashore')
     if (now - ashoreAt < 2500) return
     ashoreAt = now
     const t = landCell(); if (!t) return
@@ -102,7 +106,7 @@ module.exports = function register(api) {
       if (!active) { active = true; since = now; target = null; api.log('breath', `head under water ${Math.round((now - wetSince) / 1000)}s (air ${air}) at ${bot.entity.position.floored()}: heading for air`) }
       // the way back is the most reliable way out of an underwater cave (the nearest air pocket is often behind a wall): head for where the head was last in air
       // the pathfinder rewrites the movement keys every tick and kept digging stone under water (drowned 14:50): stop it while out of air
-      bot._breathBusyUntil = now + 1500
+      bot._breathBusyUntil = now + 1500; holdBody(1500, 'out of air')
       // first seconds: swim by hand toward air; still under after 8 s (219 s stuck in the farm's water at 00:18): let the pathfinder route there
       const handSwim = now - since < 8000
       if (now - lastScan > 1000 && handSwim) { try { bot.pathfinder && bot.pathfinder.setGoal(null) } catch {} try { bot.stopDigging() } catch {} }
@@ -117,15 +121,15 @@ module.exports = function register(api) {
         else if (now - since > 3000) bot.setControlState('forward', true)
       } catch {}
     } else if (active && !wet) {
-      active = false; saves++; release()
+      active = false; saves++; release(); if (reflex) reflex.release('body')
       api.log('breath', `head in air again after ${Math.round((now - since) / 1000)}s`)
     }
   }
   return {
     name: 'breath',
     start() { bot.on('physicsTick', tick) },
-    stop() { bot.removeListener('physicsTick', tick); if (active) release() },
+    stop() { bot.removeListener('physicsTick', tick); if (active) release(); if (reflex) reflex.release('body') },
     status: () => ({ active, saves, unburied, ashores, thornOuts, target: target && target.toString() })
   }
 }
-module.exports.meta = { name: 'breath', version: 1 }
+module.exports.meta = require('./meta.json')

@@ -91,4 +91,4 @@ module.exports = function register(api) {
     status() { return { runs, last, err } }
   }
 }
-module.exports.meta = { name: 'senses', version: 1 }
+module.exports.meta = require('./meta.json')

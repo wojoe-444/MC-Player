@@ -48,7 +48,7 @@ function register(api) {
 
   const has = (s, name) => (s.running && s.running.name === name) || s.queue.some(t => t.name === name) || s.parked.some(t => t.name === name)
   // Walter's own mining job runs ahead of the excavation (one step above it, still below furnace/farm/chat); the idle routine stays at EXCAVATE
-  const MANUAL = PRIORITY.EXCAVATE + 1
+  const MANUAL = PRIORITY.MINING_ORDER
   function submit() {
     return scheduler.submit({
       name: 'mining', key: 'mining', priority: MANUAL, onUserStop: 'park',
@@ -215,7 +215,7 @@ function register(api) {
     engine, state, go, resume, stop, pickOre, routineDue, torches
   }
 }
-register.meta = { name: 'mining', version: 1 }
+register.meta = require('./meta.json')
 
 module.exports = register
 module.exports.meta = register.meta

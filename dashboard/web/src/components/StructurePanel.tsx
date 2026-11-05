@@ -12,13 +12,34 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ago, useNow } from "@/useDashboard"
 import type { BotId } from "@/types"
 
-type Mod = { name: string; desc: string; files: number; readme: boolean; status: "active" | "loaded" | "disabled"; lastSeen: string | null; lines: number }
+type Mod = {
+  name: string; desc: string; files: number; readme: boolean; status: "active" | "loaded" | "disabled"; lastSeen: string | null; lines: number
+  kind: string | null; requires: string[]; provides: string[]; claims: string[]
+}
+type Profile = {
+  name: string | null; role: string; stance: string; steps: string[] | null; disabledModules: string[]; planner: { enabled: boolean }
+  router: { mode: string | null }; director: { mode: string | null }; hasFile: boolean; source: Record<string, string>
+}
+type Reflexes = {
+  at?: string
+  reflexes: { name: string; priority: number; claims: string[]; desc: string; grants: number; refusals: number }[]
+  leases: { resource: string; holder: string; leftMs: number | null; reason: string }[]
+  preemptions: number; recent: string[]
+}
+type Taxonomy = { kinds: Record<string, { order: number; lane: string; desc: string }>; ladder: { rung: string; desc: string }[]; claims: Record<string, string> }
+type Ladder = { primitive: string[]; skill: string[]; job: string[]; goal: string[]; planner: string[] }
+type Bands = { bands: { name: string; min: number; desc: string }[] | null; priority: Record<string, number> | null }
 export type FileRow = { group: "state" | "root"; name: string; size: number; mtime: number; summary: string }
 type Structure = {
   mode: { mode: string; since: number | null; role: string | null; safety: string | null; thinkOff: boolean; goals: string[] | null }
   scheduler: { enabled?: Record<string, boolean>; idleAfterMs?: number } | null
   tasks: { name: string; status: string; t: string | null }[]
   modules: Mod[]
+  profile: Profile | null
+  taxonomy: Taxonomy | null
+  ladder: Ladder | null
+  bands: Bands | null
+  reflexes: Reflexes | null
   skills: string[]
   steps: string[] | null
   files: FileRow[]
@@ -106,6 +127,17 @@ export function StructureView({ id }: { id: BotId }) {
           <Badge variant="outline">planner {s.mode.thinkOff ? "off" : "on"}</Badge>
           {(s.mode.goals ?? []).map((g) => <Badge key={g} variant="secondary">goal: {g.replace(/_/g, " ")}</Badge>)}
         </div>
+        {s.profile && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">Profile</span>
+            <Badge variant="outline">{s.profile.name ?? id}</Badge>
+            <Badge variant="outline" title={s.profile.source.role}>role: {s.profile.role}</Badge>
+            <Badge variant="outline" title={s.profile.source.stance}>stance: {s.profile.stance}</Badge>
+            {s.profile.router.mode && <Badge variant="outline">router: {s.profile.router.mode}</Badge>}
+            {s.profile.director.mode && <Badge variant="outline">director: {s.profile.director.mode}</Badge>}
+            <Badge variant="secondary">{s.profile.hasFile ? "profile.json" : "older state files (no profile.json yet)"}</Badge>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground">Scheduler tasks now</span>
           {s.tasks.length === 0 && <Badge variant="outline">none</Badge>}
@@ -134,21 +166,26 @@ export function StructureView({ id }: { id: BotId }) {
 
       <Separator />
       <Section title={`Modules (${counts.active} active, ${counts.loaded} loaded, ${counts.disabled} disabled)`}
-        hint="Brain modules from brain/index.js. Active means it logged within the last 10 minutes; disabled comes from this bot's disabled-modules.json.">
+        hint="Brain modules from brain/index.js, each with its kind from its meta.json. Active means it logged within the last 10 minutes; disabled comes from this bot's profile (or its older disabled-modules.json).">
         <div className="rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Module</TableHead>
+                <TableHead>Kind</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>What it does</TableHead>
                 <TableHead className="text-right">Last log</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {s.modules.map((m) => (
+              {[...s.modules].sort((a, b) => (s.taxonomy?.kinds[a.kind ?? ""]?.order ?? 99) - (s.taxonomy?.kinds[b.kind ?? ""]?.order ?? 99)).map((m) => (
                 <TableRow key={m.name}>
                   <TableCell className="font-mono">{m.name}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" title={s.taxonomy?.kinds[m.kind ?? ""]?.desc}>{m.kind ?? "?"}</Badge>
+                    {m.claims.length > 0 && <span className="ml-1 text-xs text-muted-foreground">claims {m.claims.join(", ")}</span>}
+                  </TableCell>
                   <TableCell><Badge variant={m.status === "active" ? "default" : m.status === "loaded" ? "secondary" : "outline"}>{m.status}</Badge></TableCell>
                   <TableCell className="whitespace-normal text-muted-foreground">{m.desc || "-"}</TableCell>
                   <TableCell className="text-right text-muted-foreground">{m.lastSeen ? ago(now - new Date(m.lastSeen).getTime()) : "-"}</TableCell>
@@ -158,6 +195,41 @@ export function StructureView({ id }: { id: BotId }) {
           </Table>
         </div>
       </Section>
+
+      {s.reflexes && (
+        <>
+          <Separator />
+          <Section title="Reflexes and leases" hint="Reflexes do not queue: they hold short leases on shared resources (body, melee, hands, danger). Higher priority takes a lease from a lower one.">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">Held now</span>
+              {s.reflexes.leases.length === 0 && <Badge variant="outline">nothing</Badge>}
+              {s.reflexes.leases.map((l) => (
+                <Badge key={l.resource} variant="default" title={l.reason}>{l.resource}: {l.holder}{l.leftMs === null ? " (always)" : ""}</Badge>
+              ))}
+              <Badge variant="outline">{s.reflexes.preemptions} takeovers</Badge>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {s.reflexes.reflexes.map((r) => (
+                <Badge key={r.name} variant="secondary" title={r.desc}>{r.name} p{r.priority} [{r.claims.join(", ")}] {r.grants}/{r.refusals}</Badge>
+              ))}
+            </div>
+          </Section>
+        </>
+      )}
+
+      {s.ladder && (
+        <>
+          <Separator />
+          <Section title="Capability ladder" hint="Primitive, skill, job, goal, planner: what the autopilot composes, read from the code.">
+            <div className="flex flex-wrap gap-2">
+              {(["primitive", "skill", "job", "goal", "planner"] as const).map((r) => (
+                <Badge key={r} variant="outline" title={s.taxonomy?.ladder.find((x) => x.rung === r)?.desc}>{r}: {s.ladder![r].length}</Badge>
+              ))}
+              {s.bands?.bands && s.bands.bands.map((b) => <Badge key={b.name} variant="secondary" title={b.desc}>band {b.name} {b.min}+</Badge>)}
+            </div>
+          </Section>
+        </>
+      )}
 
       <Separator />
       <Section title={`Skills (${s.skills.length})`} hint="The body skills the autopilot builds on (walk, dig, craft, place, ...), from autopilot/skills.js. Shared by both bots.">

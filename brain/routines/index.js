@@ -126,7 +126,7 @@ function register(api) {
     onChat, farm, sleep, state
   }
 }
-register.meta = { name: 'routines', version: 1 }
+register.meta = require('./meta.json')
 
 module.exports = register
 module.exports.meta = register.meta

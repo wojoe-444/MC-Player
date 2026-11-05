@@ -6,6 +6,7 @@ const fs = require('fs')
 const path = require('path')
 const { Vec3 } = require('vec3')
 const { parseModelJson } = require('../fastlane/decide')
+const profileLib = require('../profile')
 const { createMemory } = require('./memory')
 const { LOG_RE, FOOD_VALUE, HOSTILE } = require('./skills').consts
 
@@ -531,9 +532,11 @@ module.exports = function think(G, S, M, api, log) {
   }
 
   // ======================================================================= the planner call
+  // who the planner thinks it is: built from the bot's profile (name + role), so Smeo444 is briefed as the assistant and Ozo as the hillclimber
+  const personaLine = () => { try { if (api.profile) return api.profile.persona() } catch { /* profile gone: fall through */ } return profileLib.persona({ name: (bot && bot.username) || 'OzoGo444' }) }
   const ACTION_DOCS = () => Object.keys(D).map(k => `- ${k} ${D[k]}`).join('\n')
   const SYSTEM = () => [
-    'You are the mind of OzoGo444, a Minecraft survival player who just spawned in a brand-new world (LAN, Java 1.21.6, Hard) with an empty bag and no base. Goal: survive as long as possible and progress. You think, then act: each turn you see a compact STATE and choose the next 1-3 actions. Rule-based routines only run when you fail.',
+    personaLine() + ' You think, then act: each turn you see a compact STATE and choose the next 1-3 actions. Rule-based routines only run when you fail.',
     'Reply with ONE JSON object only: {"thought":"<max 30 words>","actions":[{"action":"<name>","args":{...}}],"lesson":"<optional durable insight worth remembering>"}',
     'ACTIONS',
     ACTION_DOCS(),
@@ -668,7 +671,11 @@ ${reflect.patterns()}`,
     if (T.interrupt && !/^NOSUPPLY/.test(T.interrupt)) holdDanger(true)
   }, 700))
   // shared with the watchdog: while our reflex owns the situation its cave reflex and stall alarms stand down (a 2-minute lease, cleared when done)
-  const holdDanger = (on) => { try { ap.dangerHandled = on ? Date.now() + 120000 : false } catch { /* ap gone */ } }
+  const dangerLease = api.reflexes ? api.reflexes.register({ name: 'danger-reflex', priority: 60, claims: ['danger'], desc: 'the planner\'s own danger response: seal in, fight, heal, re-plan' }) : null
+  const holdDanger = (on) => {
+    try { ap.dangerHandled = on ? Date.now() + 120000 : false } catch { /* ap gone */ }      // old flag, kept for code that has not moved to the lease
+    try { if (dangerLease) { if (on) dangerLease.claim('danger', 120000, 'planner danger reflex'); else dangerLease.release('danger') } } catch { /* registry gone */ }
+  }
   async function dangerReflex(why) {
     T.next = null
     holdDanger(true)

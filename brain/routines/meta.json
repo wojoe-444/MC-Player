@@ -1,0 +1,13 @@
+{
+  "name": "routines",
+  "version": 1,
+  "kind": "job",
+  "summary": "Farm and sleep routines, plus their chat commands.",
+  "requires": [],
+  "provides": [
+    "routines",
+    "farm",
+    "sleep"
+  ],
+  "claims": []
+}

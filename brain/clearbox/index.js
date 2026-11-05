@@ -274,4 +274,4 @@ module.exports = function register(api) {
   bot._clearbox = handle
   return handle
 }
-module.exports.meta = { name: 'clearbox', version: 1 }
+module.exports.meta = require('./meta.json')

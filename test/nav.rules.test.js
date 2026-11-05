@@ -61,7 +61,7 @@ test('timers: only one-shot setImmediate/setTimeout, and every long-lived hook i
 test('the module exports the interface: register(api) with meta, handle with name/start/stop/status/provides/navigate', () => {
   const register = require('../brain/nav')
   assert.strictEqual(typeof register, 'function')
-  assert.deepStrictEqual(register.meta, { name: 'nav', version: 1 })
+  assert.strictEqual(register.meta.name, 'nav'); assert.strictEqual(register.meta.version, 1); assert.strictEqual(register.meta.kind, 'service')
 })
 
 test('README documents the commands and the join.js notes', () => {

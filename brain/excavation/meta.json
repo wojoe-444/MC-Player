@@ -1,0 +1,11 @@
+{
+  "name": "excavation",
+  "version": 1,
+  "kind": "job",
+  "summary": "Room excavation job, only ever started by an explicit order.",
+  "requires": [],
+  "provides": [
+    "excavation"
+  ],
+  "claims": []
+}

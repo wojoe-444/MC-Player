@@ -4,6 +4,7 @@ const runtime = require('./runtime')
 const { assess, compass, Tracker, DEFAULTS } = require('./assess')
 const { PROFILES } = require('./profiles')
 const health = require('./health')
+const { PRIORITY } = require('../scheduler')
 
 const NO_FIGHT = /\b(do not|dont|don't|no|never|stop|not)\b.*\b(fight|fighting|attack|attacking|kill)\b|\b(no fighting|run away|just retreat|only retreat|avoid (the )?(mobs|monsters)|stand down)\b/
 const FIGHT = /\b(you can fight|fight back|fight if you (have to|need to)|defend (yourself|me)|self defen[cs]e|you can attack|attack (the )?(mobs|monsters|zombies)|kill (the )?(mobs|monsters|zombies))\b/
@@ -40,7 +41,7 @@ function nightRoutine(api, rt, state) {
   api.bot.on('sleep', markSlept); api.bot.on('wake', markSlept)
   state.off = () => { api.bot.removeListener('sleep', markSlept); api.bot.removeListener('wake', markSlept) }
   sched.routine({
-    name: 'night-shelter', priority: 60, intervalMs: 10000, defaultEnabled: true,
+    name: 'night-shelter', priority: PRIORITY.NIGHT, intervalMs: 10000, defaultEnabled: true,
     due() {
       const b = api.bot, t = (api.now || Date.now)()
       if (!b.entity || b.isSleeping || t < state.cooldownUntil) return false
@@ -56,12 +57,17 @@ function nightRoutine(api, rt, state) {
         async run(ctx) {
           const e = rt.environment(), sh = e.shelter
           if (!sh) return { status: 'done' }
+          // the shelter walk holds the `body` lease as the night guard, so the watchdog does not start a second forced walk
+          const guard = api.reflexes ? api.reflexes.register({ name: 'night-guard', priority: 40, claims: ['body'], desc: 'night: walk to the shelter and stay out of the dark' }) : null
+          if (guard) guard.claim('body', 100000, 'walking to shelter')
+          try {
           state.cooldownUntil = (api.now || Date.now)() + 5 * 60000
           api.say(`It's night and I'm out in the open. Heading to ${sh.name}.`)
           api.log('safety', `night: walking to ${sh.name} (${Math.round(sh.dist)} blocks)`)
           try { await api.safehand.ensureSafeForMove() } catch { return { status: 'done' } }
           await api.gotoNear({ pos: sh.pos, radius: 2, label: 'shelter', ctx, ms: 90000 })
           return { status: 'done' }
+          } finally { if (guard) guard.release('body') }
         }
       }
     }
@@ -104,7 +110,7 @@ function register(api) {
     bot: api.bot, say: api.say, goals: api.goals, scheduler: api.scheduler, PRIORITY: api.PRIORITY, safehand: api.safehand,
     stopNav: api.stopNav, canSee: typeof api.canSee === 'function' ? api.canSee : null, ownerName: api.ownerName, stateFile: api.statePath('safety-state.json'), now: api.now,
     waypointsFile: api.dir ? require('path').join(api.dir, 'waypoints.json') : null,
-    lessonsFile: api.statePath('lessons.md'), tuningFile: api.statePath('safety-tuning.json'), commands: api.commands,
+    lessonsFile: api.statePath('lessons.md'), tuningFile: api.statePath('safety-tuning.json'), commands: api.commands, reflexes: api.reflexes,
     log: (m) => api.log('safety', m), slog: makeSlog(api.statePath('safety.log'), api.now || Date.now)
   })
   const cmds = [
@@ -164,7 +170,7 @@ function register(api) {
   }
   return { name: 'safety', start, stop, status: rt.status, rt }
 }
-register.meta = { name: 'safety', version: 1 }
+register.meta = require('./meta.json')
 
 module.exports = register
 module.exports.meta = register.meta

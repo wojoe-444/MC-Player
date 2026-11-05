@@ -1,0 +1,13 @@
+{
+  "name": "pilot",
+  "version": 1,
+  "kind": "planner",
+  "summary": "Fast-tier voice, relay feed and director: picks idle-time choices and writes state-grounded replies; also the manual driver session.",
+  "requires": [
+    "router"
+  ],
+  "provides": [
+    "pilot"
+  ],
+  "claims": []
+}

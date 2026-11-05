@@ -51,7 +51,7 @@ function create(bot, overrides = {}, hooks = {}) {
   const items = () => bot.inventory.items()
   const find = (re) => items().find(i => re.test(i.name))
   // another layer is placing a block right now (nav pillar): switching to the sword made it try to place the sword (20:25)
-  const holdSlot = (it) => { if (!it) return false; if ((bot._placingUntil || 0) > Date.now() && /_sword$|_axe$/.test(it.name)) return false; const s = it.slot - 36; if (s >= 0 && s < 9) { if (bot.quickBarSlot !== s) bot.setQuickBarSlot(s); return true } return false }
+  const holdSlot = (it) => { if (!it) return false; if (bot._reflexes && bot._reflexes.heldByOther('hands', 'combat')) return false; if ((bot._placingUntil || 0) > Date.now() && /_sword$|_axe$/.test(it.name)) return false; const s = it.slot - 36; if (s >= 0 && s < 9) { if (bot.quickBarSlot !== s) bot.setQuickBarSlot(s); return true } return false }
   const sword = () => find(/_sword$/)
   const bowItem = () => find(/^bow$/)
   const arrows = () => items().filter(i => /arrow$/.test(i.name)).reduce((s, i) => s + i.count, 0)
@@ -160,7 +160,9 @@ function create(bot, overrides = {}, hooks = {}) {
     const me = bot.entity
     if (!me || bot.health <= 0 || !bot.entity.position) return
     if (organizing) { control({}); return }
-    if ((bot._ashoreUntil || 0) > Date.now()) return     // brain/breath is getting the bot out of the water: fighting drowned while swimming killed it (18:37)
+    // brain/breath owns the movement controls while it gets the bot out of the water or air: fighting drowned while swimming killed it (18:37).
+    // With the reflex registry that is the `body` lease; without one (arena harness) the old flag.
+    if (bot._reflexes ? bot._reflexes.heldByOther('body', 'combat') : (bot._ashoreUntil || 0) > Date.now()) return
     if (hp0 === null) hp0 = bot.health
     tickN++; stats.ticks++
     refreshTracks()

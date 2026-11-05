@@ -4,6 +4,8 @@
 //  - every 5 min writes brain/state/scoreboard.json and appends scoreboard.log
 const fs = require('fs')
 const path = require('path')
+const { PRIORITY } = require('../scheduler')
+const { holderOf } = require('../reflexes')
 
 module.exports = function watchdog(ap, api, log) {
   const { bot, scheduler } = api
@@ -141,7 +143,7 @@ module.exports = function watchdog(ap, api, log) {
     const st = {
       at: new Date().toISOString(), pos: p ? p.floored().toString() : null, hp: Math.round(bot.health), food: bot.food,
       task: sc && sc.running ? sc.running.name : null, queue: sc ? sc.queue.map(t => t.name) : [], parked: sc ? sc.parked.map(t => t.name) : [],
-      step: ap.G && ap.G.lastStep, apEnabled: ap.enabled, keepTaskOff: !!ap.keepTaskOff,
+      step: ap.G && ap.G.lastStep, apEnabled: ap.active ? ap.active() : ap.enabled, keepTaskOff: !!ap.keepTaskOff,
       idleSecs: Math.round((now - W.lastActiveAt) / 1000), deaths: W.deaths, kicks: W.kicks, warnings: warnings(), alarm: W.alarm, nightHold: !!(ap.S && ap.S.nightHold),
     }
     try { fs.writeFileSync(statusFile, JSON.stringify(st)) } catch {}
@@ -267,7 +269,7 @@ module.exports = function watchdog(ap, api, log) {
     S.nightHold = !!(night && !bot.isSleeping)
     if (S.nightHold && G.cool) { const t = Date.now() + 20000; for (const k of OUTDOOR_STEPS) G.cool[k] = t }
     // hard rule: outdoors at night far from the base => go to shelter now, whatever step/task is running (safety/sleep/shelter tasks excepted)
-    if (S.nightHold && !bot.isSleeping && api.gotoNear && scheduler.submit) {
+    if (S.nightHold && !bot.isSleeping && api.gotoNear && scheduler.submit && holderOf(bot, 'body') !== 'night-guard') {
       const now = Date.now(), p = bot.entity.position, t = taskName()
       const SHELTER = require('vec3').Vec3 ? new (require('vec3').Vec3)(-1051, 151, 2320) : null
       let sky = true; try { sky = S.skyVisible() } catch {}
@@ -276,8 +278,12 @@ module.exports = function watchdog(ap, api, log) {
         W.lastShelterAt = now
         log('NIGHT', `outdoors at night ${Math.round(p.distanceTo(SHELTER))} blocks from shelter (task ${t}): forcing shelter walk`)
         try {
-          scheduler.submit({ name: 'wd-shelter', key: 'wd-shelter', priority: 70, onUserStop: 'cancel', replace: true,
-            async run(ctx) { try { await api.safehand.ensureSafeForMove() } catch {} await api.gotoNear({ pos: SHELTER, radius: 3, label: 'shelter', ctx, ms: 120000 }); return { status: 'done' } } })
+          scheduler.submit({ name: 'wd-shelter', key: 'wd-shelter', priority: PRIORITY.SHELTER, onUserStop: 'cancel', replace: true,
+            async run(ctx) {
+              const guard = api.reflexes ? api.reflexes.register({ name: 'night-guard', priority: 40, claims: ['body'], desc: 'night: walk to the shelter and stay out of the dark' }) : null
+              if (guard) guard.claim('body', 130000, 'walking to shelter')
+              try { try { await api.safehand.ensureSafeForMove() } catch {} await api.gotoNear({ pos: SHELTER, radius: 3, label: 'shelter', ctx, ms: 120000 }); return { status: 'done' } } finally { if (guard) guard.release('body') }
+            } })
         } catch (e) { log('NIGHT', 'shelter submit failed ' + e.message) }
       }
     }
@@ -298,7 +304,12 @@ module.exports = function watchdog(ap, api, log) {
   }
   const losTo = (e) => { try { const eye = bot.entity.position.offset(0, 1.62, 0), t = e.position.offset(0, 1, 0), dv = t.minus(eye), dist = dv.norm(); return !bot.world.raycast(eye, dv.scaled(1 / dist), dist) } catch { return true } }
   // another danger handler (the planner's seal-in/heal/re-plan) owns the bot while ap.dangerHandled is true (or a future timestamp): stay out of its way
-  const handled = (now) => { const h = ap.dangerHandled; return h === true || (typeof h === 'number' && h > now) }
+  // (the `danger` lease in brain/reflexes.js: the planner's reflex is registered as 'danger-reflex' and outranks this one; ap.dangerHandled is still written by think.js for old code)
+  const caveLease = api.reflexes ? api.reflexes.register({ name: 'cave', priority: 50, claims: ['danger'], desc: 'underground, hostile in sight: cancel the task, retreat to shelter, hold the autopilot off' }) : null
+  const handled = (now) => {
+    if (api.reflexes && api.reflexes.heldByOther('danger', 'cave')) return true
+    const h = ap.dangerHandled; return h === true || (typeof h === 'number' && h > now)
+  }
   function caveReflex() {
     const S = ap.S; if (!S || !bot.entity || !S.hostilesNear || bot.isSleeping) return
     const now = Date.now(), t = taskName()
@@ -314,6 +325,7 @@ module.exports = function watchdog(ap, api, log) {
       const first = !ap.dangerUntil || ap.dangerUntil < now
       ap.dangerUntil = now + 20000
       ap.keepTaskOff = true
+      if (caveLease) caveLease.claim('danger', 20000, 'hostile in sight underground')
       if (t && !['safety', 'wd-retreat'].includes(t)) { try { scheduler.cancel(t, 'cave-reflex') } catch {} }
       try { scheduler.cancel('autopilot', 'cave-reflex') } catch {}
       if (first || (t !== 'safety' && t !== 'wd-retreat' && now - (W.lastRetreatAt || 0) > 15000)) {
@@ -325,7 +337,7 @@ module.exports = function watchdog(ap, api, log) {
         try { fs.appendFileSync(logFile, `${new Date().toISOString()} REFLEX ${msg}\n`) } catch {}
         if (first) { try { fs.appendFileSync(lessonsFile, `\n- ${new Date().toISOString().slice(0, 10)} ${hhmm()} [watchdog] ${msg}.`) } catch {} }
         try {
-          scheduler.submit({ name: 'wd-retreat', key: 'wd-retreat', priority: 90, onUserStop: 'cancel', replace: true,
+          scheduler.submit({ name: 'wd-retreat', key: 'wd-retreat', priority: PRIORITY.RETREAT, onUserStop: 'cancel', replace: true,
             async run(ctx) { await api.gotoNear({ pos: SH, radius: 3, label: 'shelter', ctx, ms: 120000 }); return { status: 'done' } } })
         } catch (e) { log('REFLEX', 'retreat submit failed ' + e.message) }
       }
@@ -333,6 +345,7 @@ module.exports = function watchdog(ap, api, log) {
       if (!reflexClearSince) reflexClearSince = now
       if (now - reflexClearSince >= 10000 || now > ap.dangerUntil + 60000) {       // clear for 10 s: hand control back
         ap.dangerUntil = 0; ap.keepTaskOff = false; reflexClearSince = 0
+        if (caveLease) caveLease.release('danger')
         log('REFLEX', 'clear: autopilot released')
         try { if (ap.ensureTask) ap.ensureTask() } catch {}
       }

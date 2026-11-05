@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "name": "OzoGo444",
+  "role": "hillclimber",
+  "stance": "autonomous",
+  "planner": { "enabled": true },
+  "disabledModules": ["mining", "build", "villagers", "dashboard"]
+}

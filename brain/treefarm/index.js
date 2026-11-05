@@ -118,7 +118,7 @@ function register(api) {
     onChat, engine, state, sitesFn
   }
 }
-register.meta = { name: 'treefarm', version: 1 }
+register.meta = require('./meta.json')
 
 module.exports = register
 module.exports.meta = register.meta

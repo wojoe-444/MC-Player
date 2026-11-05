@@ -1,0 +1,9 @@
+{
+  "name": "lag",
+  "version": 1,
+  "kind": "observer",
+  "summary": "Event-loop stall detector: logs stalls over 1.5 s and names the culprit handler or timer.",
+  "requires": [],
+  "provides": [],
+  "claims": []
+}

@@ -314,7 +314,7 @@ function register(api) {
   api.nav = handle
   return handle
 }
-register.meta = { name: 'nav', version: 1 }
+register.meta = require('./meta.json')
 
 module.exports = register
 module.exports.meta = register.meta

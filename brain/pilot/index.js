@@ -37,7 +37,7 @@ module.exports = function register(api) {
   const sp = (f) => api.statePath(f)
 
   // ---- persisted switches (chat: "pilot live", "quick voice off") ----
-  let sw = { quickVoice: cfg.talker.enabled !== false, director: cfg.director.mode || 'live' }
+  let sw = { quickVoice: cfg.talker.enabled !== false, director: (api.profile && api.profile.get().director.mode) || cfg.director.mode || 'live' }
   try { const j = JSON.parse(fs.readFileSync(sp(MODE_FILE), 'utf8')); if (typeof j.quickVoice === 'boolean') sw.quickVoice = j.quickVoice; if (['off', 'shadow', 'live'].includes(j.director)) sw.director = j.director } catch { /* none saved */ }
   const saveSw = () => { try { fs.writeFileSync(sp(MODE_FILE), JSON.stringify(sw)) } catch { /* ignore */ } }
 
@@ -365,5 +365,5 @@ module.exports = function register(api) {
   }
   return handle
 }
-module.exports.meta = { name: 'pilot', version: 1 }
+module.exports.meta = require('./meta.json')
 module.exports.MODE_FILE = MODE_FILE

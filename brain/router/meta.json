@@ -1,0 +1,11 @@
+{
+  "name": "router",
+  "version": 1,
+  "kind": "interface",
+  "summary": "Decision router for chat no command understood: a small model picks one registered command or none (off | shadow | live).",
+  "requires": [],
+  "provides": [
+    "router"
+  ],
+  "claims": []
+}

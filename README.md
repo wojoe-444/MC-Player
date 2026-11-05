@@ -19,6 +19,15 @@ Mineflayer bots that play survival Minecraft (Fabric 1.21.6, LAN world) as indep
 | `legacy/minecraft-agent/` | What survives only from the older base-world bot; everything else there was identical to or older than the current code. |
 | Root `*.md` | Notes: `HANDOFF.md`, `BRAIN.md`, `FEATURE-REQUESTS.md`, `XAERO.md`, `TOWER-PLAN.md`, `SURVIVAL-RESULTS.md`. Root `probe*.js`, `explore.js`, `xaero*.js`, `pov.js` are old standalone helpers. |
 
+## Vocabulary
+
+Short version; the full glossary is section 0 of `brain/INTERFACE.md` and the data behind it is `brain/taxonomy.json`.
+
+- **Module** (`brain/<name>/`): one of seven kinds, declared in its `meta.json`: `reflex` (combat, breath, safety), `observer` (lag, hurt, survival, senses, dashboard), `interface` (chat, router), `planner` (autopilot, pilot), `job` (mining, excavation, build, treefarm, routines, lighting, villagers, clearbox), `service` (nav, crafting, plugins), `policy` (mode).
+- **Ladder**: primitive, skill, job, goal, planner. The autopilot builds goals out of jobs and skills, and skills out of primitives.
+- **Profile** (`bots/<bot>/profile.json`): the bot's name, role (`hillclimber` or `assistant`), stance (`task` or `autonomous`), planner on/off and disabled modules. Replaces the separate `role.json`, `mode.json`, `think-off` and `disabled-modules.json` (those still work as a fallback).
+- **Scheduler** and **priority bands**: one task at a time, higher priority preempts. **Reflexes** do not queue: they hold short leases on shared resources (`body`, `melee`, `hands`, `danger`) in `brain/reflexes.js`.
+
 ## Setup
 
 ```

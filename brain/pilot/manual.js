@@ -9,6 +9,7 @@ const fs = require('fs')
 const path = require('path')
 const { Vec3 } = require('vec3')
 const los = require('../los')
+const { PRIORITY: SCHED_PRIORITY } = require('../scheduler')
 const { parseModelJson } = require('../fastlane/decide')
 
 const clean = (s) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -293,7 +294,7 @@ function createManual({ api, talker, cfg = {}, now = Date.now, logFile }) {
   const emit = (o) => { try { api.events && api.events.emit && api.events.emit('manual', { ...o, pos: bot.entity ? [Math.floor(bot.entity.position.x), Math.floor(bot.entity.position.y), Math.floor(bot.entity.position.z)] : null }) } catch { /* observers only */ } }
   const holdNames = () => { const n = new Set(HOLD); try { for (const r of (api.scheduler.status().routines || [])) n.add(r.name) } catch { /* no status */ } for (const k of KEEP) n.delete(k); return [...n] }
   function hold() {
-    try { if (typeof api.scheduler.focus === 'function') S.focusId = api.scheduler.focus({ task: 'manual', priority: 48, until: c.maxSessionMs, maxMs: c.maxSessionMs, note: 'manual mode (Walter): background tasks stay paused until he ends it', suppress: holdNames(), resumePrevious: true }) } catch (e) { api.log('pilot', 'manual hold failed: ' + e.message) }
+    try { if (typeof api.scheduler.focus === 'function') S.focusId = api.scheduler.focus({ task: 'manual', priority: SCHED_PRIORITY.MANUAL_FOCUS, until: c.maxSessionMs, maxMs: c.maxSessionMs, note: 'manual mode (Walter): background tasks stay paused until he ends it', suppress: holdNames(), resumePrevious: true }) } catch (e) { api.log('pilot', 'manual hold failed: ' + e.message) }
   }
   function release() {
     try { if (S.focusId != null && typeof api.scheduler.clearFocus === 'function') api.scheduler.clearFocus(S.focusId) } catch { /* optional */ }
@@ -366,7 +367,7 @@ function createManual({ api, talker, cfg = {}, now = Date.now, logFile }) {
     return { status: 'done' }
   }
   function submitTask() {
-    return api.scheduler.submit({ name: 'manual', key: 'manual', priority: api.PRIORITY.CHAT - 1, onUserStop: 'cancel', replace: true, abort, run: sessionRun })
+    return api.scheduler.submit({ name: 'manual', key: 'manual', priority: SCHED_PRIORITY.MANUAL, onUserStop: 'cancel', replace: true, abort, run: sessionRun })
   }
   // start a session, or hand a new goal to the running one (it replaces the goal in progress)
   function start(goal, deps, source = 'chat', opts = null) {

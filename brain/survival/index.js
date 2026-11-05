@@ -68,6 +68,6 @@ function register(api) {
     status: () => ({ life: cur && cur.n, ticks: cur ? age() - cur.startAge : 0, milestones: cur ? Object.keys(cur.milestones).length : 0, deaths: lives.length })
   }
 }
-register.meta = { name: 'survival', version: 1 }
+register.meta = require('./meta.json')
 module.exports = register
 module.exports.meta = register.meta

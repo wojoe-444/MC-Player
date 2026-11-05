@@ -93,7 +93,7 @@ function register(api) {
     engine, state, go, pause
   }
 }
-register.meta = { name: 'excavation', version: 1 }
+register.meta = require('./meta.json')
 
 module.exports = register
 module.exports.meta = register.meta
