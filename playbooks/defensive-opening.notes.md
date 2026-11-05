@@ -10,7 +10,7 @@ Sources: `brain/autopilot/{goals,plan,think,reflect}.js`, `brain/safety/{deaths,
 "chop_trees (8+ logs) -> craft planks, crafting table, wooden pickaxe, sword -> gather stone -> stone tools, furnace -> hunt animals -> coal -> torches. Before the first night, have a shelter: dig into a hillside or wall yourself into a 1x2 cell... Craft a bed (3 wool + 3 planks; sheep give wool)."
 The fallback routine list (`G.steps`, order set in `plan.js` ~line 825) is: eat, take-cover, rebed, cook, night-home, restock, tool-kit, harvest, wood, wooden-tools, stone, stone-tools, furnace, torches, wood-stock, wear, shield, iron-smelt, iron-gear, food, berries/fish/seeds/farm, coal, stash, **iron**, grove, light-home, tidy. Neither makes the dug-out room a shelter, bed and storage hub. `night-home` and `rebed` assume a `home()` already exists.
 
-**The safe-farm and tree-source infrastructure comes after iron.** In the routine order, `iron` (the mine trip) sits ahead of `grove` (trees), `light-home` and `tidy`. This is deliberate and recent: the comment in `plan.js` says "iron before upkeep: grove, lighting and tidying kept winning every pick and the hillclimber never went mining". So the draft's order (infrastructure first) reverses a fix. The playbook answers this with time boxes and finite "done when" lists, so upkeep can't starve mining again. That's the main design risk to talk through (open question 3).
+**The safe-farm and tree-source infrastructure comes after iron.** In the routine order, `iron` (the mine trip) sits ahead of `grove` (trees), `light-home` and `tidy`. This is deliberate and recent: the comment in `plan.js` says "iron before upkeep: grove, lighting and tidying kept winning every pick and the hillclimber never went mining". So the draft's order (infrastructure first) reverses a fix. Draft 2 answers this by defining the foundation as a finite end state (four pillars with checks) that mining and upkeep both have to satisfy, rather than an ordering, so upkeep has a stopping point and can't starve mining again. Walter confirmed he wants a framework, not an order. The remaining risk is that "finished" is checked, not assumed.
 
 **Armor: no hard gate, but three soft pressures push toward it.**
 1. `think.js` prompt: "Then: iron ..., smelt, craft iron pickaxe, sword and ARMOR (armor is wanted here...). Armor matters a lot on Hard." The default goal text also ends "... iron, armor."
@@ -37,20 +37,24 @@ The readiness gate (`think.js:116`) does not require armor (stone pickaxe, sword
 4. **Skeletons shoot over fences and creepers blow them up.** A fence stops zombies and wandering animals, not the real killers. Light is the defense; the fence is mostly for keeping the crops from being trampled and pets in.
 5. **Iron depth.** 15 blocks down is around y 45 to 50 at sea level, fine for coal and some iron, but most iron is lower (y 15 to 50). Drafted: extend the shaft after the room.
 6. **Mine breaching a cave.** Drafted a rule (plug and go around), because the mine is the main place to meet open caves.
-7. **Time boxes vs "never stall".** Without a time box, a finite checklist can still loop on a failing item (a tree that won't grow, wheat that won't take). Needs the same loop detector `G.step` already has.
+7. **"Never stall".** Without any time limit, a finite checklist can still loop on a failing item (a tree that won't grow, wheat that won't take). Needs the same loop detector `G.step` already has.
 8. **Respawn.** Dying in the room is safe, but dying in the mine drops the kit far from the bed. The "come up when ..." rules reduce this; a chest of spare tools in the room (stone pickaxe, sword, torches) makes a death cheap.
-9. **Phantoms and the sleep rule** (above) may conflict with "sleep every 3rd night" in rule 4 of the world rules.
+9. **Phantoms and the sleep rule:** see 3b; Walter clarified the rule (section 3, item 4).
 
-## 3. Open design questions for Walter
+## 3. Walter's answers (2026-11-05) and what changed
 
-1. **Bed at start:** true for a fresh world, or only for respawns? If not, do we want sheep-for-a-bed as step zero?
-2. **Iron order:** shield, sword, bucket, pickaxe, then armor chestplate first. Do you want the pickaxe or the bucket earlier, or armor earlier than the bucket?
-3. **Infrastructure vs mining:** this reverses "iron before upkeep". Fine with time boxes? Or should TWO be a short "minimum viable" (6 trees, 12 wheat, lit) so the bot is mining by day 3?
-4. **Where is home:** the shaft in the first stone you find, even when it's far from the island base? Or always inside the existing work zone near the Claudistan waypoint?
-5. **Sleep:** sleep every night in the early game (kills phantoms, costs the night's mining), or keep "every 3rd night" and mine through the other two?
-6. **Armor from chests:** the notes say "ask Walter before using chest items for armor". Keep it, and is spare iron in a shared chest OK for a shield?
-7. **Animals:** pens (needs fence + wheat) as part of TWO, or leave to the berries/fishing steps?
-8. **Scope:** hillclimber (OzoGo444) only? Smeo444 is the fixed assistant and already has a routine.
+1. **Bed:** assumed for convenience; re-making the bed on respawn is the policy so a death never stalls the hillclimb. Written into the Assumptions. (The current bot crafts a bed from sheep wool and has a `rebed` step, so this mostly matches; the playbook adds "spare bed or wool in the chest".)
+2. **Framework, not an order:** the draft is now organized around four end-state pillars with checks, and the phase list is a worked example. The old iron order is now a "suggestion".
+3. **Same answer:** infrastructure vs mining is no longer a priority fight; both just have to hold. The explicit time boxes and "done when" lists per phase were replaced by pillar checks. The loop-detector and "never stall" rule stay.
+4. **Sleep:** survival-mode human: every 3 days; otherwise try for about 60 seconds, then get up and resume, if the other bots aren't sleeping. Note this differs from FEATURE-REQUESTS.md (90-second wake-up, no retry that night); the code (`bedRoutine` in `join.js`) should be checked when this is implemented.
+5. **Home site:** the existing `Claude-Base-2` waypoint. I couldn't read `waypoints.json` (it lives in the bot's runtime folder, not the repo), so the coordinates are not in the playbook; the bot resolves the name at run time.
+
+## 3b. Still open
+
+- Phantoms: I believe the time-since-rest counter resets when a player gets into a bed, not when the night is skipped, so a 60-second attempt each night would keep phantoms away. This is from memory of the game, not tested; worth checking on the trial server before relying on it.
+- "If the other bots aren't sleeping": does the bot know the other bot's state (Smeo444)? Need a shared flag or a chat check.
+- Is the spare bed or wool in the restock chest OK, or should the bot just fetch sheep when it respawns?
+- Scope: hillclimber (OzoGo444) only. Smeo444 stays on his routine.
 
 ## 4. Mapping to the per-bot profile
 
