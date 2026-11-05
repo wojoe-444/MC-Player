@@ -470,13 +470,18 @@ module.exports = function plan(G, S, M, api, log) {
           // instead of being dug and given up after three floods
           await S.goto(new goals.GoalNearXZ(h.x + o[0], h.z + o[1], 3), { dig: false, ms: 90000 })
           { const f = S.flo(bot.entity.position), wet = [[0, 0], [2, 0], [-2, 0], [0, 2], [0, -2]].some(([dx, dz]) => [-1, 0].some(dy => { const b = S.block(f.offset(dx, dy, dz)); return b && /water/.test(b.name) }))
-            if (wet || Math.hypot(f.x - h.x - o[0], f.z - h.z - o[1]) > 8) { st.mineSpot = (st.mineSpot || 0) + 1; G.save(); note(`mine: spot ${h.x + o[0]},${h.z + o[1]} is ${wet ? 'by water' : 'out of reach'}, trying the next one`); return false } }
+            // skipped: the next ring spot next time (a chosen site is dropped, or it would be picked again forever); after a full round of
+            // skips in a row, dig right here as before rather than cycle
+            if ((wet || Math.hypot(f.x - h.x - o[0], f.z - h.z - o[1]) > 8) && (st.mineSkips || 0) < OFF.length) {
+              st.mineSkips = (st.mineSkips || 0) + 1; st.mineSpot = (st.mineSpot || 0) + 1
+              if (st.mineSite && o[0] === st.mineSite[0] - h.x && o[1] === st.mineSite[2] - h.z) st.mineSite = null
+              G.save(); note(`mine: spot ${h.x + o[0]},${h.z + o[1]} is ${wet ? 'by water' : 'out of reach'}, trying the next one (${st.mineSkips} skipped)`); return false } }
           const entry = bot.entity.position.floored(), dir0 = st.mineDir == null ? 0 : st.mineDir
           const r = await M.descend(20, { maxSteps: 120, dir0 })
           const bottom = bot.entity.position.floored()
           note('mine: dug the shaft from ' + entry + ' down to y' + bottom.y + ' ' + JSON.stringify(r))
           if (bottom.y > 56) return false
-          st.mine = { entry: [entry.x, entry.y, entry.z], bottom: [bottom.x, bottom.y, bottom.z], dir0, since: Date.now() }
+          st.mine = { entry: [entry.x, entry.y, entry.z], bottom: [bottom.x, bottom.y, bottom.z], dir0, since: Date.now() }; st.mineSkips = 0
           G.save()
         }
       }
