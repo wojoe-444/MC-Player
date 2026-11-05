@@ -477,7 +477,11 @@ module.exports = function plan(G, S, M, api, log) {
           const o = st.mineSite && !near(st.mineSite[0], st.mineSite[2]) ? [st.mineSite[0] - h.x, st.mineSite[2] - h.z] : OFF[(st.mineSpot || 0) % OFF.length]
           // by x/z only (spots up to 45 out sit on hills or in hollows), and only on dry land: a spot out at sea or on the shore is skipped
           // instead of being dug and given up after three floods
-          await S.goto(new goals.GoalNearXZ(h.x + o[0], h.z + o[1], 3), { dig: false, ms: 90000 })
+          // to the ground surface of the spot when that column is loaded (top solid block), else by x/z only. By x/z alone the path went
+          // into a cave under the spot (17:44): the spot was skipped but the bot stayed down there and a creeper killed it (17:46)
+          { const tx = h.x + o[0], tz = h.z + o[1]; let top = null
+            for (let y = Math.min(140, h.y + 50); y > h.y - 30; y--) { const b = S.block(v(tx, y, tz)); if (!b) { top = null; break } if (b.boundingBox === 'block' && !/_leaves$|_log$/.test(b.name)) { top = y; break } }
+            await S.goto(top != null ? new goals.GoalNear(tx, top + 1, tz, 3) : new goals.GoalNearXZ(tx, tz, 3), { dig: false, ms: 90000 }) }
           { const f = S.flo(bot.entity.position), wet = [[0, 0], [2, 0], [-2, 0], [0, 2], [0, -2]].some(([dx, dz]) => [-1, 0].some(dy => { const b = S.block(f.offset(dx, dy, dz)); return b && /water/.test(b.name) }))
             // skipped: the next ring spot next time (a chosen site is dropped, or it would be picked again forever); after a full round of
             // skips in a row, dig right here as before rather than cycle
@@ -487,7 +491,9 @@ module.exports = function plan(G, S, M, api, log) {
             if ((wet || deep || Math.hypot(f.x - h.x - o[0], f.z - h.z - o[1]) > 8) && (st.mineSkips || 0) < OFF.length) {
               st.mineSkips = (st.mineSkips || 0) + 1; st.mineSpot = (st.mineSpot || 0) + 1
               if (st.mineSite && o[0] === st.mineSite[0] - h.x && o[1] === st.mineSite[2] - h.z) st.mineSite = null
-              G.save(); note(`mine: spot ${h.x + o[0]},${h.z + o[1]} is ${wet ? 'by water' : deep ? 'under ground (a cave)' : 'out of reach'}, trying the next one (${st.mineSkips} skipped)`); return false } }
+              G.save(); note(`mine: spot ${h.x + o[0]},${h.z + o[1]} is ${wet ? 'by water' : deep ? 'under ground (a cave)' : 'out of reach'}, trying the next one (${st.mineSkips} skipped)`)
+              if (deep && !S.skyVisible()) { const up = await M.goSurface(); note('mine: back out of the cave first (' + up + ')') }
+              return false } }
           const entry = bot.entity.position.floored(), dir0 = st.mineDir == null ? 0 : st.mineDir
           const r = await M.descend(20, { maxSteps: 120, dir0 })
           const bottom = bot.entity.position.floored()
