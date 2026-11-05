@@ -1,0 +1,195 @@
+{
+  "req": {
+    "filler": 32,
+    "food": 12,
+    "armor": 2,
+    "sword": 1,
+    "torches": 16
+  },
+  "deaths": [
+    {
+      "at": "2026-11-04T08:34:29.495Z",
+      "cause": "archers",
+      "by": "skeleton",
+      "pos": "169,70,-309"
+    },
+    {
+      "at": "2026-11-04T08:42:39.635Z",
+      "cause": "archers",
+      "by": "skeleton",
+      "pos": "185,63,-274"
+    },
+    {
+      "at": "2026-11-04T09:26:59.744Z",
+      "cause": "melee",
+      "by": "zombie",
+      "pos": "155,61,-303"
+    },
+    {
+      "at": "2026-11-04T09:58:36.295Z",
+      "cause": "archers",
+      "by": "skeleton",
+      "pos": "186,67,-277"
+    },
+    {
+      "at": "2026-11-04T11:41:00.396Z",
+      "cause": "melee",
+      "by": "zombie",
+      "pos": "187,64,-289"
+    },
+    {
+      "at": "2026-11-04T12:52:21.163Z",
+      "cause": "creeper",
+      "by": "creeper",
+      "pos": "191,66,-289"
+    },
+    {
+      "at": "2026-11-04T13:10:03.551Z",
+      "cause": "melee",
+      "by": "zombie",
+      "pos": "174,63,-286"
+    },
+    {
+      "at": "2026-11-04T14:21:30.654Z",
+      "cause": "fall",
+      "by": null,
+      "pos": "185,71,-297"
+    },
+    {
+      "at": "2026-11-04T14:50:05.995Z",
+      "cause": "drowning",
+      "by": null,
+      "pos": "270,60,-394"
+    },
+    {
+      "at": "2026-11-04T15:29:43.394Z",
+      "cause": "melee",
+      "by": "phantom",
+      "pos": "189,71,-290"
+    },
+    {
+      "at": "2026-11-04T16:00:04.862Z",
+      "cause": "archers",
+      "by": "skeleton",
+      "pos": "187,69,-282"
+    },
+    {
+      "at": "2026-11-04T16:19:28.343Z",
+      "cause": "melee",
+      "by": "phantom",
+      "pos": "163,71,-316"
+    },
+    {
+      "at": "2026-11-04T18:37:07.393Z",
+      "cause": "melee",
+      "by": "phantom",
+      "pos": "125,61,-292"
+    },
+    {
+      "at": "2026-11-04T18:43:11.931Z",
+      "cause": "archers",
+      "by": "skeleton",
+      "pos": "181,71,-285"
+    },
+    {
+      "at": "2026-11-04T19:59:49.194Z",
+      "cause": "archers",
+      "by": "skeleton",
+      "pos": "231,21,-321"
+    },
+    {
+      "at": "2026-11-04T20:26:57.557Z",
+      "cause": "creeper",
+      "by": "creeper",
+      "pos": "189,60,-283"
+    },
+    {
+      "at": "2026-11-04T20:58:32.596Z",
+      "cause": "melee",
+      "by": "enderman",
+      "pos": "180,59,-282"
+    },
+    {
+      "at": "2026-11-04T20:58:51.793Z",
+      "cause": "archers",
+      "by": "skeleton",
+      "pos": "185,56,-295"
+    },
+    {
+      "at": "2026-11-04T21:14:00.993Z",
+      "cause": "melee",
+      "by": "phantom",
+      "pos": "190,71,-290"
+    },
+    {
+      "at": "2026-11-04T22:31:11.142Z",
+      "cause": "melee",
+      "by": "phantom",
+      "pos": "204,61,-285"
+    },
+    {
+      "at": "2026-11-04T23:10:40.324Z",
+      "cause": "melee",
+      "by": "phantom",
+      "pos": "191,65,-285"
+    },
+    {
+      "at": "2026-11-04T23:17:16.606Z",
+      "cause": "melee",
+      "by": "zombie",
+      "pos": "192,64,-292"
+    },
+    {
+      "at": "2026-11-04T23:17:42.404Z",
+      "cause": "creeper",
+      "by": "creeper",
+      "pos": "176,62,-298"
+    },
+    {
+      "at": "2026-11-04T23:46:31.391Z",
+      "cause": "archers",
+      "by": "skeleton",
+      "pos": "192,68,-293"
+    },
+    {
+      "at": "2026-11-04T23:53:26.227Z",
+      "cause": "archers",
+      "by": "skeleton",
+      "pos": "182,56,-282"
+    },
+    {
+      "at": "2026-11-05T00:05:31.473Z",
+      "cause": "archers",
+      "by": "skeleton",
+      "pos": "190,62,-279"
+    },
+    {
+      "at": "2026-11-05T01:28:45.670Z",
+      "cause": "archers",
+      "by": "skeleton",
+      "pos": "188,62,-294"
+    },
+    {
+      "at": "2026-11-05T01:36:11.327Z",
+      "cause": "creeper",
+      "by": "creeper",
+      "pos": "186,58,-274"
+    },
+    {
+      "at": "2026-11-05T02:13:26.427Z",
+      "cause": "archers",
+      "by": "skeleton",
+      "pos": "181,52,-281"
+    },
+    {
+      "at": "2026-11-05T02:37:42.828Z",
+      "cause": "melee",
+      "by": "enderman",
+      "pos": "181,71,-314"
+    }
+  ],
+  "minFightHealthPlus": 3,
+  "creeperRangePlus": 4,
+  "maxArchers": 1,
+  "archerHealthPlus": 4
+}

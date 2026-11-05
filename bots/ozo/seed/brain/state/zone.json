@@ -1,0 +1,3 @@
+{ "_note": "Walter 2026-11-02: work near the Claudistan waypoint, never dig near his base. workZone: goto targets must be inside (travel back toward it is allowed). noDig: circles where nothing is ever dug.",
+  "workZone": { "x": 188, "z": -303, "r": 320 },
+  "noDig": [ { "label": "Walter base (Base waypoint)", "x": 246, "z": 450, "r": 200 }, { "label": "Walter base 2 / box / tree farm", "x": 140, "z": 419, "r": 200 }, { "label": "Village", "x": -210, "z": 304, "r": 80 } ] }

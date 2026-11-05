@@ -1,0 +1,17 @@
+{
+  "_note": "Walter (2026-10-26) authorized placing torches, and only torches, to light dark spots on the routes the bot actually walks. Line of sight to the block a torch stands on is required, every placement is logged.",
+  "placeBelow": 2,
+  "cover": 8,
+  "skipNear": 3,
+  "maxPerRun": 6,
+  "intervalMs": 120000,
+  "cooldownMs": 600000,
+  "retryBadMs": 3600000,
+  "sampleMs": 2000,
+  "saveMs": 60000,
+  "routeCap": 3000,
+  "craftCount": 16,
+  "craftRetryMs": 7200000,
+  "areas": [{ "min": [-1100, 100, 2250], "max": [-1020, 200, 2360], "label": "Walter's base" }],
+  "areaPad": 8
+}

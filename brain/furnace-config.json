@@ -1,0 +1,34 @@
+{
+  "_note": "Derived from stations.json, furnace-scan.txt and find-lava_cauldron.txt (2026-10-25). Run 'furnace verify' to check these against the live world. Chest positions are one half of a double chest.",
+  "stations": [
+    {
+      "id": "S1",
+      "label": "station 1",
+      "units": [
+        { "furnace": [-1043, 130, 2273], "fuel": [-1043, 131, 2274], "input": [-1043, 132, 2273], "output": [-1043, 128, 2273] }
+      ]
+    },
+    {
+      "id": "S2",
+      "label": "station 2",
+      "units": [
+        { "furnace": [-1051, 153, 2324], "fuel": [-1051, 154, 2323], "input": [-1051, 155, 2324], "output": [-1051, 151, 2324] },
+        { "furnace": [-1051, 153, 2325], "fuel": [-1051, 154, 2326], "input": [-1051, 155, 2325], "output": [-1051, 151, 2325] }
+      ]
+    }
+  ],
+  "depots": [
+    { "id": "D1", "label": "lava depot 1", "box": { "min": [-1046, 136, 2314], "max": [-1045, 136, 2321] } },
+    { "id": "D2", "label": "lava depot 2", "box": { "min": [-1040, 128, 2270], "max": [-1034, 128, 2270] } }
+  ],
+  "targets": {
+    "fuelMin": 4,
+    "fuelTop": 6,
+    "maxCarryLava": 12,
+    "reserveCobble": 48,
+    "minCobbleToDeposit": 32,
+    "outputWarnFraction": 0.8,
+    "checkIntervalMinutes": 10,
+    "minHealth": 12
+  }
+}

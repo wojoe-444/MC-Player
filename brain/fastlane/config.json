@@ -1,0 +1,16 @@
+{
+  "model": "mistralai/ministral-8b-2512",
+  "url": "https://openrouter.ai/api/v1/chat/completions",
+  "timeoutMs": 4000,
+  "maxTokens": 250,
+  "temperature": 0,
+  "maxPerDay": 100000,
+  "maxInFlight": 1,
+  "cacheMs": 120000,
+  "allowReplies": true,
+  "maxReplyChars": 140,
+  "maxTextChars": 300,
+  "slowMedianMs": 5000,
+  "thresholds": { "run": 0.8, "info": 0.65, "ask": 0.5, "instant": 0.5 },
+  "extraBody": {}
+}

@@ -1,0 +1,80 @@
+{
+  "_note": "Farm + sleep routines folded in from join.js (bedRoutine, idle farm routine) and farm.js. Times in minutes/ms, ticks are Minecraft game ticks.",
+  "farm": {
+    "intervalMinutes": 45,
+    "lowFoodIntervalMinutes": 15,
+    "lowFood": 8,
+    "keepFood": 64,
+    "keepSeed": 16,
+    "radius": 48,
+    "fallbackRadius": 40,
+    "walkToSiteDistance": 24,
+    "maxActionsPerRun": 200,
+    "minFreeSlots": 2,
+    "dropWaitMs": 350,
+    "plantWaitMs": 120,
+    "replantTries": 2,
+    "dangerRetries": 5,
+    "dangerRetryMs": 30000,
+    "houseChest": [
+      -1064,
+      160,
+      2326
+    ],
+    "houseChestSearchRadius": 30,
+    "sites": [
+      {
+        "name": "home farm",
+        "x": -1067,
+        "y": 160,
+        "z": 2360
+      }
+    ],
+    "sitePattern": "farm|cane|sugar",
+    "caneMinHeight": 3,
+    "craftPollMs": 1000,
+    "craftPolls": 120,
+    "worksite": {
+      "enabled": true,
+      "radius": 12
+    },
+    "bamboo": {
+      "stalks": 8,
+      "minHeight": 4,
+      "keep": 4,
+      "radius": 12,
+      "floors": [
+        "dirt",
+        "grass_block",
+        "podzol",
+        "moss_block",
+        "coarse_dirt",
+        "rooted_dirt",
+        "mud",
+        "sand",
+        "red_sand"
+      ],
+      "fetch": 10,
+      "anchor": [
+        -1066,
+        160,
+        2321
+      ],
+      "discoverRadius": 7,
+      "prefer": "_axe$"
+    }
+  },
+  "sleep": {
+    "dueTicks": 48000,
+    "nightStart": 12542,
+    "nightEnd": 23460,
+    "bedSearchRadius": 160,
+    "pingAfterMs": 20000,
+    "giveUpAfterMs": 90000,
+    "pollMs": 1000,
+    "retryAfterFailureMs": 60000,
+    "retryAfterGiveUpMs": 600000,
+    "maxAttemptsPerNight": 2,
+    "bedsToTry": 3
+  }
+}

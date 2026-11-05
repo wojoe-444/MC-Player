@@ -1,0 +1,23 @@
+{
+  "mode": "live",
+  "model": "baseten/elephant-1:free",
+  "url": "https://openrouter.ai/api/alpha/decisions",
+  "timeoutMs": 3000,
+  "ackAfterMs": 3400,
+  "staleMs": 10000,
+  "maxInFlight": 2,
+  "maxPerDay": 100000,
+  "confirmTtlMs": 30000,
+  "thresholds": {
+    "directed": 0.8,
+    "run": 0.8,
+    "actMaxChars": 100,
+    "margin": 0.25,
+    "ask": 0.55,
+    "instant": 0.5,
+    "place": 0.6
+  },
+  "acks": "auto",
+  "decisionModel": false,
+  "fastlane": false
+}

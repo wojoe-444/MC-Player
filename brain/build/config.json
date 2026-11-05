@@ -1,0 +1,43 @@
+{
+  "_note": "Walter's personal lookout tower (stone bricks + spruce), built from a temporary cobblestone pillar. Everything is survival-legit: line of sight to the block each piece is placed on, reach 4.5, only blueprint blocks are placed, only the recorded pillar cobblestone is ever dug. Overrides: brain/state/build-config.json (limits, timing and site merge key by key; protect is appended).",
+  "site": {
+    "x": -984,
+    "z": 2292,
+    "radius": 14,
+    "maxDy": 1,
+    "yRange": 48
+  },
+  "protect": [
+    {
+      "label": "Walter's base",
+      "min": [
+        -1100,
+        100,
+        2250
+      ],
+      "max": [
+        -1020,
+        200,
+        2360
+      ]
+    }
+  ],
+  "limits": {
+    "minHealth": 8,
+    "hostileRadius": 6,
+    "reach": 4.5,
+    "pillarMax": 11,
+    "spareCobble": 6,
+    "dangerRetries": 6,
+    "dangerRetryMs": 20000,
+    "surveyRetries": 3,
+    "surveyRetryMs": 10000
+  },
+  "timing": {
+    "stepMs": 30,
+    "landMs": 120,
+    "confirmMs": 80
+  },
+  "autoResumeOnStart": true,
+  "_gate": "autoResumeOnStart is on again (2026-10-26) because the scheduler outdoor gate (brain/index.js setGate: daylight, health >= 18, no hostile within 16) holds the queued build until it is safe. Without that gate the module refuses to start at night / below 18 health / with a hostile within 16 blocks. Do NOT register the tower as a scheduler focus: a focus skips the gate."
+}

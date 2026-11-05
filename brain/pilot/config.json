@@ -1,0 +1,57 @@
+{
+  "talker": {
+    "enabled": true,
+    "model": "deepseek/deepseek-v4.1-flash",
+    "timeoutMs": 2800,
+    "maxTokens": 200,
+    "temperature": 0.4,
+    "maxReplyChars": 200,
+    "maxPerDay": 2000,
+    "extraBody": {
+      "models": [
+        "deepseek/deepseek-v4.1-flash",
+        "anthropic/claude-haiku-5.5"
+      ],
+      "reasoning": {
+        "enabled": false
+      },
+      "provider": {
+        "sort": "latency"
+      }
+    }
+  },
+  "feed": {
+    "capMs": 2200
+  },
+  "director": {
+    "mode": "live",
+    "tickMs": 10000,
+    "minQuietS": 45,
+    "minGapMs": 180000,
+    "maxPerHour": 6,
+    "holdMs": 600000,
+    "narrate": "low",
+    "autoHigh": [
+      "chop-wood"
+    ],
+    "_note_autoHigh": "mine-iron removed 2026-10-26 by the driver until the mining job can climb back out of the shaft (it got stuck at y26); put it back after the return check exists"
+  },
+  "manual": {
+    "model": "anthropic/claude-sonnet-5.5",
+    "stepTimeoutMs": 15000,
+    "maxTokens": 400,
+    "extraBody": {
+      "models": [
+        "anthropic/claude-sonnet-5.5",
+        "anthropic/claude-haiku-5.5"
+      ],
+      "reasoning": {
+        "effort": "low"
+      },
+      "provider": {
+        "sort": "latency"
+      }
+    },
+    "idleReleaseMs": 60000
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "scanRadius": 48,
+  "approachRadius": 2.5,
+  "approachMs": 60000,
+  "rememberDays": 3,
+  "maxKnown": 80,
+  "ledgerMax": 300,
+  "budget": {
+    "emeraldsPerRun": 128,
+    "adHocMaxEmeralds": 40,
+    "keepEmeralds": 0
+  },
+  "dangerRadius": 8,
+  "minHealth": 8,
+  "wishlist": [
+    { "name": "mending", "kind": "book", "enchant": "mending", "maxEmeralds": 64 },
+    { "name": "efficiency", "kind": "book", "enchant": "efficiency", "minLevel": 5, "maxEmeralds": 48 },
+    { "name": "unbreaking", "kind": "book", "enchant": "unbreaking", "minLevel": 3, "maxEmeralds": 40 },
+    { "name": "fortune", "kind": "book", "enchant": "fortune", "minLevel": 3, "maxEmeralds": 48 },
+    { "name": "protection", "kind": "book", "enchant": "protection", "minLevel": 4, "maxEmeralds": 40 },
+    { "name": "sharpness", "kind": "book", "enchant": "sharpness", "minLevel": 5, "maxEmeralds": 40 },
+    { "name": "looting", "kind": "book", "enchant": "looting", "minLevel": 3, "maxEmeralds": 40 },
+    { "name": "silk touch", "kind": "book", "enchant": "silk_touch", "maxEmeralds": 40 },
+    { "name": "feather falling", "kind": "book", "enchant": "feather_falling", "minLevel": 4, "maxEmeralds": 32 },
+    { "name": "depth strider", "kind": "book", "enchant": "depth_strider", "minLevel": 3, "maxEmeralds": 32 },
+    { "name": "diamond pickaxe", "kind": "item", "item": "diamond_pickaxe", "maxEmeralds": 24 },
+    { "name": "diamond axe", "kind": "item", "item": "diamond_axe", "maxEmeralds": 24 },
+    { "name": "diamond shovel", "kind": "item", "item": "diamond_shovel", "maxEmeralds": 16 },
+    { "name": "diamond sword", "kind": "item", "item": "diamond_sword", "maxEmeralds": 24 },
+    { "name": "diamond helmet", "kind": "item", "item": "diamond_helmet", "maxEmeralds": 24 },
+    { "name": "diamond chestplate", "kind": "item", "item": "diamond_chestplate", "maxEmeralds": 36 },
+    { "name": "diamond leggings", "kind": "item", "item": "diamond_leggings", "maxEmeralds": 32 },
+    { "name": "diamond boots", "kind": "item", "item": "diamond_boots", "maxEmeralds": 24 },
+    { "name": "arrows", "kind": "item", "item": "arrow", "maxEmeralds": 4 },
+    { "name": "bread", "kind": "item", "item": "bread", "maxEmeralds": 2 },
+    { "name": "bell", "kind": "item", "item": "bell", "maxEmeralds": 48 },
+    { "name": "experience bottles", "kind": "item", "item": "experience_bottle", "maxEmeralds": 8 }
+  ],
+  "sell": {
+    "items": ["wheat", "carrot", "potato", "beetroot", "stick", "string", "paper", "coal", "rotten_flesh"],
+    "keep": { "wheat": 32, "carrot": 32, "potato": 32, "beetroot": 16, "bread": 16 },
+    "professions": { "wheat": "farmer", "carrot": "farmer", "potato": "farmer", "beetroot": "farmer", "stick": "fletcher", "string": "fletcher", "paper": "librarian", "coal": "butcher", "rotten_flesh": "cleric" }
+  },
+  "upkeep": {
+    "intervalMs": 900000,
+    "autoBuy": false
+  }
+}

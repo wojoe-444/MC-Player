@@ -1,0 +1,289 @@
+{
+  "_note": "Legit mining (Walter): strip mine without x-ray. Depths are hallway FEET levels. Nothing here may switch the line-of-sight rule off.",
+  "ores": {
+    "diamond": {
+      "blocks": [
+        "diamond_ore",
+        "deepslate_diamond_ore"
+      ],
+      "drop": "diamond",
+      "tier": 2,
+      "y": -58,
+      "range": [
+        -58,
+        -50
+      ],
+      "default": 5
+    },
+    "iron": {
+      "blocks": [
+        "iron_ore",
+        "deepslate_iron_ore"
+      ],
+      "drop": "raw_iron",
+      "tier": 1,
+      "y": 16,
+      "range": [
+        -8,
+        40
+      ],
+      "default": 32
+    },
+    "coal": {
+      "blocks": [
+        "coal_ore",
+        "deepslate_coal_ore"
+      ],
+      "drop": "coal",
+      "tier": 0,
+      "y": 45,
+      "range": [
+        30,
+        100
+      ],
+      "default": 32
+    },
+    "gold": {
+      "blocks": [
+        "gold_ore",
+        "deepslate_gold_ore"
+      ],
+      "drop": "raw_gold",
+      "tier": 2,
+      "y": -16,
+      "range": [
+        -48,
+        -8
+      ],
+      "default": 16
+    },
+    "redstone": {
+      "blocks": [
+        "redstone_ore",
+        "deepslate_redstone_ore"
+      ],
+      "drop": "redstone",
+      "tier": 2,
+      "y": -58,
+      "range": [
+        -58,
+        -50
+      ],
+      "default": 32
+    },
+    "lapis": {
+      "blocks": [
+        "lapis_ore",
+        "deepslate_lapis_ore"
+      ],
+      "drop": "lapis_lazuli",
+      "tier": 1,
+      "y": 0,
+      "range": [
+        -32,
+        24
+      ],
+      "default": 16
+    },
+    "copper": {
+      "blocks": [
+        "copper_ore",
+        "deepslate_copper_ore"
+      ],
+      "drop": "raw_copper",
+      "tier": 1,
+      "y": 40,
+      "range": [
+        20,
+        60
+      ],
+      "default": 32
+    }
+  },
+  "aliases": {
+    "diamonds": "diamond",
+    "irons": "iron",
+    "iron ore": "iron",
+    "coals": "coal",
+    "golds": "gold",
+    "gold ore": "gold",
+    "redstones": "redstone",
+    "red stone": "redstone",
+    "redstone dust": "redstone",
+    "lapis lazuli": "lapis",
+    "lapiz": "lapis",
+    "coppers": "copper",
+    "diamond ore": "diamond",
+    "coal ore": "coal",
+    "raw iron": "iron",
+    "raw gold": "gold",
+    "raw copper": "copper"
+  },
+  "unsupported": {
+    "emerald": "Emeralds only generate in mountain biomes, a strip mine will not find them.",
+    "netherite": "Ancient debris is in the Nether; I only strip mine in the overworld.",
+    "debris": "Ancient debris is in the Nether; I only strip mine in the overworld.",
+    "quartz": "Nether quartz is in the Nether; I only strip mine in the overworld."
+  },
+  "pattern": {
+    "spacing": 3,
+    "trunkLength": 48,
+    "branchLength": 16
+  },
+  "sight": {
+    "scanRadius": 7,
+    "liquidRadius": 6,
+    "lavaKeepout": 5,
+    "waterKeepout": 3,
+    "cellKeepout": 2
+  },
+  "limits": {
+    "fullSlots": 6,
+    "minFreeSlots": 3,
+    "minHealth": 8,
+    "hostileRadius": 7,
+    "minOreUses": 25,
+    "minPickUses": 120,
+    "dangerRetries": 6,
+    "dangerRetryMs": 20000,
+    "chestRetryMs": 600000,
+    "maxGroundItems": 30,
+    "itemRadius": 24,
+    "maxStairTurns": 3,
+    "walkMax": 200,
+    "maxCraftAsks": 2
+  },
+  "junk": [
+    "dirt",
+    "gravel",
+    "sand",
+    "andesite",
+    "diorite",
+    "granite",
+    "tuff",
+    "clay",
+    "coarse_dirt",
+    "red_sand",
+    "calcite",
+    "rooted_dirt",
+    "diamond",
+    "redstone",
+    "lapis_lazuli",
+    "gold_nugget",
+    "emerald",
+    "flint"
+  ],
+  "recordWaypoint": true,
+  "worksite": { "_note": "Walter's time economy rule: far from the final chests, store the haul in a chest placed in the mine and carry it once at the end (or when 90% full).", "enabled": true, "minDistance": 60, "home": [-1048, 130, 2290], "maxAsks": 2, "haulAt": 0.9 },
+  "shaft": { "_note": "Walter's ladder shaft is the entry for mines below the base (new mines may not start inside it). Ladders: 7 sticks = 3. Asks before using more than askAbovePlanks planks of wood.", "enabled": true, "top": [-1042, 128, 2281], "waypoint": "ladder shaft", "supportUnder": true, "preferExistingBottom": true, "maxRungs": 8, "exitOn": ["finished"], "exit": { "belowY": 100 }, "useWithin": 400, "askAbovePlanks": 24, "batch": 48, "maxAsks": 2 },
+  "torches": { "enabled": true, "spacing": 9, "placeBelow": 2, "minGap": 3, "craftCount": 16, "maxAsks": 2 },
+  "routine": {
+    "_note": "Idle fallback (Walter 2026-10-26): when nothing else is due the bot may go mining on its own, but only into a mine it already knows (own strip or a 'mine ...' waypoint) unless allowNewMine is true and it is outside the protected area. Stocks count the bag and chest-index.json.",
+    "intervalMs": 60000, "cooldownMs": 600000, "backoffMs": 1800000, "maxBackoffMs": 14400000, "holdAfterStopMs": 7200000, "minHealth": 14, "minFood": 12,
+    "allowNewMine": false, "noStartFrom": 12000, "noStartUntil": 24000, "hintEveryMs": 43200000,
+    "wants": { "coal": 128, "iron": 128, "diamond": 16, "redstone": 64, "lapis": 32, "gold": 32, "copper": 64 },
+    "products": { "diamond": ["diamond"], "iron": ["raw_iron", "iron_ingot", "iron_block"], "coal": ["coal", "charcoal"], "gold": ["raw_gold", "gold_ingot"], "redstone": ["redstone"], "lapis": ["lapis_lazuli"], "copper": ["raw_copper", "copper_ingot"] }
+  },
+  "protect": {
+    "boxes": [
+      {
+        "min": [
+          -1100,
+          100,
+          2250
+        ],
+        "max": [
+          -1020,
+          200,
+          2360
+        ],
+        "label": "Walter's base"
+      }
+    ],
+    "pad": 8
+  },
+  "storageChests": [
+    [
+      -1054,
+      128,
+      2275
+    ],
+    [
+      -1054,
+      128,
+      2278
+    ],
+    [
+      -1054,
+      128,
+      2281
+    ],
+    [
+      -1054,
+      129,
+      2275
+    ],
+    [
+      -1054,
+      129,
+      2278
+    ],
+    [
+      -1054,
+      129,
+      2281
+    ],
+    [
+      -1054,
+      130,
+      2275
+    ],
+    [
+      -1054,
+      130,
+      2278
+    ],
+    [
+      -1054,
+      130,
+      2281
+    ],
+    [
+      -1054,
+      131,
+      2275
+    ],
+    [
+      -1054,
+      131,
+      2278
+    ],
+    [
+      -1054,
+      131,
+      2281
+    ],
+    [
+      -1054,
+      132,
+      2275
+    ],
+    [
+      -1054,
+      132,
+      2278
+    ],
+    [
+      -1054,
+      132,
+      2281
+    ],
+    [
+      -1054,
+      128,
+      2284
+    ]
+  ],
+  "autoResumeOnStart": true,
+  "_storageNote": "Walter (2026-10-26): non-smeltable mined items go to any chest in the wall across from the auto-furnace in the lower underground room (x -1054, y 128-132, z 2275-2285). One entry per double chest. Coal stays with the bot as fuel/torch stock."
+}

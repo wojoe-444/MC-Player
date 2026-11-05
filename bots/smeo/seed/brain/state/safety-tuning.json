@@ -1,0 +1,48 @@
+{
+  "req": {
+    "filler": 32,
+    "food": 12,
+    "torches": 16,
+    "armor": 2,
+    "sword": 1
+  },
+  "deaths": [
+    {
+      "at": "2026-11-04T23:45:50.781Z",
+      "cause": "drowning",
+      "by": null,
+      "pos": "244,62,-162"
+    },
+    {
+      "at": "2026-11-04T23:49:29.969Z",
+      "cause": "archers",
+      "by": "skeleton",
+      "pos": "229,78,335"
+    },
+    {
+      "at": "2026-11-05T00:16:06.988Z",
+      "cause": "archers",
+      "by": "skeleton",
+      "pos": "177,12,418"
+    },
+    {
+      "at": "2026-11-05T00:20:03.169Z",
+      "cause": "archers",
+      "by": "skeleton",
+      "pos": "141,17,406"
+    },
+    {
+      "at": "2026-11-05T00:42:19.671Z",
+      "cause": "other",
+      "by": null,
+      "pos": "133,69,417"
+    },
+    {
+      "at": "2026-11-05T01:17:46.373Z",
+      "cause": "other",
+      "by": null,
+      "pos": "135,70,416"
+    }
+  ],
+  "maxArchers": 1
+}

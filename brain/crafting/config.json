@@ -1,0 +1,15 @@
+{
+  "_note": "Crafting module settings. knownTables are tried after crafting tables the bot can already see. Furnace-station chests (from brain/furnace-config.json) are protected so crafting never starves the upkeep routine.",
+  "knownTables": [[-1051, 151, 2320]],
+  "tableSearchRadius": 64,
+  "knownTableMaxDistance": 400,
+  "neverTakeItems": ["lava_bucket"],
+  "furnaceChestRules": { "fuel": "all", "input": "all", "output": ["bucket"] },
+  "maxCount": 2304,
+  "craftChunk": 16,
+  "craftTimeoutMs": 10000,
+  "craftSoftWaitMs": 1500,
+  "findRadius": 128,
+  "findBlockCount": 600,
+  "chestIndexFile": "chest-index.json"
+}

@@ -1,0 +1,4 @@
+{ "_note": "Smeo444 (assistant). Walter 2026-11-04: its first routine is his birch tree farm at 142 69 415. workZone: around the farm and its bed. noDig: Walter's bases, except the allow box: logs, leaves and the bot's own pillar cobblestone inside the farm fence.",
+  "workZone": { "x": 142, "z": 425, "r": 60 },
+  "noDig": [ { "label": "Walter base (Base waypoint)", "x": 246, "z": 450, "r": 200 }, { "label": "Walter base 2 / box / tree farm", "x": 140, "z": 419, "r": 200 }, { "label": "Village", "x": -210, "z": 304, "r": 80 } ],
+  "allow": [ { "label": "birch farm", "x0": 133, "x1": 159, "y0": 69, "y1": 84, "z0": 417, "z1": 443, "blocks": "^(birch_log|birch_leaves|cobblestone|crafting_table)$" } ] }

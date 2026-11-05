@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OzoGo444 Status</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --ink: #1c2330; --muted: #5d6778; --line: #dde1e8;
+    --accent: #2f6fdb; --good: #1f8a4c; --warn: #b36b00; --bad: #c2362b; --track: #e6e9ef;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --card: #1a1f28; --ink: #e6e9ef; --muted: #98a2b3; --line: #2b3240;
+      --accent: #6b9cff; --good: #4cc380; --warn: #e6a23c; --bad: #ff7468; --track: #2a303c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--card); position: sticky; top: 0; z-index: 2; }
+  header h1 { font-size: 17px; margin: 0; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; color: var(--muted); }
+  .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .pill.ok::before { background: var(--good); } .pill.bad::before { background: var(--bad); } .pill.warn::before { background: var(--warn); }
+  .pill.ok { color: var(--ink); } .pill.bad { color: var(--bad); } .pill.warn { color: var(--warn); }
+  main { display: grid; gap: 12px; padding: 12px 16px 32px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); max-width: 1500px; margin: 0 auto; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+  section.wide { grid-column: 1 / -1; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+  .muted { color: var(--muted); } .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+  .row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }
+  .bar { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  .bar .lbl { width: 54px; color: var(--muted); } .bar .num { width: 56px; text-align: right; font-variant-numeric: tabular-nums; }
+  .track { flex: 1; height: 10px; background: var(--track); border-radius: 5px; overflow: hidden; }
+  .fill { height: 100%; background: var(--good); } .fill.warn { background: var(--warn); } .fill.bad { background: var(--bad); }
+  .task { padding: 6px 0; border-top: 1px solid var(--line); } .task:first-of-type { border-top: 0; }
+  .task b { font-weight: 600; }
+  .tag { font-size: 11px; padding: 0 6px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); margin-left: 6px; }
+  img.pov { width: 100%; height: auto; border-radius: 6px; background: var(--track); display: block; min-height: 120px; }
+  .chat { max-height: 320px; overflow-y: auto; }
+  .chat div { padding: 2px 0; overflow-wrap: anywhere; } .chat .who { font-weight: 600; margin-right: 6px; } .chat .who.bot { color: var(--accent); }
+  .inv { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 12px; }
+  .inv div { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dotted var(--line); padding: 1px 0; }
+  .inv b { font-variant-numeric: tabular-nums; }
+  table { border-collapse: collapse; width: 100%; } th, td { text-align: left; padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  input[type=search] { width: 100%; max-width: 320px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); margin-bottom: 8px; }
+  .warnbox { border: 1px solid var(--bad); color: var(--bad); border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; font-weight: 600; }
+  details summary { cursor: pointer; color: var(--muted); }
+  pre { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; max-height: 260px; overflow: auto; }
+  .empty { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <h1>OzoGo444</h1>
+  <span id="conn" class="pill">connecting</span>
+  <span id="botstate" class="pill">bot</span>
+  <span class="muted" id="updated"></span>
+</header>
+<main>
+  <section id="vitals"><h2>Vitals</h2><div class="body"></div></section>
+  <section id="task"><h2>Current task and queue</h2><div class="body"></div></section>
+  <section id="povcard"><h2>Last POV <span id="povage" class="muted"></span></h2><div class="body"></div></section>
+  <section id="chat"><h2>Recent chat</h2><div class="body chat"></div></section>
+  <section id="inventory"><h2>Inventory <span id="invsum" class="muted"></span></h2><div class="body"></div></section>
+  <section id="stations" class="wide"><h2>Stations and chests</h2><div class="body"></div></section>
+  <section id="misc" class="wide"><h2>Furnace, modules and log</h2><div class="body"></div></section>
+</main>
+<script>
+'use strict';
+// Every value from the bot or from chat is untrusted text: it only ever goes in through textContent.
+const $ = (sel) => document.querySelector(sel);
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) { if (k === 'class') el.className = v; else if (v !== null && v !== undefined) el.setAttribute(k, v); }
+  for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  return el;
+}
+const put = (sel, ...kids) => { const el = $(sel + ' .body'); el.replaceChildren(...kids.flat().filter(Boolean)); };
+const empty = (t) => h('div', { class: 'empty' }, t);
+function ago(ms) {
+  if (ms === null || ms === undefined) return 'never';
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 90) return s + 's ago'; if (s < 5400) return Math.round(s / 60) + 'm ago';
+  if (s < 172800) return Math.round(s / 3600) + 'h ago'; return Math.round(s / 86400) + 'd ago';
+}
+function bar(label, v, max, lowIsBad) {
+  const known = typeof v === 'number';
+  const pct = known ? Math.max(0, Math.min(100, (v / max) * 100)) : 0;
+  const cls = lowIsBad && known ? (v <= max * 0.3 ? 'bad' : v <= max * 0.6 ? 'warn' : '') : '';
+  return h('div', { class: 'bar' }, h('span', { class: 'lbl' }, label),
+    h('span', { class: 'track', role: 'meter', 'aria-label': label, 'aria-valuenow': known ? v : null, 'aria-valuemax': max }, h('div', { class: 'fill ' + cls, style: 'width:' + pct + '%' })),
+    h('span', { class: 'num' }, known ? v + '/' + max : '?'));
+}
+const row = (k, v) => h('div', { class: 'row' }, h('span', { class: 'muted' }, k), h('span', { class: 'mono' }, v));
+const fmtPos = (p) => p ? [p.x, p.y, p.z].map(n => Math.round(n)).join(', ') : '?';
+
+let last = null, povMtime = null, chestFilter = '';
+
+function renderVitals(d) {
+  const b = d.bot || {};
+  const warn = b.holdingLava ? h('div', { class: 'warnbox' }, 'Holding a lava bucket') : null;
+  put('#vitals', warn,
+    bar('Health', b.health, 20, true), bar('Food', b.food, 20, true),
+    row('Position', fmtPos(b.pos)), row('Facing', b.yawDeg === null || b.yawDeg === undefined ? '?' : b.yawDeg + '° yaw, ' + b.pitchDeg + '° pitch'),
+    row('Dimension', b.dimension || '?'), row('Game time', (b.gameClock || '?') + (b.gameDay != null ? ' (day ' + b.gameDay + ')' : '')),
+    row('Holding', b.held ? b.held.count + ' x ' + b.held.name : 'nothing'),
+    b.isSleeping ? row('State', 'sleeping') : null);
+}
+
+function taskRow(t, tagText) {
+  return h('div', { class: 'task' },
+    h('b', {}, t.name), h('span', { class: 'tag' }, tagText),
+    h('span', { class: 'muted' }, ' p' + t.priority),
+    t.progress ? h('div', { class: 'mono' }, t.progress) : null,
+    t.parkReason ? h('div', { class: 'muted' }, t.parkReason) : null);
+}
+function renderTask(d) {
+  const k = d.task || {};
+  const out = [];
+  out.push(k.running ? taskRow(k.running, 'running ' + (k.running.runningS ?? 0) + 's') : h('div', { class: 'task' }, h('b', {}, 'Idle'), h('span', { class: 'tag' }, k.quietForS != null ? 'quiet ' + k.quietForS + 's' : '')));
+  (k.queue || []).forEach(t => out.push(taskRow(t, t.status)));
+  (k.parked || []).forEach(t => out.push(taskRow(t, 'parked')));
+  const rs = k.routines || [];
+  if (rs.length) out.push(h('div', { class: 'task' }, h('span', { class: 'muted' }, 'Routines: '),
+    rs.map(r => h('span', { class: 'tag', title: 'priority ' + r.priority }, r.name + (r.enabled ? ' on' : ' off')))));
+  const hist = (k.history || []).slice(-6).reverse();
+  if (hist.length) out.push(h('details', {}, h('summary', {}, 'Scheduler history'), h('pre', {}, hist.map(x => (x.agoS != null ? x.agoS + 's ago  ' : '') + (x.msg ?? x.text ?? '')).join('\n'))));
+  put('#task', out);
+}
+
+function renderPov(d) {
+  const p = d.pov || {};
+  if (!p.exists) { put('#povcard', empty('No POV image yet (pov\\latest.png). Run node pov.js while the bot is online.')); $('#povage').textContent = ''; povMtime = null; return; }
+  if (p.mtimeMs !== povMtime || !$('#povcard img')) {
+    povMtime = p.mtimeMs;
+    put('#povcard', h('img', { class: 'pov', src: '/pov/latest.png?v=' + p.mtimeMs, alt: 'Last first-person view of the bot' }));
+  }
+  $('#povage').textContent = 'taken ' + ago(d.ts - p.mtimeMs);
+}
+
+function renderChat(d) {
+  const el = $('#chat .body'), atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+  const botName = (d.bot && d.bot.username) || 'OzoGo444';
+  const lines = (d.chat || []).map(c => h('div', {}, h('span', { class: 'who' + (c.from === botName || c.from === 'bot' ? ' bot' : '') }, c.from ? c.from + ':' : ''), c.text));
+  el.replaceChildren(...(lines.length ? lines : [empty('No chat yet')]));
+  if (atBottom) el.scrollTop = el.scrollHeight;
+}
+
+function renderInventory(d) {
+  const inv = d.inventory || { items: [] };
+  $('#invsum').textContent = inv.stacks ? '(' + inv.stacks + ' stacks)' : '';
+  put('#inventory', inv.items.length ? h('div', { class: 'inv' }, inv.items.map(i => h('div', { title: i.name }, h('span', {}, i.displayName), h('b', {}, i.count)))) : empty('Empty'));
+}
+
+function itemsText(items, n) {
+  const e = Object.entries(items || {}).sort((a, b) => b[1] - a[1]);
+  if (!e.length) return 'empty';
+  return e.slice(0, n).map(([k, v]) => v + ' ' + k).join(', ') + (e.length > n ? ' (+' + (e.length - n) + ' more)' : '');
+}
+function chestRow(c, now) {
+  if (c.error) return h('tr', {}, h('td', { class: 'mono' }, c.at), h('td', { colspan: 2, class: 'muted' }, 'unreadable: ' + c.error));
+  const full = c.slots ? Math.round((c.used / c.slots) * 100) : null;
+  return h('tr', {}, h('td', { class: 'mono' }, c.at),
+    h('td', {}, full === null ? c.used + ' slots' : c.used + '/' + c.slots + ' (' + full + '%)', c.scannedAt ? h('div', { class: 'muted' }, ago(now - c.scannedAt)) : null),
+    h('td', {}, itemsText(c.items, 6)));
+}
+const chestTable = (rows, now) => h('table', {}, h('tr', {}, h('th', {}, 'Chest'), h('th', {}, 'Used'), h('th', {}, 'Contents')), rows.map(c => chestRow(c, now)));
+
+// The filter box lives outside the re-rendered parts so it keeps focus while the page refreshes.
+const stTop = h('div'), stHead = h('div'), stRows = h('div');
+const stBox = h('input', { type: 'search', placeholder: 'Filter by item or coordinates', 'aria-label': 'Filter chest index' });
+stBox.addEventListener('input', () => { chestFilter = stBox.value; if (last) renderStations(last); });
+$('#stations .body').append(stTop, stHead, stBox, stRows);
+
+function renderStations(d) {
+  const c = d.chests || { stations: [], index: [] }, now = d.ts, top = [];
+  (c.stations || []).forEach(s => {
+    top.push(h('h3', { style: 'margin:12px 0 4px;font-size:14px' }, 'Station ' + s.station, h('span', { class: 'muted' }, '  furnaces: ' + (s.furnaces || []).join(' | '))));
+    top.push(chestTable(s.chests || [], now));
+  });
+  if (c.stationsScannedAt) top.push(h('div', { class: 'muted' }, 'Stations scanned ' + ago(now - c.stationsScannedAt)));
+  if (!top.length) top.push(empty('No stations.json found'));
+  stTop.replaceChildren(...top);
+  const has = c.index && c.index.length;
+  stBox.hidden = !has;
+  if (!has) { stHead.replaceChildren(h('h3', { style: 'margin:16px 0 4px;font-size:14px' }, 'Chest index'), empty('No chest-index.json yet (say "index chests" in game)')); stRows.replaceChildren(); return; }
+  const q = chestFilter.toLowerCase();
+  const rows = c.index.filter(x => !q || x.at.includes(q) || Object.keys(x.items || {}).some(n => n.includes(q)));
+  stHead.replaceChildren(h('h3', { style: 'margin:16px 0 4px;font-size:14px' }, 'Chest index', h('span', { class: 'muted' }, '  ' + c.indexed + ' chests' + (c.indexErrors ? ', ' + c.indexErrors + ' unreadable' : '') + ', updated ' + ago(now - c.indexUpdatedAt))));
+  stRows.replaceChildren(rows.length ? chestTable(rows.slice(0, 150), now) : empty('No chest matches'), rows.length > 150 ? h('div', { class: 'muted' }, 'Showing 150 of ' + rows.length) : null);
+}
+
+function renderMisc(d) {
+  const keepOpen = new Set([...document.querySelectorAll('#misc details[open]')].map(x => x.dataset.k));
+  const det = (k, title, text) => { const el = h('details', { 'data-k': k }, h('summary', {}, title), h('pre', { class: 'mono' }, text)); if (keepOpen.has(k)) el.open = true; return el; };
+  const out = [];
+  out.push(det('furnace', 'Furnace routine', d.furnace == null ? 'no data' : JSON.stringify(d.furnace, null, 2)));
+  const mods = d.modules || {};
+  out.push(det('modules', 'Modules (' + Object.keys(mods).length + ')', Object.keys(mods).length ? JSON.stringify(mods, null, 2) : 'none'));
+  out.push(det('log', 'Brain log', (d.log || []).map(l => (l.from ? '[' + l.from + '] ' : '') + l.text).join('\n') || 'empty'));
+  put('#misc', out);
+}
+
+function render(d) {
+  last = d;
+  const b = d.bot || {};
+  const bs = $('#botstate');
+  bs.className = 'pill ' + (b.online ? 'ok' : 'bad');
+  bs.textContent = b.online ? 'bot online' + (b.dimension ? ' · ' + b.dimension : '') : 'bot offline';
+  $('#updated').textContent = 'up ' + Math.round(d.uptimeS / 60) + ' min';
+  renderVitals(d); renderTask(d); renderPov(d); renderChat(d); renderInventory(d); renderMisc(d);
+  renderStations(d);
+}
+
+let fails = 0;
+async function poll() {
+  const conn = $('#conn');
+  try {
+    const r = await fetch('/api/status', { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    render(await r.json());
+    fails = 0; conn.className = 'pill ok'; conn.textContent = 'live';
+  } catch {
+    fails++;
+    conn.className = 'pill ' + (fails > 2 ? 'bad' : 'warn');
+    conn.textContent = fails > 2 ? 'disconnected (bot restarting?)' : 'retrying';
+  }
+}
+poll();
+setInterval(poll, 2000);
+</script>
+</body>
+</html>

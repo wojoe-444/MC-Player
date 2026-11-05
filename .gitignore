@@ -1,0 +1,65 @@
+# --- secrets and logins (never commit) ---
+*.key
+*.pem
+.env
+.env.*
+!.env.example
+bot.local.env
+bots/*/bot.local.env
+auth-cache/
+**/auth-cache/
+*_mca-cache.json
+*-cache.json
+*token*.json
+brain/router/openrouter.key
+brain/fastlane/openrouter.key
+
+# --- dependencies and build output ---
+node_modules/
+**/node_modules/
+dashboard/web/node_modules/
+
+# --- runtime data: everything a running bot writes ---
+/runtime/
+/brain/state/
+*.log
+*.err
+*.out
+idle.log
+join.log
+narration.log
+chat.log
+chat-context.jsonl
+outbox.txt
+cmd.txt
+lan-port.txt
+player-pos.json
+sleep-state.json
+bots-sleep.json
+waypoints.json
+stations.json
+chest-index.json
+exc-state.json
+routine-state.json
+find-*.txt
+*-scan.txt
+room-map.txt
+furnace-inspect.txt
+# screenshots and recordings
+*.png
+!dashboard/web/src/assets/*.png
+shot/
+screenshots/
+pov/
+# arena run output
+arena/results/
+arena/queue/
+arena/staging/
+# plugin-eval output
+plugin-eval/out/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

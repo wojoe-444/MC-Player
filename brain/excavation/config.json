@@ -1,0 +1,91 @@
+{
+  "_note": "Room carved at Walter's request (2026-10-25), extended 2026-10-26 to 10 blocks tall (y136..145). Digging only happens at digFrom..digTo inside box; those are clamped below hallMinY (Walter's stone-brick hall starts at y151, its floor is y150) and to a 10-block-tall room (floorY..floorY+9).",
+  "box": {
+    "x1": -1069,
+    "x2": -1053,
+    "z1": 2299,
+    "z2": 2344
+  },
+  "floorY": 136,
+  "digFrom": 138,
+  "digTo": 145,
+  "hallMinY": 151,
+  "groupSize": 3,
+  "entry": [
+    -1061,
+    136,
+    2323
+  ],
+  "protectedBoxes": [],
+  "extraDiggable": [],
+  "limits": {
+    "maxGroundItems": 30,
+    "itemRadius": 24,
+    "reserveCobble": 48,
+    "fullSlots": 6,
+    "minFreeSlots": 3,
+    "minHealth": 8,
+    "hostileRadius": 6,
+    "minPickaxeUses": 60,
+    "dangerRetries": 6,
+    "dangerRetryMs": 20000,
+    "chestRetryMs": 600000,
+    "craftPollMs": 1000,
+    "craftPolls": 120
+  },
+  "inputChests": [
+    [
+      -1043,
+      132,
+      2273
+    ],
+    [
+      -1051,
+      155,
+      2324
+    ],
+    [
+      -1051,
+      155,
+      2325
+    ]
+  ],
+  "autoResumeOnStart": true,
+  "bands": [
+    {
+      "id": "base",
+      "from": 138,
+      "to": 141,
+      "access": "floor",
+      "key": "done"
+    },
+    {
+      "id": "ceiling",
+      "from": 142,
+      "to": 142,
+      "access": "floor",
+      "key": "doneCeiling"
+    },
+    {
+      "id": "high",
+      "from": 143,
+      "to": 145,
+      "access": "pillar",
+      "key": "doneHigh"
+    }
+  ],
+  "pillar": {
+    "blocks": 4,
+    "minCobble": 6,
+    "aimOffset": 0
+  },
+  "worksite": {
+    "enabled": true,
+    "cell": [
+      -1069,
+      136,
+      2323
+    ],
+    "search": 25
+  }
+}

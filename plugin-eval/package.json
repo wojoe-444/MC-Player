@@ -1,0 +1,1 @@
+{"name":"plugin-eval","private":true,"version":"1.0.0","dependencies":{"@nxg-org/mineflayer-custom-pvp":"^1.7.16","mineflayer":"^4.39.0","mineflayer-collectblock":"^1.6.0","mineflayer-pathfinder":"^2.4.5","mineflayer-schem":"^1.5.2","mineflayer-statemachine":"^1.7.0","mineflayer-tool":"^1.2.0"}}
