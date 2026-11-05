@@ -24,3 +24,5 @@ node scripts/start-bot.js ozo      # or smeo
 The bot's cwd is `runtime/<bot>/` (gitignored): logs, `auth-cache/` (Microsoft login), `brain/state/`, chat files, waypoints. To keep using a folder where a bot already runs, set `BOT_RUNTIME_DIR` to it. The first sign-in prompts for a Microsoft device-code login in the console.
 
 The dashboard reads the same folders: `node dashboard/server.js` (override with `BOT_OZO_DIR`, `BOT_SMEO_DIR`, `BOT_CODE_DIR`).
+
+Seed defaults (set 2026-11-05 from the live driver's overrides): the planner is off (no model credit; flip `planner.enabled` to turn it on) and `disabledModules` lists treefarm, excavation, build, villagers, mining, routines and dashboard (the old treefarm once dug around the tree farm). Remove a name from that list to enable the module for that bot.

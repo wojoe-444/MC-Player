@@ -117,3 +117,11 @@ test('the stance command matches through the integrator signature match(user, te
   for (const t of ['hello there', 'what mode is the farm in today']) assert.ok(!c.match('OGWO', t), t)
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'brain', 'clearbox', 'index.js'), 'utf8'), /match: \(u, t\) => STARTRE\.test\(t\)/)
 })
+
+test('the seed profiles ship with the planner off and the digging/building modules disabled', () => {
+  for (const b of ['ozo', 'smeo']) {
+    const pf = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'bots', b, 'profile.json'), 'utf8'))
+    assert.strictEqual(pf.planner.enabled, false, b)
+    for (const m of ['treefarm', 'excavation', 'build', 'villagers', 'mining', 'routines']) assert.ok(pf.disabledModules.includes(m), b + ' ' + m)
+  }
+})

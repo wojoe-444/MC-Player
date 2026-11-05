@@ -3,7 +3,7 @@
   "name": "Smeo444",
   "role": "assistant",
   "stance": "autonomous",
-  "planner": { "enabled": true },
+  "planner": { "enabled": false },
   "steps": ["eat", "take-cover", "recover", "cook", "night-home", "wear", "tool-kit", "site-work", "berries"],
-  "disabledModules": ["mining", "build", "villagers", "dashboard"]
+  "disabledModules": ["treefarm", "excavation", "build", "villagers", "mining", "routines", "dashboard"]
 }
