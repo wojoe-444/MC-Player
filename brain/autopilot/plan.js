@@ -99,7 +99,8 @@ module.exports = function plan(G, S, M, api, log) {
       if (!torchFuel()) {
         const ln = logName(); if (!ln) return false
         if (S.logs() < 12) return false          // keep a wood reserve: the last logs are the next pickaxe, not torches (it stranded itself with none)
-        const got = await S.smelt(ln, Math.min(6, S.count(ln) - 8))   // charcoal: the renewable torch fuel
+        // the wood reserve counts all logs: 8 oak + 4 birch gave count(oak) - 8 = 0 to smelt and the step failed every minute (torches failed x10)
+        const got = await S.smelt(ln, Math.min(6, S.logs() - 8, S.count(ln)))   // charcoal: the renewable torch fuel
         note('charcoal from ' + ln + ': ' + got)
       }
       const n = torchFuel(); if (!n) return false
