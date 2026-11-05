@@ -6,6 +6,7 @@
 // beds / doors / spawners / bedrock, no lava or fire or TNT or buckets, no tossing items, only the items the goal names may leave or enter a chest,
 // lava is never held while moving (safehand). It runs as a scheduler task (chat priority, cancelled by "stop", preempted by safety) and every step is logged.
 const fs = require('fs')
+const botname = require('../botname')
 const path = require('path')
 const { Vec3 } = require('vec3')
 const los = require('../los')
@@ -252,7 +253,7 @@ function createManual({ api, talker, cfg = {}, now = Date.now, logFile }) {
         const obs = observe(lim.steps - steps, msLeft)
         const user = `GOAL (Walter's words): ${clean(goal).slice(0, 300)}\nHISTORY:\n${hist.slice(-10).join('\n') || 'none yet'}\nOBSERVATION: ${JSON.stringify(obs).slice(0, 3800)}`
         const t0 = Date.now()
-        const r = await talker.raw({ model: c.model, messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: user }], maxTokens: c.maxTokens || 260, temperature: 0.2, timeoutMs: c.stepTimeoutMs, extraBody: c.extraBody })
+        const r = await talker.raw({ model: c.model, messages: [{ role: 'system', content: botname.forName(SYSTEM) }, { role: 'user', content: user }], maxTokens: c.maxTokens || 260, temperature: 0.2, timeoutMs: c.stepTimeoutMs, extraBody: c.extraBody })
         if (st.aborted) return finish('aborted')
         if (!r.ok) { if (++errs >= 3) return finish('model-error', r.kind); await new Promise(res => setTimeout(res, 400)); continue }
         const obj = parseModelJson(r.content)

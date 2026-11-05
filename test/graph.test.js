@@ -5,7 +5,7 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const { catalog } = require('../brain/ladder')
-const { createGraph } = require('../brain/behavior')
+const { createGraph } = require('../brain/graph')
 const { Scheduler, PRIORITY } = require('../brain/scheduler')
 
 test('ladder: every rung has members, read from the code', () => {

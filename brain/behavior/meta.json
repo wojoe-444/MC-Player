@@ -1,0 +1,9 @@
+{
+  "name": "behavior",
+  "version": 1,
+  "kind": "observer",
+  "summary": "Exports what the bot is doing as a state graph (behavior-tree.json) for the dashboard; follows the scheduler, never decides.",
+  "requires": ["autopilot"],
+  "provides": [],
+  "claims": []
+}

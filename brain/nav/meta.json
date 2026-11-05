@@ -7,5 +7,7 @@
   "provides": [
     "nav"
   ],
-  "claims": []
+  "claims": [
+    "hands"
+  ]
 }

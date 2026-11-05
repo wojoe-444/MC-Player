@@ -2,6 +2,7 @@
 // No network, no bot. The model can only (a) pick a command string that the router's slots.validate() accepts, (b) say a short
 // vetted sentence, or (c) hand the line to Claude. Everything else is rejected here and becomes 'escalate'.
 const { NONE, GOTO } = (() => { try { return require('../router/catalog') } catch { return { NONE: 'none', GOTO: 'goto-waypoint' } } })()
+const botname = require('../botname')
 
 const DEFAULTS = { run: 0.8, info: 0.65, ask: 0.5, instant: 0.5 }
 const MAX_DESC = 80
@@ -22,7 +23,7 @@ const SLOT_FORMS = [
 const clean = (s) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim()
 
 function systemPrompt() {
-  return [
+  return botname.forName([
     'You are the quick command picker for OzoGo444, a Minecraft bot owned by Walter (chat name OGWO).',
     'Read ONE chat line and answer with ONE JSON object and nothing else. Choose exactly one form:',
     '{"kind":"command","command":"<one command from the list>","confidence":<0 to 1>,"rest":"<remaining steps, only if the line has more than one>"}',
@@ -42,7 +43,7 @@ function systemPrompt() {
     'chat "walk to 10 70 -20" -> {"kind":"command","command":"go to 10 70 -20","confidence":0.95}',
     'chat "thanks, nice work" -> {"kind":"reply","text":"Anytime, Walter!"}',
     'chat "what is the best way to find diamonds" -> {"kind":"escalate"}'
-  ].join('\n')
+  ].join('\n'))
 }
 
 // catalog: from router/catalog.build(). -> the list the model sees

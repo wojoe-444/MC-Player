@@ -56,4 +56,4 @@ module.exports = function register(api) {
     status() { return { builtFor } }
   }
 }
-module.exports.meta = { name: 'behavior', version: 1 }
+module.exports.meta = require('./meta.json')
