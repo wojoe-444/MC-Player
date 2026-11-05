@@ -21,7 +21,7 @@ if (!bot || !fs.existsSync(path.join(cfgDir, 'bot.json'))) {
   const known = fs.readdirSync(path.join(repo, 'bots')).filter(d => fs.existsSync(path.join(repo, 'bots', d, 'bot.json')))
   console.error('usage: node scripts/start-bot.js <' + known.join('|') + '>'); process.exit(2)
 }
-const cfg = JSON.parse(fs.readFileSync(path.join(cfgDir, 'bot.json'), 'utf8'))
+const cfg = JSON.parse(fs.readFileSync(path.join(cfgDir, 'bot.json'), 'utf8').replace(/^﻿/, ''))   // bot.json files were saved with a BOM
 
 function readEnvFile(file) {
   const out = {}
