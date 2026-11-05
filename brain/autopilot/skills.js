@@ -696,6 +696,8 @@ module.exports = function makeSkills({ bot, api, log }) {
     for (const e of Object.values(bot.entities)) {
       if (!e || !e.position || e === bot.entity) continue
       if (!HOSTILE.test(e.name || '')) continue
+      // a calm enderman is no threat (metadata 17/18: angry/staring); counting it held the cave reflex on for 14 minutes (03:49)
+      if (e.name === 'enderman') { const md = e.metadata || []; if (md[17] !== true && md[18] !== true) continue }
       if (e.position.distanceTo(me) <= r) out.push(e)
     }
     return out
