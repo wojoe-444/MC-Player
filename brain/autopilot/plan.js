@@ -827,6 +827,12 @@ module.exports = function plan(G, S, M, api, log) {
       const p = bot.entity.position
       st.avoid = (st.avoid || []).concat([[Math.floor(p.x), Math.floor(p.y), Math.floor(p.z)]]).slice(-20)
       if (p.y < 60) { st.mineSpot = (st.mineSpot || 0) + 1; st.mineBlocked = 0 }
+      // a shaft whose tunnels open into a mob-filled cave: the bot died four times around (223-231, 22-27, -313..-338) in five hours. Two deaths
+      // within 48 blocks of the shaft bottom and the shaft is given up; the next one is dug at another spot around home
+      if (p.y < 60 && st.mine && st.mine.bottom && p.distanceTo(v(...st.mine.bottom)) < 48) {
+        st.mineDeaths = (st.mineDeaths || 0) + 1
+        if (st.mineDeaths >= 2) { log('PLAN', `mine: ${st.mineDeaths} deaths around the shaft bottom ${st.mine.bottom}, giving the shaft up`); st.mine = null; st.mineSite = null; st.mineDeaths = 0 }
+      }
       st.restockAt = 0   // the bag is empty now: the home chests are the first stop
       G.save(); log('PLAN', `death at ${p.floored()} remembered; mine spot now ${st.mineSpot || 0}`)
     } catch {}
