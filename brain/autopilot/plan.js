@@ -527,15 +527,22 @@ module.exports = function plan(G, S, M, api, log) {
   ]
 
   // ---- tend the field: plots that dried out or got trampled back to dirt are tilled and sown again (7 of 9 plots had reverted, 2026-11-04) ----
-  steps.push({ id: 'tend', budget: 150000, cool: 180000, need: () => !S.isNight() && cnt('wheat_seeds') >= 1 && (st.farm || []).some(q => { const c = S.block(v(q[0], q[1] + 1, q[2])); return c && S.isAir(c) }), run: async () => {
+  const tendBare = () => (st.farm || []).filter(q => { const c = S.block(v(q[0], q[1] + 1, q[2])); return c && S.isAir(c) && !((st.tendSkip || {})[q.join(',')] > Date.now()) })
+  steps.push({ id: 'tend', budget: 150000, cool: 180000, need: () => {
+      if (S.isNight() || cnt('wheat_seeds') < 1) return false
+      // bare plots, minus the ones that would not take seed lately (unreachable, not farmland any more): those wait half an hour.
+      // From down in the mine it takes three bare plots to make the climb worth it (at 14:06 it climbed the shaft to resow nothing).
+      const bare = tendBare().length, h = home(), deep = h && bot.entity.position.y < h.y - 8
+      return bare >= (deep ? 3 : 1) }, run: async () => {
     let n = 0
-    for (const q of st.farm) {
+    for (const q of tendBare()) {
       if (!cnt('wheat_seeds')) break
-      const p = v(q[0], q[1], q[2]), c = S.block(p.offset(0, 1, 0)); if (!c || !S.isAir(c)) continue
-      const r = await S.goto(new goals.GoalNear(p.x, p.y + 1, p.z, 2), { dig: false, ms: 25000 }); if (!r.ok) continue
+      const p = v(q[0], q[1], q[2]), k = q.join(','), skip = () => { st.tendSkip = st.tendSkip || {}; st.tendSkip[k] = Date.now() + 1800000 }
+      const r = await S.goto(new goals.GoalNear(p.x, p.y + 1, p.z, 2), { dig: false, ms: 25000 }); if (!r.ok) { skip(); continue }
       let g = S.block(p)
       if (g && /^(dirt|grass_block)$/.test(g.name)) { const hoe = S.items().find(i => /_hoe$/.test(i.name)) || (await S.craft('stone_hoe', 1), S.items().find(i => /_hoe$/.test(i.name))); if (!hoe) break; try { await bot.equip(hoe, 'hand'); await bot.lookAt(p.offset(0.5, 1, 0.5), true); await bot.activateBlock(g); await S.wait(250) } catch {} g = S.block(p) }
       if (g && g.name === 'farmland' && await S.placeAgainst(g, v(0, 1, 0), 'wheat_seeds')) n++
+      else skip()
     }
     note('tend: resowed ' + n + ' plots'); return n > 0 } })
 
