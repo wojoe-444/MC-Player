@@ -8,7 +8,9 @@ const VENDOR = path.join(__dirname, '..', '..', 'vendor', 'node_modules')
 module.exports = function register(api) {
   const { bot } = api
   const log = (m) => api.log('plugins', m)
-  let timer = null, ok = { eat: false, armor: false }
+  let timer = null, guard = null, ok = { eat: false, armor: false }
+  // no eating with a mob in reach: auto-eat kept a zombie's victim holding bread for six hits in a row (OzoGo444 died, 05:54); the sword comes first
+  const threatClose = () => { try { const S = bot._ap && bot._ap.S; return !!(S && S.hostilesNear && S.hostilesNear(5).length) } catch { return false } }
   return {
     name: 'plugins',
     async start() {
@@ -24,11 +26,20 @@ module.exports = function register(api) {
         }
         bot.autoEat.setOpts({ minHunger: 15, minHealth: 14, bannedFood: ['rotten_flesh', 'spider_eye', 'poisonous_potato', 'pufferfish', 'chorus_fruit', 'suspicious_stew', 'golden_apple', 'enchanted_golden_apple'] })
         bot.autoEat.enableAuto()
+        let paused = false
+        guard = setInterval(() => {
+          try {
+            const close = threatClose()
+            if (close && !paused) { paused = true; bot.autoEat.disableAuto(); if (bot.autoEat.isEating) { try { bot.deactivateItem() } catch {} } }
+            else if (!close && paused) { paused = false; bot.autoEat.enableAuto() }
+          } catch {}
+        }, 250)
+        bot._eatBlocked = () => threatClose()
         ok.eat = true
       } catch (e) { log('auto-eat not loaded: ' + e.message) }
       log(`loaded: auto-eat ${ok.eat}, armor-manager ${ok.armor}`)
     },
-    stop() { clearInterval(timer); try { bot.autoEat && bot.autoEat.disableAuto() } catch {} },
+    stop() { clearInterval(timer); clearInterval(guard); try { bot.autoEat && bot.autoEat.disableAuto() } catch {} },
     status() { return ok }
   }
 }

@@ -348,7 +348,9 @@ module.exports = function install({
     try {
       if (eatNow) { await eatNow(); return true }
       // brain/plugins loaded mineflayer-auto-eat: one eater only, it picks the food
-      if (bot.autoEat && typeof bot.autoEat.eat === 'function') { try { await bot.autoEat.eat() } catch (e) { log('auto-eat: ' + e.message); return false } return true }
+      if (bot.autoEat && typeof bot.autoEat.eat === 'function') {
+        if (bot._eatBlocked && bot._eatBlocked()) return false   // a mob in reach: fight first (brain/plugins)
+        try { await bot.autoEat.eat() } catch (e) { log('auto-eat: ' + e.message); return false } return true }
       const food = chooseFood(bot.inventory.items(), bot.registry.foodsByName || {}, { food: bot.food, emergency })
       if (!food) { if (!noFoodSaid) { noFoodSaid = true; say(emergency ? 'Hurt and no food on me.' : 'No food to eat.') } return false }
       await bot.equip(food, 'hand'); swappedForFood = true
