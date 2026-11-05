@@ -725,11 +725,13 @@ module.exports = function plan(G, S, M, api, log) {
   }
   const missingShelter = (pl) => pl.walls.concat(pl.roof).filter(p => { const b = S.block(p); return b && (S.isAir(b) || b.boundingBox === 'empty') && !/torch|_bed|door/.test(b.name) })
   const shelterTorch = (pl) => bot.findBlocks({ matching: ids(/^(torch|wall_torch)$/), point: pl.inside, maxDistance: 3, count: 3 }).some(p => p.x >= pl.box.x0 && p.x <= pl.box.x1 && p.z >= pl.box.z0 && p.z <= pl.box.z1)
+  const doorIn = (pl) => /door/.test((S.block(pl.door) || {}).name || '')
+  const shelterTodo = (pl) => missingShelter(pl).length + (!shelterTorch(pl) && cnt('torch') > 0 ? 1 : 0) + (!doorIn(pl) && S.items().some(i => /_door$/.test(i.name)) ? 1 : 0)
   steps.push({ id: 'shelter', budget: 240000, cool: 600000, need: () => {
       if (G.role === 'assistant' || S.isNight() || !home() || Date.now() < (st.shelterPauseUntil || 0)) return false
       if (Date.now() - (st._shelterAt || 0) < 120000) return !!st._shelterNeed
       st._shelterAt = Date.now(); const pl = shelterPlan()
-      st._shelterNeed = !!pl && (missingShelter(pl).length > 0 || !shelterTorch(pl) || (!/door/.test((S.block(pl.door) || {}).name || '') && S.items().some(i => /_door$/.test(i.name))))
+      st._shelterNeed = !!pl && (missingShelter(pl).length > 0 || (!shelterTorch(pl) && cnt('torch') > 0) || (!/door/.test((S.block(pl.door) || {}).name || '') && S.items().some(i => /_door$/.test(i.name))))
       return st._shelterNeed }, run: async () => {
     const pl = shelterPlan(); if (!pl) { note('shelter: no walkable side for a doorway, not building'); st.shelterPauseUntil = Date.now() + 3600000; return false }
     const FILL = /^(cobblestone|cobbled_deepslate|stone|andesite|diorite|granite|dirt|tuff)$/
@@ -745,12 +747,17 @@ module.exports = function plan(G, S, M, api, log) {
         if (have() >= 80) break
       }
     }
-    const before = missingShelter(pl).length
+    const before = shelterTodo(pl)
     let placed = 0
     // three standing spots inside, so every wall and roof block is within reach of one of them
-    const spots = [pl.inside, pl.inside.offset(pl.box.x1 - pl.inside.x, 0, pl.box.z0 - pl.inside.z), pl.inside.offset(pl.box.x0 - pl.inside.x, 0, pl.box.z1 - pl.inside.z)]
+    // (free interior cells only, never a bed cell, and never by the escalating go-to: at 11:49 it pillared inside the box and the breath
+    // reflex then broke the roof out over the bot's head)
+    const standable = (c) => { const a = S.block(c), b = S.block(c.offset(0, 1, 0)), g = S.block(c.offset(0, -1, 0)); return a && b && g && a.boundingBox === 'empty' && b.boundingBox === 'empty' && g.boundingBox === 'block' && !/_bed$/.test(g.name) }
+    const free = []; for (let x = pl.box.x0; x <= pl.box.x1; x++) for (let z = pl.box.z0; z <= pl.box.z1; z++) { const c = v(x, pl.box.y, z); if (standable(c)) free.push(c) }
+    const corner = (x, z) => free.slice().sort((a, b) => (Math.abs(a.x - x) + Math.abs(a.z - z)) - (Math.abs(b.x - x) + Math.abs(b.z - z)))[0]
+    const spots = [corner(pl.inside.x, pl.inside.z), corner(pl.box.x1, pl.box.z0), corner(pl.box.x0, pl.box.z1)].filter((c, i, a) => c && a.findIndex(d => d && d.equals(c)) === i)
     if (filler()) for (const s of spots) {
-      await S.goto(new goals.GoalNear(s.x, s.y, s.z, 0), { dig: false, ms: 30000 })
+      await S.goto(new goals.GoalNear(s.x, s.y, s.z, 0), { dig: false, ms: 30000, escalate: false })
       for (let pass = 0; pass < 2; pass++) for (const p of missingShelter(pl).sort((a, b) => a.y - b.y)) {
         const it = filler(); if (!it) break
         if (S.eye().distanceTo(p.offset(0.5, 0.5, 0.5)) > 4.4) continue
@@ -763,7 +770,7 @@ module.exports = function plan(G, S, M, api, log) {
     if (!shelterTorch(pl) && cnt('torch')) {
       for (const c of [pl.inside, ...[[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dz]) => pl.inside.offset(dx, 0, dz))]) {
         const b = S.block(c), g = S.block(c.offset(0, -1, 0)); if (!b || !S.isAir(b) || !g || g.boundingBox !== 'block') continue
-        if (S.dist(c) > 4) await S.goto(new goals.GoalNear(c.x, c.y, c.z, 2), { dig: false, ms: 15000 })
+        if (S.dist(c) > 4) await S.goto(new goals.GoalNear(c.x, c.y, c.z, 2), { dig: false, ms: 15000, escalate: false })
         if (await S.placeAgainst(g, v(0, 1, 0), 'torch')) { placed++; break }
       }
     }
@@ -774,14 +781,15 @@ module.exports = function plan(G, S, M, api, log) {
       const dItem = S.items().find(i => /_door$/.test(i.name))
       const floor = S.block(pl.door.offset(0, -1, 0))
       if (dItem && floor && floor.boundingBox === 'block' && db && S.isAir(db) && da && S.isAir(da)) {
-        await S.goto(new goals.GoalNear(pl.door.x, pl.door.y, pl.door.z, 2), { dig: false, ms: 20000 })
+        await S.goto(new goals.GoalNear(pl.door.x, pl.door.y, pl.door.z, 2), { dig: false, ms: 20000, escalate: false })
         if (await S.placeAgainst(floor, v(0, 1, 0), dItem.name)) placed++
       }
     }
-    const left = missingShelter(pl).length
-    // cells that cannot be filled (nothing to place against, out of reach) must not hold the step ahead of iron for ever
-    if (left > 0 && left >= before) { st.shelterStuck = (st.shelterStuck || 0) + 1; if (st.shelterStuck >= 3) { st.shelterPauseUntil = Date.now() + 3600000; st.shelterStuck = 0 } } else st.shelterStuck = 0
-    note(`shelter: ${placed} placed, ${left} wall/roof blocks still missing, door ${/door/.test((S.block(pl.door) || {}).name || '') ? 'in' : 'open'}, torch ${shelterTorch(pl) ? 'in' : 'missing'}`)
+    const left = missingShelter(pl).length, todo = shelterTodo(pl)
+    // what cannot be done (a cell with nothing to place against, a torch or door that will not go down) must not hold the step ahead of
+    // iron for ever: three passes without progress pause it for an hour
+    if (todo > 0 && todo >= before) { st.shelterStuck = (st.shelterStuck || 0) + 1; if (st.shelterStuck >= 3) { st.shelterPauseUntil = Date.now() + 3600000; st.shelterStuck = 0 } } else st.shelterStuck = 0
+    note(`shelter: ${placed} placed, ${left} wall/roof blocks still missing, door ${doorIn(pl) ? 'in' : 'open'}, torch ${shelterTorch(pl) ? 'in' : 'missing'}`)
     st._shelterAt = 0
     return placed > 0 } })
 
