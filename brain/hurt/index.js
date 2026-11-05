@@ -32,10 +32,13 @@ module.exports = function register(api) {
       }, 150)
     } catch {}
   }
+  // thorns marks end when the mob dies or leaves, or after 5 minutes
+  const forget = (e) => { try { if (e && bot._thornsMobs) bot._thornsMobs.delete(e.id) } catch {} }
+  const prune = setInterval(() => { try { const m = bot._thornsMobs; if (m) for (const [id, t] of m) if (Date.now() - t > 5 * 60000) m.delete(id) } catch {} }, 30000)
   return {
     name: 'hurt',
-    start() { bot._client.on('damage_event', onDamage) },
-    stop() { bot._client.removeListener('damage_event', onDamage); try { fs.writeFileSync(file, JSON.stringify(totals, null, 1)) } catch {} },
+    start() { bot._client.on('damage_event', onDamage); bot.on('entityDead', forget); bot.on('entityGone', forget) },
+    stop() { bot._client.removeListener('damage_event', onDamage); bot.removeListener('entityDead', forget); bot.removeListener('entityGone', forget); clearInterval(prune); try { fs.writeFileSync(file, JSON.stringify(totals, null, 1)) } catch {} },
     status() { return totals }
   }
 }
