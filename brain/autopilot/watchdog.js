@@ -305,7 +305,9 @@ module.exports = function watchdog(ap, api, log) {
     if (handled(now)) { if (ap.dangerUntil) { ap.dangerUntil = 0; ap.keepTaskOff = false } reflexClearSince = 0; return }
     const under = underRock() && bot.game && bot.game.dimension === 'overworld'
     const seen = under ? S.hostilesNear(15).filter(losTo) : []
-    const hurtNear = under && now - lastHurtAt < 3000 && S.hostilesNear(24).length > 0
+    // a thorn, a fall or drowning is not an archer: brain/hurt marks hits with no mob behind them (berry bushes set this reflex off again and again)
+    const envHit = bot._lastEnvHurtAt && Math.abs(bot._lastEnvHurtAt - lastHurtAt) < 1500
+    const hurtNear = under && !envHit && now - lastHurtAt < 3000 && S.hostilesNear(24).length > 0
     const danger = under && (seen.length > 0 || hurtNear)
     if (danger) {
       reflexClearSince = 0
