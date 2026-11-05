@@ -479,6 +479,16 @@ module.exports = function plan(G, S, M, api, log) {
       const before = ironUnits()
       const t = await M.tunnel(st.mineDir, 40, { targets: /^(deepslate_)?(iron|coal|copper|gold|diamond|redstone|lapis)_ore$/, torchEvery: 6, stop: () => S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 })
       note(`mine: tunnel ${t.len} blocks, mined ${t.mined}, iron +${ironUnits() - before} (${t.reason})`)
+      // the four tunnels from this bottom are dug out: walking them again mines nothing (06:56, "tunnel 40 blocks, mined 0" in 11 s).
+      // Two empty walks in a row: a new level 8 blocks further down the same shaft, which becomes the shaft bottom
+      if (t.mined === 0 && t.len >= 30) st.mineEmpty = (st.mineEmpty || 0) + 1; else if (t.mined > 0) st.mineEmpty = 0
+      if ((st.mineEmpty || 0) >= 2 && st.mine && st.mine.bottom && st.mine.bottom[1] > -48) {
+        const target = st.mine.bottom[1] - 8
+        const r = await M.descend(target, { maxSteps: 40, dir0: st.mine.dir0 })
+        const b = S.flo(bot.entity.position)
+        if (b.y < st.mine.bottom[1]) { st.mine.bottom = [b.x, b.y, b.z]; st.mineEmpty = 0; note(`mine: new level at y${b.y} below the worked-out one (${JSON.stringify(r)})`) }
+        G.save()
+      }
       // blocked tunnels (water, lava): just branch another way next time, from the same shaft bottom; no new surface breach
       if (t.len === 0 && /water|lava|hazard|clear-fail|blocked/.test(String(t.reason))) { st.mineBlocked = (st.mineBlocked || 0) + 1; G.save() } else st.mineBlocked = 0
       if (S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 || ironUnits() >= 24) { const up = await M.goSurface(); note('mine: back up ' + up) }
