@@ -67,7 +67,10 @@ module.exports = function register(api) {
       fs.writeFileSync(json, JSON.stringify(d))
       fs.writeFileSync(api.statePath('topmap.json'), JSON.stringify(d))
       const top = path.join(DIR, `top-${ts}.png`), pov = path.join(DIR, `pov-${ts}.png`)
-      const [a, b] = await Promise.all([run(['tools/topmap.js', '6', json, top], 40000), run(['pov.js', pov, '--around', '--w', '480', '--h', '270', '--port', String(Number(process.env.VIEWER_PORT) || 3007)], 50000)])
+      // the first-person ray-cast costs several CPU-seconds per bot; with the laptop at 100% (the game host itself) it starved both bots into
+      // 16-19 s freezes and reconnects (07:05), so it runs every third tick (3 min), the map every tick
+      const povDue = (runs % 3) === 0
+      const [a, b] = await Promise.all([run(['tools/topmap.js', '6', json, top], 40000), !povDue ? Promise.resolve(null) : run(['pov.js', pov, '--around', '--w', '480', '--h', '270', '--port', String(Number(process.env.VIEWER_PORT) || 3007)], 50000)])
       if (a && fs.existsSync(top)) fs.copyFileSync(top, path.join(DIR, 'top-latest.png'))
       if (b && fs.existsSync(pov)) fs.copyFileSync(pov, path.join(DIR, 'pov-latest.png'))
       let info = null; try { info = JSON.parse(String(b).trim().split('\n').pop()) } catch {}
