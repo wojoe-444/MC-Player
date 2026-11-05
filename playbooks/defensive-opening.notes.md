@@ -52,7 +52,7 @@ The readiness gate (`think.js:116`) does not require armor (stone pickaxe, sword
 ## 3b. Still open
 
 - Phantoms: confirmed against the Minecraft wiki (Insomnia page, checked 2026-11-05): entering a bed resets the insomnia counter ("Sleeping or entering a bed"), and so does dying; the spawn threshold is 3 in-game days (72000 ticks) without rest. The page doesn't say the night has to skip, so a 60-second attempt each night should keep phantoms away. Still worth one test on the trial server.
-- "If the other bots aren't sleeping": the coordinator asked the driver thread to add each bot's sleeping state to its always-on `latest.json` so the bots can see each other's state. The playbook can then read that flag.
+- "If the other bots aren't sleeping": solved. `bots-sleep.json` in the code folder (written by `plan.js`) holds `{ "<bot>": { sleeping, at } }`, refreshed every 15 s and on each bed enter and exit; each bot's `latest.json` also has `sleeping`, `time` and `home`. The playbook's sleep rule reads `bots-sleep.json`.
 - Is the spare bed or wool in the restock chest OK, or should the bot just fetch sheep when it respawns?
 - Scope: hillclimber (OzoGo444) only. Smeo444 stays on his routine.
 
