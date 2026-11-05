@@ -51,7 +51,9 @@ function create(bot, overrides = {}, hooks = {}) {
   const items = () => bot.inventory.items()
   const find = (re) => items().find(i => re.test(i.name))
   // another layer is placing a block right now (nav pillar): switching to the sword made it try to place the sword (20:25)
-  const holdSlot = (it) => { if (!it) return false; { const h = bot._reflexes && bot._reflexes.heldByOther('hands', 'combat'); if (h && (h !== 'placer' || /_sword$|_axe$/.test(it.name))) return false }   /* safehand holds the slot: nothing; a placing job: no weapon swap */ if (!bot._reflexes && (bot._placingUntil || 0) > Date.now() && /_sword$|_axe$/.test(it.name)) return false; const s = it.slot - 36; if (s >= 0 && s < 9) { if (bot.quickBarSlot !== s) bot.setQuickBarSlot(s); return true } return false }
+  // a mob in melee range beats a placing job: safety walling itself in held the cobblestone while a zombie killed OzoGo444 in four hits (08:26)
+  let meleeClose = false
+  const holdSlot = (it) => { if (!it) return false; { const h = bot._reflexes && bot._reflexes.heldByOther('hands', 'combat'); if (h && (h !== 'placer' || (/_sword$|_axe$/.test(it.name) && !meleeClose))) return false }   /* safehand holds the slot: nothing; a placing job: no weapon swap */ if (!bot._reflexes && (bot._placingUntil || 0) > Date.now() && /_sword$|_axe$/.test(it.name)) return false; const s = it.slot - 36; if (s >= 0 && s < 9) { if (bot.quickBarSlot !== s) bot.setQuickBarSlot(s); return true } return false }
   const sword = () => find(/_sword$/)
   const bowItem = () => find(/^bow$/)
   const arrows = () => items().filter(i => /arrow$/.test(i.name)).reduce((s, i) => s + i.count, 0)
@@ -171,6 +173,7 @@ function create(bot, overrides = {}, hooks = {}) {
     if (shielding && tickN % 3 === 0) { const f = bot.entity.metadata && bot.entity.metadata[8]; stats.shieldChecks++; if (typeof f === 'number' && !(f & 1)) { stats.shieldDrops++; if (P.shieldVerify) bot.activateItem(true) } else if (typeof f !== 'number') stats.shieldNoMeta++ }
     const { threats, arrows: inbound } = P.assess(bot, tracks, P)
     const live = threats.filter(t => t.canHurt)
+    meleeClose = live.some(t => t.kind !== 'ranged' && t.d < 3.5)
     behTicks[beh] = (behTicks[beh] || 0) + 1
     // ---- flight recorder ----
     const ar = inbound.length
