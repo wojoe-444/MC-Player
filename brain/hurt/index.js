@@ -20,6 +20,8 @@ module.exports = function register(api) {
       const by = p.sourceCauseId > 0 ? bot.entities[p.sourceCauseId - 1] : null
       const who = by ? (by.username || by.name || by.type) : null
       if (!who) bot._lastEnvHurtAt = Date.now()   // no mob behind it: thorns, falls, drowning, fire (the cave reflex ignores these)
+      // a mob in Thorns armor hurts whoever hits it: remember it, and combat stops swinging at it (two OzoGo444 deaths at 11:13-11:14)
+      if (kind === 'thorns' && by) { bot._thornsMobs = bot._thornsMobs || new Map(); bot._thornsMobs.set(by.id, Date.now()) }
       const hp0 = bot.health
       setTimeout(() => {
         const lost = Math.max(0, +(hp0 - bot.health).toFixed(1))
