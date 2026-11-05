@@ -406,7 +406,7 @@ module.exports = function makeSkills({ bot, api, log }) {
   S.placeAgainst = async (ref, face, itemName) => {
     const it = bot.inventory.items().find(i => i.name === itemName)
     if (!it) return false
-    if (bot._meleeClose) return false   // a mob in reach: no placing while combat holds the sword
+    if (bot._meleeClose && Date.now() - (bot._meleeCloseAt || 0) < 500) return false   // a mob in reach: no placing while combat holds the sword
     markPlacing(bot, 2500)
     await bot.equip(it, 'hand').catch(() => {})
     try { await bot.lookAt(v(ref.position.x + 0.5 + face.x * 0.5, ref.position.y + 0.5 + face.y * 0.5, ref.position.z + 0.5 + face.z * 0.5), true) } catch {}

@@ -173,7 +173,8 @@ function create(bot, overrides = {}, hooks = {}) {
     if (shielding && tickN % 3 === 0) { const f = bot.entity.metadata && bot.entity.metadata[8]; stats.shieldChecks++; if (typeof f === 'number' && !(f & 1)) { stats.shieldDrops++; if (P.shieldVerify) bot.activateItem(true) } else if (typeof f !== 'number') stats.shieldNoMeta++ }
     const { threats, arrows: inbound } = P.assess(bot, tracks, P)
     const live = threats.filter(t => t.canHurt)
-    meleeClose = live.some(t => t.kind !== 'ranged' && t.d < 3.5); bot._meleeClose = meleeClose
+    // melee only: a creeper close by is a reason to wall in or back off, not to hold the sword over the placer
+    meleeClose = live.some(t => t.kind === 'melee' && t.d < 3.5); bot._meleeClose = meleeClose; bot._meleeCloseAt = Date.now()
     behTicks[beh] = (behTicks[beh] || 0) + 1
     // ---- flight recorder ----
     const ar = inbound.length
@@ -478,7 +479,7 @@ function create(bot, overrides = {}, hooks = {}) {
     P, stats, events, trace, dmgLog, behTicks, engaged: () => tickN - lastEngagedTick <= 8,
     setIdleYaw(y) { idleYaw = y },
     stop() {
-      bot.removeListener('physicsTick', onTick); bot.removeListener('entityDead', onDead); bot.removeListener('entityGone', onGone)
+      bot.removeListener('physicsTick', onTick); bot._meleeClose = false; bot.removeListener('entityDead', onDead); bot.removeListener('entityGone', onGone)
       bot._client.removeListener('entity_status', onStatus); bot.removeListener('soundEffectHeard', onSound); bot.removeListener('soundEffectHeard', onSkelSound); bot._client.removeListener('explosion', onExplosion)
       control({}); try { if (shielding) bot.deactivateItem() } catch {}
     },

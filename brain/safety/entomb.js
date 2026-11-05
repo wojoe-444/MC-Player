@@ -83,7 +83,7 @@ function makeEntomb({ bot, log = () => {}, canSee = null, sleep = (ms) => new Pr
   }
   // Place one filler block at `target` against the visible face `r`. Waits for the block to appear (the server's blockUpdate) and retries once.
   async function placeOne(target, r) {
-    if (bot._meleeClose) return false   // a mob in reach: the sword has the hand (combat), walling in waits (no slot flip-flop, review of #20)
+    if (bot._meleeClose && Date.now() - (bot._meleeCloseAt || 0) < 500) return false   // a mob in reach: the sword has the hand (combat), walling in waits (no slot flip-flop, review of #20)
     const refBlock = bot.blockAt(r.ref)
     if (canSee && refBlock && !(await canSee(refBlock))) return false
     const here = bot.blockAt(target)
