@@ -76,13 +76,8 @@ module.exports = function plan(G, S, M, api, log) {
       // with a shelter round the bed: to the cell outside its door first, then in through the door to a floor cell beside the bed.
       // A plain go-to near the bed ended on the shelter roof twice (13:01, 14:48: 'cannot sleep: the bed is too far').
       let r
-      if (st.shelterDoor && G.role !== 'assistant') {
-        const d = v(...st.shelterDoor), out = d.offset(Math.sign(d.x - h.x), 0, Math.sign(d.z - h.z))
-        if (S.dist(h) > 3) await S.goto(new goals.GoalNear(out.x, out.y, out.z, 1), { dig: false, ms: 90000 })
-        r = await S.goto(new goals.GoalNear(h.x, h.y, h.z, 1.5), { dig: false, ms: 30000, escalate: false })
-        // the walk to the door above may escalate (from a cave); right at the shelter nothing digs or pillars: that is how the roof broke
-        if (!r.ok) r = await S.goto(new goals.GoalNear(h.x, h.y, h.z, 2), { dig: false, ms: 60000, escalate: false })
-      } else r = await S.goto(new goals.GoalNear(h.x, h.y, h.z, 2), { dig: false, ms: 90000 })
+      if (st.shelterDoor && G.role !== 'assistant') r = await G.enterShelter()
+      else r = await S.goto(new goals.GoalNear(h.x, h.y, h.z, 2), { dig: false, ms: 90000 })
       const bed = bot.findBlock({ matching: ids(/_bed$/), maxDistance: 4 })
       if (!bed) { st.noSleepUntil = Date.now() + 120000; return !!r.ok }
       try { await bot.sleep(bed); note('sleeping at home') } catch (e) { note('cannot sleep: ' + e.message); st.noSleepUntil = Date.now() + 5 * 60000; return true }
@@ -737,6 +732,17 @@ module.exports = function plan(G, S, M, api, log) {
   // Blocks inside the box around the home bed already count as established (isEstablished, homeBox), so neither the bot nor the pathfinder
   // takes them down. Chests are never built over (a block on top seals a chest). ----
   const CONTAINER = /chest|barrel|shulker|furnace|smoker/
+  // into the shelter the one way that works: to the cell outside the door, then through it to the floor beside the bed. The walk to the door
+  // may escalate only from far away (a cave); near the shelter nothing digs or pillars: from 3-4 blocks out the escalating go-to stacked
+  // blocks up the outside wall and left the bot on the roof (14:48, 15:20, 21:29 'cannot sleep: the bed is too far')
+  G.enterShelter = async () => {
+    const h = home(); if (!h || !st.shelterDoor) return { ok: false, err: 'no shelter' }
+    const d = v(...st.shelterDoor), out = d.offset(Math.sign(d.x - h.x), 0, Math.sign(d.z - h.z))
+    if (S.dist(h) > 2.2) await S.goto(new goals.GoalNear(out.x, out.y, out.z, 1), { dig: false, ms: 90000, escalate: S.dist(h) > 12 })
+    let r = await S.goto(new goals.GoalNear(h.x, h.y, h.z, 1.5), { dig: false, ms: 30000, escalate: false })
+    if (!r.ok) r = await S.goto(new goals.GoalNear(h.x, h.y, h.z, 2), { dig: false, ms: 60000, escalate: false })
+    return r
+  }
   // the cells above the shelter roof (the roof is at floor + 2), cached: the pathfinder asks for every step it weighs
   var _roof = { at: 0, box: null }
   function roofBox() {

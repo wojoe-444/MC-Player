@@ -209,7 +209,7 @@ module.exports = function makeGoals(S, M, api, log) {
       const lh = steps.find(x => x.id === 'light-home')
       if (lh && G.role !== 'assistant' && st.home && S.count('torch') >= 8 && Date.now() - (G.idleLightAt || 0) > 60000) { G.idleLightAt = Date.now(); G.lastStep = 'light-home'; note('nothing to do: lighting more ground around home'); st.lightAt = 0; S.stepDeadline = Date.now() + 150000; try { await lh.run() } catch (e) { if (S.isAbort(e)) throw e } finally { S.stepDeadline = 0 } return }
       // random exploring kept walking it into the sea (drowned, 06:34) and caves: with a home, idle time is spent there, not wandering
-      if (st.home) { G.lastStep = 'home'; const h = v(st.home[0], st.home[1], st.home[2]); if (S.dist(h) > 6) { note('nothing to do: back home'); await S.goto(new goals.GoalNear(h.x, h.y, h.z, 3), { dig: false, ms: 60000 }) } await S.wait(4000); return }
+      if (st.home) { G.lastStep = 'home'; const h = v(st.home[0], st.home[1], st.home[2]); if (S.dist(h) > 6) { note('nothing to do: back home'); if (G.enterShelter && st.shelterDoor && G.role !== 'assistant') await G.enterShelter(); else await S.goto(new goals.GoalNear(h.x, h.y, h.z, 3), { dig: false, ms: 60000 }) } await S.wait(4000); return }
       if (G.role === 'assistant') { G.lastStep = 'home'; await S.wait(5000); return }
       note('nothing to do: exploring')
       G.lastStep = 'explore'
