@@ -154,6 +154,8 @@ module.exports = function site(G, S, M, api, log) {
         for (const p of cands) {
           const b = S.block(p), g = S.block(p.offset(0, -1, 0))
           if (!b || !S.isAir(b) || !g || g.boundingBox !== 'block' || passage(p) || (!(cfg.newChestSpots || []).some(q => q[0] === p.x && q[2] === p.z) && inBox(p, cfg.box))) continue
+          // walk up to the spot first: from the old chests the farther spots (138, 146, 147) were out of reach and every placement timed out (23:11)
+          if (eyeDist(p) > 4) await S.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { dig: false, ms: 30000 })
           if (await S.placeAgainst(g, v(0, 1, 0), 'chest')) { cfg.chests.push([p.x, p.y, p.z]); fs.writeFileSync(api.statePath('site.json'), JSON.stringify(cfg, null, 1)); note(`${cfg.name}: chests full, added one at ${p}`); return moved + await deposit(cfg) }
         }
       }
