@@ -527,7 +527,10 @@ module.exports = function plan(G, S, M, api, log) {
   ]
 
   // ---- tend the field: plots that dried out or got trampled back to dirt are tilled and sown again (7 of 9 plots had reverted, 2026-11-04) ----
-  const tendBare = () => (st.farm || []).filter(q => { const c = S.block(v(q[0], q[1] + 1, q[2])); return c && S.isAir(c) && !((st.tendSkip || {})[q.join(',')] > Date.now()) })
+  // a plot that is no longer soil (water, air, a path: the farm was rebuilt) is dropped from the list; at 14:10 nine of them kept the step due
+  const tendBare = () => {
+    st.farm = (st.farm || []).filter(q => { const g = S.block(v(q[0], q[1], q[2])); return !g || /^(farmland|dirt|grass_block)$/.test(g.name) })
+    return st.farm.filter(q => { const g = S.block(v(q[0], q[1], q[2])), c = S.block(v(q[0], q[1] + 1, q[2])); return g && c && S.isAir(c) && !((st.tendSkip || {})[q.join(',')] > Date.now()) }) }
   steps.push({ id: 'tend', budget: 150000, cool: 180000, need: () => {
       if (S.isNight() || cnt('wheat_seeds') < 1) return false
       // bare plots, minus the ones that would not take seed lately (unreachable, not farmland any more): those wait half an hour.
