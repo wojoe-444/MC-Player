@@ -560,7 +560,8 @@ module.exports = function install({
     await maybeEat(true)
     if (!roofTried && bot.food >= 0) { roofTried = true; const ok = await entomber.closeRoof(); slog(`entomb roof: ${ok ? 'closed' : 'left open'}`) }
     // an archer within 16 or anything within 8 keeps the walls up: at 16:11 the bot dug out with a skeleton 6.8 blocks off and was shot dead
-    const hostileNear = latest && t - latest.at < 1500 && latest.threats.some(m => m.dist <= 8 || (m.dist <= 16 && (PROFILES[m.name] || {}).kind === 'ranged'))
+    // creepers too: at 17:45 it dug out with a creeper 12 blocks off, which walked up and blew it up a few seconds later
+    const hostileNear = latest && t - latest.at < 1500 && latest.threats.some(m => m.dist <= 8 || (m.dist <= 16 && /^(ranged|explosive)$/.test((PROFILES[m.name] || {}).kind || '')))
     if (hostileNear) entombCalmAt = 0; else if (!entombCalmAt) entombCalmAt = t
     const healed = bot.health >= C.recoverHealth
     if ((healed && entombCalmAt && t - entombCalmAt > 5000) || t - holdStart > C.entombHoldMs) {
@@ -568,7 +569,8 @@ module.exports = function install({
       const out = env.shelter ? env.shelter.pos : null
       const ok = await entomber.digOut(out).catch(() => false)
       slog(`entomb exit: ${ok}`)
-      entombed = false; entombFailedAt = t
+      // a clean dig-out may wall in again after 10 s (the old 60 s lock left it in the open while the next creeper came, 17:45); a failed one waits the full minute
+      entombed = false; entombFailedAt = ok ? t - 50000 : t
       // a failed dig-out used to re-enter the hold forever (the safety task ran 29 min at 19:30): leave it to the autopilot, which digs its own way
     }
   }
