@@ -102,9 +102,15 @@ export function ViewPanel({ bot }: { bot: BotSnap }) {
         <TabsTrigger value="3d">3D live</TabsTrigger>
         <TabsTrigger value="hist">History</TabsTrigger>
       </TabsList>
-      <TabsContent value="top" className="flex flex-col gap-2">
-        <Frame src={`/img/${bot.id}/top?t=${img.top ?? 0}`} pixelated alt="Top-down map" />
-        <Meta><span>Purple marks mob-spawnable cells</span><span>updated {age(img.top)}</span></Meta>
+      <TabsContent value="top" className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
+        <div className="flex flex-col gap-2">
+          <Frame src={`/img/${bot.id}/top?t=${img.top ?? 0}`} pixelated alt="Top-down map" />
+          <Meta><span>Top-down map; purple marks mob-spawnable cells</span><span>updated {age(img.top)}</span></Meta>
+        </div>
+        <div className="flex flex-col gap-2">
+          <Frame src={`/img/${bot.id}/slice?t=${img.slice ?? 0}`} pixelated alt="Vertical slice" />
+          <Meta><span>Vertical slice; only what the bot has line of sight to</span><span>{img.slice ? `updated ${age(img.slice)}` : "not written yet"}</span></Meta>
+        </div>
       </TabsContent>
       <TabsContent value="pov" className="flex flex-col gap-2">
         <Frame src={`/img/${bot.id}/pov?t=${img.pov ?? 0}`} alt="First-person view" />
