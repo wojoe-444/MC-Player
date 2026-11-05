@@ -694,6 +694,76 @@ module.exports = function plan(G, S, M, api, log) {
   }, 20000)
   { const prev = G.dispose; G.dispose = () => { clearInterval(loopTimer); try { bot.removeListener('death', onDeathLoop) } catch {} if (prev) prev() } }
 
+  // ---- a shelter around the home bed (2026-11-05: Walter's house there is gone, and the bot kept dying at its own spawn point at night:
+  // skeleton arrows from the dark (11:28), a zombie camping the bed). Walls two high around the bed with one block of room on each side,
+  // a roof, and a door on the side away from the chests. Built from cobblestone by day; missing blocks are put back on later passes.
+  // The hillclimber only: the assistant's bed belongs to Walter's base. Blocks inside the box around the bed are established, so nothing
+  // (bot or pathfinder) takes them down again. ----
+  function shelterPlan() {
+    const h = home(); if (!h) return null
+    const cells = [h, ...[[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dz]) => h.offset(dx, 0, dz))].filter(p => { const b = S.block(p); return b && /_bed$/.test(b.name) })
+    if (!cells.length) return null
+    const x0 = Math.min(...cells.map(p => p.x)) - 1, x1 = Math.max(...cells.map(p => p.x)) + 1, z0 = Math.min(...cells.map(p => p.z)) - 1, z1 = Math.max(...cells.map(p => p.z)) + 1, y = h.y
+    const walls = [], roof = []
+    for (let x = x0 - 1; x <= x1 + 1; x++) for (let z = z0 - 1; z <= z1 + 1; z++) {
+      const edge = x === x0 - 1 || x === x1 + 1 || z === z0 - 1 || z === z1 + 1
+      if (edge) { walls.push(v(x, y, z)); walls.push(v(x, y + 1, z)) }
+      roof.push(v(x, y + 2, z))
+    }
+    // the door: the middle of the longer side that has no chest next to it
+    const midZ = Math.round((z0 + z1) / 2), midX = Math.round((x0 + x1) / 2)
+    const doors = [v(x1 + 1, y, midZ), v(x0 - 1, y, midZ), v(midX, y, z1 + 1), v(midX, y, z0 - 1)]
+    const door = doors.find(d => { const out = d.offset(Math.sign(d.x - midX), 0, Math.sign(d.z - midZ)); const g = S.block(out.offset(0, -1, 0)), a = S.block(out); return g && g.boundingBox === 'block' && a && a.boundingBox === 'empty' }) || doors[0]
+    return { walls: walls.filter(p => !(p.x === door.x && p.z === door.z)), roof, door, inside: v(midX, y, midZ), box: { x0, x1, z0, z1, y } }
+  }
+  const missingShelter = (pl) => pl.walls.concat(pl.roof).filter(p => { const b = S.block(p); return b && (S.isAir(b) || b.boundingBox === 'empty') && !/torch|_bed|door/.test(b.name) })
+  steps.push({ id: 'shelter', budget: 240000, cool: 600000, need: () => {
+      if (G.role === 'assistant' || S.isNight() || !home()) return false
+      if (Date.now() - (st._shelterAt || 0) < 120000) return !!st._shelterNeed
+      st._shelterAt = Date.now(); const pl = shelterPlan(); st._shelterNeed = !!pl && (missingShelter(pl).length > 0 || !/door/.test((S.block(pl.door) || {}).name || ''))
+      return st._shelterNeed }, run: async () => {
+    const pl = shelterPlan(); if (!pl) return false
+    const FILL = /^(cobblestone|cobbled_deepslate|stone|andesite|diorite|granite|dirt|tuff)$/
+    const filler = () => (S.items().find(i => cobbleRe.test(i.name)) || S.items().find(i => FILL.test(i.name)) || {}).name
+    // building stone from the home chests (they hold the rubble the bot stashed: diorite, andesite, granite)
+    if (S.items().filter(i => FILL.test(i.name)).reduce((n, i) => n + i.count, 0) < 48) {
+      for (const cp of bot.findBlocks({ matching: ids(/^chest$/), maxDistance: 12, count: 8, point: home() })) {
+        if (S.eye().distanceTo(cp.offset(0.5, 0.5, 0.5)) > 4.2) await S.goto(new goals.GoalNear(cp.x, cp.y, cp.z, 2), { dig: false, ms: 30000 })
+        let c; S.closeWindows(); try { c = await bot.openContainer(S.block(cp)) } catch { continue }
+        try { for (const it of c.containerItems().filter(i => FILL.test(i.name))) { await c.withdraw(it.type, null, Math.min(it.count, 64)); if (S.items().filter(i => FILL.test(i.name)).reduce((n, i) => n + i.count, 0) >= 80) break } } catch {} finally { try { c.close() } catch {} }
+        if (S.items().filter(i => FILL.test(i.name)).reduce((n, i) => n + i.count, 0) >= 80) break
+      }
+    }
+    if (!filler()) { note('shelter: no building stone in the bag or the home chests'); return false }
+    let placed = 0
+    // two standing spots inside, so every wall and roof block is within reach of one of them
+    const spots = [pl.inside, pl.inside.offset(pl.box.x1 - pl.inside.x, 0, pl.box.z0 - pl.inside.z), pl.inside.offset(pl.box.x0 - pl.inside.x, 0, pl.box.z1 - pl.inside.z)]
+    for (const s of spots) {
+      await S.goto(new goals.GoalNear(s.x, s.y, s.z, 0), { dig: false, ms: 30000 })
+      for (let pass = 0; pass < 2; pass++) for (const p of missingShelter(pl).sort((a, b) => a.y - b.y)) {
+        const it = filler(); if (!it) break
+        if (S.eye().distanceTo(p.offset(0.5, 0.5, 0.5)) > 4.4) continue
+        // something solid to place against: below first, then the sides, then above
+        const ref = [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]].map(([dx, dy, dz]) => [S.block(p.offset(dx, dy, dz)), v(-dx, -dy, -dz)]).find(([b]) => b && b.boundingBox === 'block')
+        if (ref && await S.placeAgainst(ref[0], ref[1], it)) placed++
+      }
+    }
+    // the door
+    const db = S.block(pl.door), da = S.block(pl.door.offset(0, 1, 0))
+    if (db && !/door/.test(db.name)) {
+      if (!S.items().some(i => /_door$/.test(i.name)) && S.planks() + S.logs() * 4 >= 6) await S.craft('oak_door', 1).catch(() => false)
+      const dItem = S.items().find(i => /_door$/.test(i.name))
+      const floor = S.block(pl.door.offset(0, -1, 0))
+      if (dItem && floor && floor.boundingBox === 'block' && db && S.isAir(db) && da && S.isAir(da)) {
+        await S.goto(new goals.GoalNear(pl.door.x, pl.door.y, pl.door.z, 2), { dig: false, ms: 20000 })
+        if (await S.placeAgainst(floor, v(0, 1, 0), dItem.name)) placed++
+      }
+    }
+    const left = missingShelter(pl).length
+    note(`shelter: ${placed} blocks placed around the bed, ${left} still missing, door ${/door/.test((S.block(pl.door) || {}).name || '') ? 'in' : 'missing'}`)
+    st._shelterAt = 0
+    return placed > 0 } })
+
   // ---- the home bed is a fixed point (Walter 2026-11-04: if the base blows up, use commands to put a bed back and reset the spawn). When the
   // bed block at home is gone, a bed is given if none is carried, set down at the same spot and the respawn point is set there again. ----
   steps.splice(Math.max(0, steps.findIndex(s => s.id === 'eat') + 1), 0, { id: 'rebed', budget: 90000, cool: 30000, need: () => {
@@ -881,7 +951,7 @@ module.exports = function plan(G, S, M, api, log) {
   insertAfter('furnace', [byId.torches, byId['wood-stock'], byId.wear, byId.shield, byId['iron-smelt'], byId['iron-gear']])
   insertAfter('food', ['berries', 'fish', 'rod', 'string', 'hunt-memory', 'tend'].map(id => steps.find(s => s.id === id)).concat([byId.seeds, byId.farm]))   // kelp diving dropped: it drowned the bot
   // iron before upkeep: grove, lighting and tidying kept winning every pick and the hillclimber never went mining (02:50)
-  insertAfter('coal', [byId.stash, byId.iron, byId.grove, byId['light-home'], steps.find(s => s.id === 'tidy')])
+  insertAfter('coal', [byId.stash, byId.shelter, byId.iron, byId.grove, byId['light-home'], steps.find(s => s.id === 'tidy')])
   insertAfter('wood-stock', [steps.find(s => s.id === 'scout'), steps.find(s => s.id === 'storage')])
   // routine work at a fixed site (site.json; Smeo444's birch farm), right after the survival basics
   try { delete require.cache[require.resolve('./site')]; insertAfter('tool-kit', [require('./site')(G, S, M, api, log)]) } catch (e) { log('PLAN', 'site not loaded: ' + e.message) }
