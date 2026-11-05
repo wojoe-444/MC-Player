@@ -493,6 +493,9 @@ module.exports = function plan(G, S, M, api, log) {
           const bottom = bot.entity.position.floored()
           note('mine: dug the shaft from ' + entry + ' down to y' + bottom.y + ' ' + JSON.stringify(r))
           if (bottom.y > 56) return false
+          // never record a shaft that starts deep under ground or was not dug at all (the fallback after a full round of skipped spots
+          // could still start one in a cave; descend's 'blocked' exit has no steps count, so depth is measured by y): go home instead
+          if (entry.y < h.y - 10 || bottom.y >= entry.y) { st.mineSpot = (st.mineSpot || 0) + 1; G.save(); note(`mine: no shaft recorded (entry y${entry.y}, ${entry.y - bottom.y} blocks down), heading home`); await M.goSurface(); await S.goto(new goals.GoalNear(h.x, h.y, h.z, 3), { dig: false, ms: 120000 }); return false }
           st.mine = { entry: [entry.x, entry.y, entry.z], bottom: [bottom.x, bottom.y, bottom.z], dir0, since: Date.now() }; st.mineSkips = 0
           G.save()
         }
