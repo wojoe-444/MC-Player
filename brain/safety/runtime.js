@@ -421,7 +421,10 @@ module.exports = function install({
           } else if (d.action === 'shoot') {
             await shoot(L, e, dist)
           } else {
-            if (!d.urgent) await maybeEat()
+            // fleeing still holds the weapon, not the pickaxe, and eats only with nothing within 8 blocks: twice underground (16:11 a
+            // skeleton, 17:13 zombies and a creeper) the bot fled with a pickaxe in hand and bread in its mouth while mobs hit it point-blank
+            await equipWeapon()
+            if (!d.urgent && nearestThreatDist() > 8) await maybeEat()
             await retreat(L, e, d)
           }
         } else if (!active) {
@@ -556,7 +559,8 @@ module.exports = function install({
     } catch {}
     await maybeEat(true)
     if (!roofTried && bot.food >= 0) { roofTried = true; const ok = await entomber.closeRoof(); slog(`entomb roof: ${ok ? 'closed' : 'left open'}`) }
-    const hostileNear = latest && t - latest.at < 1500 && latest.threats.some(m => m.dist <= 6)
+    // an archer within 16 or anything within 8 keeps the walls up: at 16:11 the bot dug out with a skeleton 6.8 blocks off and was shot dead
+    const hostileNear = latest && t - latest.at < 1500 && latest.threats.some(m => m.dist <= 8 || (m.dist <= 16 && (PROFILES[m.name] || {}).kind === 'ranged'))
     if (hostileNear) entombCalmAt = 0; else if (!entombCalmAt) entombCalmAt = t
     const healed = bot.health >= C.recoverHealth
     if ((healed && entombCalmAt && t - entombCalmAt > 5000) || t - holdStart > C.entombHoldMs) {

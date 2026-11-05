@@ -164,7 +164,12 @@ function create(bot, overrides = {}, hooks = {}) {
     if (organizing) { control({}); return }
     // brain/breath owns the movement controls while it gets the bot out of the water or air: fighting drowned while swimming killed it (18:37).
     // With the reflex registry that is the `body` lease; without one (arena harness) the old flag.
-    if (bot._reflexes ? bot._reflexes.heldByOther('body', 'combat') : (bot._ashoreUntil || 0) > Date.now()) return
+    { const bodyBy = bot._reflexes ? bot._reflexes.heldByOther('body', 'combat') : ((bot._ashoreUntil || 0) > Date.now() ? 'ashore' : null)
+      if (bodyBy) {
+        // a record when this costs a fight: who held the body while a hostile was in reach (two cave deaths 2026-11-05 without a swing)
+        try { const me2 = bot.entity.position; const m = Object.values(bot.entities).find(x => x !== bot.entity && x.position && /zombie|skeleton|spider|husk|drowned|stray|creeper|witch|pillager|vindicator|slime|silverfish|cave_spider/.test(x.name || '') && x.position.distanceTo(me2) < 3.5)
+          if (m && Date.now() - (bot._combatYieldLogAt || 0) > 10000) { bot._combatYieldLogAt = Date.now(); ev('yield', { body: bodyBy, mob: m.name, d: +m.position.distanceTo(me2).toFixed(1) }) } } catch {}
+        return } }
     if (hp0 === null) hp0 = bot.health
     tickN++; stats.ticks++
     refreshTracks()

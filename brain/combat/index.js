@@ -11,7 +11,7 @@ function register(api) {
     name: 'combat',
     start() {
       try {
-        combat = reflex.create(bot, { yieldIdle: true, idleSprint: false }, { event: (t, o) => { if (t === 'hit' || t === 'kill' || t === 'escape') log(`${t} ${JSON.stringify(o).slice(0, 100)}`) } })
+        combat = reflex.create(bot, { yieldIdle: true, idleSprint: false }, { event: (t, o) => { if (t === 'hit' || t === 'kill' || t === 'escape' || t === 'yield') log(`${t} ${JSON.stringify(o).slice(0, 100)}`) } })
         bot._combat = combat
         api.combat = combat
         // the old safety melee would double-swing on the same mobs: keep its health holds and entomb, but not its own fight. This used to be a fake
