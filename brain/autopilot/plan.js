@@ -723,6 +723,11 @@ module.exports = function plan(G, S, M, api, log) {
     }
     return { walls: walls.filter(p => !sealsChest(p)), roof: roof.filter(p => !sealsChest(p)), door, inside: v(midX, y, midZ), box: { x0, x1, z0, z1, y } }
   }
+  // the shelter's floor, its doorway and the cell in front of it stay free: nothing is set down there (tables, furnaces, chests)
+  S.keepClear = (c) => { const pl = st.shelterDoor && home() && G.role !== 'assistant' ? shelterPlan() : null; if (!pl) return false
+    const b = pl.box, d = pl.door, out = d.offset(Math.sign(d.x - pl.inside.x), 0, Math.sign(d.z - pl.inside.z))
+    if (c.y < b.y - 1 || c.y > b.y + 1) return false
+    return (c.x >= b.x0 && c.x <= b.x1 && c.z >= b.z0 && c.z <= b.z1) || (c.x === d.x && c.z === d.z) || (c.x === out.x && c.z === out.z) }
   const missingShelter = (pl) => pl.walls.concat(pl.roof).filter(p => { const b = S.block(p); return b && (S.isAir(b) || b.boundingBox === 'empty') && !/torch|_bed|door/.test(b.name) })
   const shelterTorch = (pl) => bot.findBlocks({ matching: ids(/^(torch|wall_torch)$/), point: pl.inside, maxDistance: 3, count: 3 }).some(p => p.x >= pl.box.x0 && p.x <= pl.box.x1 && p.z >= pl.box.z0 && p.z <= pl.box.z1)
   const doorIn = (pl) => /door/.test((S.block(pl.door) || {}).name || '')

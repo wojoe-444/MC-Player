@@ -423,6 +423,8 @@ module.exports = function makeSkills({ bot, api, log }) {
       const cell = v(me.x + dx, me.y + dy, me.z + dz), floor = S.block(cell.offset(0, -1, 0)), here = S.block(cell), above = S.block(cell.offset(0, 1, 0))
       if (!floor || !here || !above) continue
       if (!S.solid(floor) || !S.isAir(here) || !S.passable(above)) continue
+      // cells a plan keeps walkable (the shelter's floor and doorway: a table set down inside the door locked the bot out at night, 2026-11-05)
+      if (typeof S.keepClear === 'function' && S.keepClear(cell)) continue
       spots.push({ cell, floor, d: Math.abs(dx) + Math.abs(dz) + Math.abs(dy) })
     }
     spots.sort((a, b) => a.d - b.d)
