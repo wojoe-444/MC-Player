@@ -892,14 +892,19 @@ module.exports = function plan(G, S, M, api, log) {
     }
   }
   const SCAFFOLD = /^(cobblestone|cobbled_deepslate|dirt|andesite|diorite|granite|tuff|netherrack|stone)$/
-  const tidyList = () => {
-    const hb = homeBox(), now = Date.now()
+  let _tidy = { at: 0, list: [] }
+  const tidyList = () => { if (Date.now() - _tidy.at < 10000) return _tidy.list; _tidy = { at: Date.now(), list: tidyList0() }; return _tidy.list }
+  const tidyList0 = () => {
+    const hb = homeBox(), now = Date.now(), placedKeys = new Set((st.placed || []).map(q => q[0] + ',' + q[1] + ',' + q[2]))
     return (st.placed || []).filter(q => now - q[4] > 10 * 60000 && SCAFFOLD.test(q[3])).map(q => v(q[0], q[1], q[2])).filter(p => {
       const b = S.block(p); if (!b || !SCAFFOLD.test(b.name)) return false
       if (inBox(p, hb) || nearList(p, st.farm, 1) || nearList(p, st.grove, 1)) return false
-      // surface scaffold only: blocks below ground are tunnel plugs, cave walls and pillars that keep the mine closed. Tidy walked down into
+      // surface scaffold only: blocks under ground are tunnel plugs, cave walls and pillars that keep the mine closed. Tidy walked down into
       // the cave under home to take them apart and the bot died there at 20:43 (fell in, two zombies)
-      { const h0 = home(); if (h0 && p.y < h0.y - 4) return false }
+      // (exposure, not height: valleys and the island shore sit below the bed and their pillars must still go; a block with solid
+      // rock within 8 above it is under ground; its own placed blocks stacked above do not count as cover, natural stone does)
+      { const h0 = home(); if (h0 && p.y < h0.y - 12) return false }       // deep backstop: a tall cavern's floor can have open air 8 up
+      for (let dy = 1; dy <= 8; dy++) { const q = p.offset(0, dy, 0), a = S.block(q); if (!a) break; if (a.boundingBox === 'block' && !placedKeys.has(q.x + ',' + q.y + ',' + q.z) && !/_leaves$|_log$/.test(a.name)) return false }
       if (st.mine && st.mine.entry && Math.abs(p.x - st.mine.entry[0]) <= 3 && Math.abs(p.z - st.mine.entry[2]) <= 3) return false
       const below = S.block(p.offset(0, -1, 0)), above = S.block(p.offset(0, 1, 0))
       if (below && below.name === 'water') return false                         // sea paths: taking them apart from on top of them means swimming
