@@ -52,7 +52,7 @@ When all four hold, the base can be surrounded by enemies and nothing is lost. T
 ## Sleep (Walter's rule)
 
 - If Walter is in **survival mode** (as a human player): sleep every 3 days (the 3rd night) when he does.
-- Otherwise: attempt to sleep, give it about 60 seconds, then get up and get back to work **if the other bots aren't sleeping**. Don't stall in bed.
+- Otherwise: attempt to sleep, give it about 60 seconds, then get up and get back to work **if the other bots aren't sleeping** (read `bots-sleep.json`). Don't stall in bed.
 - With the room as home, the bed is a few steps from the work, so the attempt is cheap.
 
 ## A worked example: the first hour (Walter's procedure, not a script)
