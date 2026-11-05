@@ -108,7 +108,7 @@ module.exports = function makeMining(S, api, log) {
   // stop(): optional predicate to end early. Returns {len, mined, reason}.
   M.tunnel = async (dirIdx, len, { targets = ORE_RE, stop = null, torchEvery = 7, minY = -999 } = {}) => {
     const [dx, dz] = DIRS[dirIdx % 4]
-    let done = 0, mined = 0, reason = 'length'
+    let done = 0, mined = 0, reason = 'length', plugged = 0
     for (let i = 0; i < len; i++) {
       S.check()
       if (stop && stop()) { reason = 'stop'; break }
@@ -147,10 +147,15 @@ module.exports = function makeMining(S, api, log) {
         const here = S.flo(bot.entity.position)
         if (here.distanceTo(back) > 1.5) await S.goto(new goals.GoalBlock(back.x, back.y, back.z), { dig: false, ms: 10000 })
       }
+      // plug cave openings beside, above and below the tunnel, so cave mobs cannot walk or shoot in: every death underground on
+      // 2026-11-05 came from a cave the tunnel had broken into (skeletons at y17-18, zombies and creepers at y28-38)
+      { const here = S.flo(bot.entity.position), side = [[dz, dx], [-dz, -dx]]
+        const cells = [...side.flatMap(([sx, sz]) => [here.offset(sx, 0, sz), here.offset(sx, 1, sz)]), here.offset(0, 2, 0), here.offset(0, -1, 0)]
+        for (const c of cells) { const b = S.block(c); if (b && S.passable(b) && !S.isLiquid(b) && !/torch/.test(b.name)) { if (await M.fill(c)) plugged++ } } }
       if (done % torchEvery === 0) await M.torch()
     }
     await S.pickup(6, 3000)
-    return { len: done, mined, reason }
+    return { len: done, mined, reason, plugged }
   }
 
   // Walk back up the way we came (stairs are walkable): pathfind to the surface above/near the start. Returns true when the sky is visible.
