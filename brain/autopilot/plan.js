@@ -994,7 +994,10 @@ module.exports = function plan(G, S, M, api, log) {
     if (S.skyVisible()) return 'already up'
     if (st.mine && st.mine.bottom) {
       // straight for the entry (going to the bottom first sent it 30 blocks down from halfway up the shaft); digging allowed on a second try
-      const e = v(...st.mine.entry)
+      const e = v(...st.mine.entry), b = v(...st.mine.bottom)
+      // out in the tunnels at the bottom's level: back along them to the foot of the stairs first. One search from a tunnel end 40 blocks
+      // out to the top found no path, the escalation dug its own way up into an aquifer and the good shaft was given up (15:58, y47)
+      if (Math.abs(bot.entity.position.y - b.y) <= 3 && S.dist(b) > 6) await S.goto(new goals.GoalNear(b.x, b.y, b.z, 2), { dig: false, ms: 90000, escalate: false })
       let r = await S.goto(new goals.GoalNear(e.x, e.y, e.z, 2), { dig: false, ms: 120000 })
       if (!r.ok && !S.skyVisible()) r = await S.goto(new goals.GoalNear(e.x, e.y, e.z, 2), { dig: true, ms: 120000 })
       if (r.ok || S.skyVisible()) return 'via the shaft'
