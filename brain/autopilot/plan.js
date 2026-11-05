@@ -584,6 +584,9 @@ module.exports = function plan(G, S, M, api, log) {
       return w
     }
     // berry bushes are prickly (Walter 2026-11-05): never a step on the way, whichever Movements object a layer built
+    // and keep a margin: walking along the edge of a bush row the bot's body grazes the thorns (53 bush hits by the farm gate, 03:30)
+    if (!Mv._origExStep) Mv._origExStep = Mv.exclusionStep
+    Mv.exclusionStep = function (block) { let w = Mv._origExStep.call(this, block); try { const p = block.position; if (p && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => { const n = bot.blockAt(p.offset(dx, 0, dz), false); return n && n.name === 'sweet_berry_bush' })) w += 6 } catch {} return w }
     if (!Mv._origGetBlock) Mv._origGetBlock = Mv.getBlock
     Mv.getBlock = function (pos, dx, dy, dz) { const b = Mv._origGetBlock.call(this, pos, dx, dy, dz); if (b && b.name === 'sweet_berry_bush') { b.safe = false; b.physical = false } return b }
   } catch (e) { log('PLAN', 'exclusions not installed: ' + e.message) }
