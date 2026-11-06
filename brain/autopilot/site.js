@@ -203,7 +203,8 @@ module.exports = function site(G, S, M, api, log) {
   }
   async function axe(cfg) {
     // the pillar block: planks are made from the harvest (no cobblestone around Smeo's farm, 05:57), anything else comes from the stores
-    if (/_planks$/.test(cfg.pillar || '')) { if (S.count(cfg.pillar) < 8 && S.count(cfg.log) >= 2) await S.craft(cfg.pillar, Math.min(4, Math.floor(S.count(cfg.log) / 2))).catch(() => false) }
+    // (16 planks from 4 logs: 4 planks ran out after a tree or two, 07:10)
+    if (/_planks$/.test(cfg.pillar || '')) { if (S.count(cfg.pillar) < 8 && S.count(cfg.log) >= 3) await S.craft(cfg.pillar, Math.min(16, (S.count(cfg.log) - 2) * 4)).catch(() => false) }
     else if (S.count(cfg.pillar || 'cobblestone') < 4) await cobble(cfg, 16)
     if (S.items().some(i => i.name === 'stone_axe' || /^(iron|diamond|netherite)_axe$/.test(i.name))) return true
     if (S.items().some(i => i.name === 'wooden_axe') && S.count('cobblestone') < 3 && Date.now() - (st._axeTry || 0) < 20 * 60000) return true
