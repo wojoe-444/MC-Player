@@ -113,6 +113,8 @@ module.exports = function makeMining(S, api, log) {
     for (let i = 0; i < len; i++) {
       S.check()
       if (stop && stop()) { reason = 'stop'; break }
+      // a spawner in sight is written down; a tunnel never goes on toward one (st from the plan via M.st)
+      if (M.st) { S.noteSpawners(M.st); if (S.nearSpawner(M.st, bot.entity.position, 12)) { reason = 'spawner'; break } }
       if (S.freeSlots() <= 2) { reason = 'full'; break }
       { const hs = S.hostilesNear(8).filter(e => Math.abs(e.position.y - bot.entity.position.y) <= 3)
         if (hs.length || bot.health < 12) { const r = await M.defend(hs); if (r === 'sealed') {

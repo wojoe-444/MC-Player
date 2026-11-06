@@ -94,6 +94,16 @@ module.exports = function makeSkills({ bot, api, log }) {
   S.blockIds = (re) => mcData.blocksArray.filter(b => (re instanceof RegExp ? re.test(b.name) : re.includes(b.name))).map(b => b.id)
 
   // Blocks of a kind that the bot can actually SEE from where it stands (exposed face + clear ray). Never an x-ray list.
+  // spawners the bot has actually seen (an exposed face in line of sight, the same rule as ores: never through rock). Kept for good in
+  // G.state.spawners as [x, y, z, firstSeenAt]; mine planning and tunnels keep away from them. Walter 2026-11-06: knowing a spawner is
+  // there is survival-critical (a zombie spawner under home, 184,28,-283, was guessed from 24 zombies behind the rock).
+  S.noteSpawners = (st) => { try {
+    const seen = S.seen(/^spawner$/, { radius: 24, max: 6, needSight: true }); if (!seen.length) return 0
+    st.spawners = st.spawners || []; let n = 0
+    for (const b of seen) { const p = b.position; if (st.spawners.some(q => q[0] === p.x && q[1] === p.y && q[2] === p.z)) continue
+      st.spawners.push([p.x, p.y, p.z, Date.now()]); n++; log('SPAWNER', `spawner seen at ${p}: kept as a hazard`) }
+    return n } catch { return 0 } }
+  S.nearSpawner = (st, p, r = 12) => (st.spawners || []).some(q => Math.hypot(p.x - q[0], p.y - q[1], p.z - q[2]) <= r)
   S.seen = (what, { radius = 40, max = 60, needSight = true } = {}) => {
     const ids = S.blockIds(what)
     if (!ids.length) return []
