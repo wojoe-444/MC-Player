@@ -205,6 +205,8 @@ module.exports = function site(G, S, M, api, log) {
     if (S.count(cfg.pillar || 'cobblestone') < 4) await cobble(cfg, 16)
     if (S.items().some(i => /_axe$/.test(i.name))) return true
     if (S.count('cobblestone') < 3) await cobble(cfg, 8)
+    // none in the stores either: its own smooth stone turned into cobblestone by the gate (mobfarm.js G.makeCobble)
+    if (S.count('cobblestone') < 3 && G.makeCobble) await G.makeCobble(3).catch(() => false)
     if (S.count('stick') < 2 && S.planks() < 2 && S.logs()) await S.craft(S.items().find(i => /_log$/.test(i.name)).name.replace('_log', '_planks'), 4)
     if (S.count('stick') < 2) await S.craft('stick', 4)
     await S.craft('stone_axe', 1)
