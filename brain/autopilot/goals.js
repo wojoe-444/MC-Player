@@ -226,7 +226,10 @@ module.exports = function makeGoals(S, M, api, log) {
     // loop detector (general, any step): the same step picked 4 times in a row while the bag did not change = no progress; park that step for 15 min
     const sig = S.items().map(i => i.name + i.count).sort().join(',')
     G.picks = (G.picks || []).concat([{ id: s.id, sig }]).slice(-4)
-    if (G.picks.length === 4 && G.picks.every(p => p.id === s.id && p.sig === sig)) {
+    // (steps whose work does not show in the bag are exempt: the mob farm's kills go into the farm's own chest; it was parked 15 min
+    // with mobs dropping, 08:09)
+    const NOBAG = new Set(['mob-farm', 'shelter', 'light-home', 'night-home', 'take-cover'])
+    if (!NOBAG.has(s.id) && G.picks.length === 4 && G.picks.every(p => p.id === s.id && p.sig === sig)) {
       G.cool[s.id] = Date.now() + 15 * 60000; G.picks = []
       note(`loop: ${s.id} ran 4 times with no change in the bag, parked for 15 min`)
       return
