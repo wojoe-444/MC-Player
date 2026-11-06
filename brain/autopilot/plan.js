@@ -479,7 +479,12 @@ module.exports = function plan(G, S, M, api, log) {
           // to the ground surface of the spot when that column is loaded (top solid block), else by x/z only. By x/z alone the path went
           // into a cave under the spot (17:44): the spot was skipped but the bot stayed down there and a creeper killed it (17:46)
           { const tx = h.x + o[0], tz = h.z + o[1]; let top = null
-            for (let y = Math.min(140, h.y + 50); y > h.y - 30; y--) { const b = S.block(v(tx, y, tz)); if (!b) { top = null; break } if (b.boundingBox === 'block' && !/_leaves$|_log$/.test(b.name)) { top = y; break } }
+            let wetTop = false
+            for (let y = Math.min(140, h.y + 50); y > h.y - 30; y--) { const b = S.block(v(tx, y, tz)); if (!b) { top = null; break } if (/water|kelp|seagrass/.test(b.name)) wetTop = true; if (b.boundingBox === 'block' && !/_leaves$|_log$/.test(b.name)) { top = y; break } }
+            // water over the spot, or right beside its top: skipped from here, without walking out there (a drowned's trident from the
+            // water killed the bot walking to such a spot, 08:05)
+            if (!wetTop && top != null) wetTop = [[2, 0], [-2, 0], [0, 2], [0, -2]].some(([dx, dz]) => { const b = S.block(v(tx + dx, top + 1, tz + dz)); return b && /water/.test(b.name) })
+            if (wetTop && (st.mineSkips || 0) < OFF.length) { st.mineSkips = (st.mineSkips || 0) + 1; st.mineSpot = (st.mineSpot || 0) + 1; if (st.mineSite && o[0] === st.mineSite[0] - h.x && o[1] === st.mineSite[2] - h.z) st.mineSite = null; G.save(); note(`mine: spot ${tx},${tz} is water (seen from here), trying the next one (${st.mineSkips} skipped)`); return false }
             await S.goto(top != null ? new goals.GoalNear(tx, top + 1, tz, 3) : new goals.GoalNearXZ(tx, tz, 3), { dig: false, ms: 90000 }) }
           { const f = S.flo(bot.entity.position), wet = [[0, 0], [2, 0], [-2, 0], [0, 2], [0, -2]].some(([dx, dz]) => [-1, 0].some(dy => { const b = S.block(f.offset(dx, dy, dz)); return b && /water/.test(b.name) }))
             // skipped: the next ring spot next time (a chosen site is dropped, or it would be picked again forever); after a full round of
