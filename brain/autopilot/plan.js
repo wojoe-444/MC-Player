@@ -241,8 +241,9 @@ module.exports = function plan(G, S, M, api, log) {
     // torches where the computed light (light.js; the server's light data is scrambled) still shows spawnable cells. Torches off the grid that
     // the grid makes redundant are taken down by day (the island had 417, mostly bunched). ----
     { id: 'light-home', budget: 180000, need: () => !!home() && (cnt('torch') >= 4 || daylightLeft() > 2500) && nearHome(72) && Date.now() > (st.lightAt || 0), cool: 60000, run: async () => {
-      // 40 by day (64 took 230 s on this machine with the server alongside and the watchdog reset the bot mid-step, 01:02), 24 near dusk
-      const h = home(), GRID = 10, R = daylightLeft() > 2500 ? 40 : 24
+      // 32 by day (64 and then 40 still took 230 s on this machine with the server alongside and the watchdog reset the bot mid-step,
+      // 01:02 and 05:59), 24 near dusk
+      const h = home(), GRID = 10, R = daylightLeft() > 2500 ? 32 : 24
       const torchIds = ids(/^(torch|wall_torch)$/)
       // the walkable top of a column (not on leaves, not in water), or null
       const surface = (x, z) => { for (let y = h.y + 20; y >= h.y - 16; y--) { const g = S.block(v(x, y - 1, z)); if (!g) return null
