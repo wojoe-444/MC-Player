@@ -427,7 +427,11 @@ module.exports = function install({
             if (!d.urgent && nearestThreatDist() > 8) await maybeEat()
             // a creeper is the combat reflex's: it hits it as it comes and runs from the fuse by itself. A pathfinder flee on top of that
             // pulled the controls the other way and the bot stood still while the creeper walked up and blew (18:21, 20 hp on the surface)
-            if (!(e.name === 'creeper' && bot._combat)) await retreat(L, e, d)
+            // mobs that are already on us, healthy, combat on: the combat reflex fights, kites and breaks out of a ring itself. A pathfinder flee on top of it
+            // pulled the controls the other way and ran the bot down a dead-end corridor into four zombies (arena, zombies-4: 1 death in 4, hp 20 -> 0.7).
+            const combatFights = !!bot._combat && e.name !== 'creeper' && bot.health > C.minFightHealth && nearestThreatDist() <= 8
+            if (combatFights) slogOnce('flee-skip', `flee skipped: combat fights ${e.name} (${d.reason}), health ${Math.round(bot.health)}`, 5000)
+            if (!(e.name === 'creeper' && bot._combat) && !combatFights) await retreat(L, e, d)
           }
         } else if (!active) {
           if (recovering && latest && latest.retreat === 'shelter') await goShelter(L)

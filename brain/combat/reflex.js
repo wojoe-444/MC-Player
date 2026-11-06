@@ -52,8 +52,11 @@ function create(bot, overrides = {}, hooks = {}) {
   const find = (re) => items().find(i => re.test(i.name))
   // another layer is placing a block right now (nav pillar): switching to the sword made it try to place the sword (20:25)
   // a mob in melee range beats a placing job: safety walling itself in held the cobblestone while a zombie killed OzoGo444 in four hits (08:26)
-  let meleeClose = false
-  const holdSlot = (it) => { if (!it) return false; { const h = bot._reflexes && bot._reflexes.heldByOther('hands', 'combat'); if (h && (h !== 'placer' || (/_sword$|_axe$/.test(it.name) && !meleeClose))) return false }   /* safehand holds the slot: nothing; a placing job: no weapon swap */ if (!bot._reflexes && (bot._placingUntil || 0) > Date.now() && /_sword$|_axe$/.test(it.name)) return false; const s = it.slot - 36; if (s >= 0 && s < 9) { if (bot.quickBarSlot !== s) bot.setQuickBarSlot(s); return true } return false }
+  let meleeClose = false, equipping = false
+  const holdSlot = (it) => { if (!it) return false; { const h = bot._reflexes && bot._reflexes.heldByOther('hands', 'combat'); if (h && (h !== 'placer' || (/_sword$|_axe$/.test(it.name) && !meleeClose))) return false }   /* safehand holds the slot: nothing; a placing job: no weapon swap */ if (!bot._reflexes && (bot._placingUntil || 0) > Date.now() && /_sword$|_axe$/.test(it.name)) return false; const s = it.slot - 36; if (s >= 0 && s < 9) { if (bot.quickBarSlot !== s) bot.setQuickBarSlot(s); return true }
+    // not in the hotbar (a sword that was just crafted, food picked up with a full hotbar): swap it in through the inventory instead of giving up. One swap at a time.
+    if (!equipping && (!bot.heldItem || bot.heldItem.name !== it.name)) { equipping = true; stats.invEquips = (stats.invEquips || 0) + 1; Promise.resolve(bot.equip(it, 'hand')).catch(() => {}).then(() => { equipping = false }) }
+    return false }
   const sword = () => find(/_sword$/)
   const bowItem = () => find(/^bow$/)
   const arrows = () => items().filter(i => /arrow$/.test(i.name)).reduce((s, i) => s + i.count, 0)
@@ -270,11 +273,11 @@ function create(bot, overrides = {}, hooks = {}) {
     }
     // ---- eating ----
     if (eatingUntil > tickN) {
-      if (nearest && nearest.reach < P.eatAbortDist) { bot.deactivateItem(); eatingUntil = 0; ev('eat-abort', {}) }
+      if ((nearest && nearest.reach < P.eatAbortDist) || threats.some(t => t.d < P.eatAbortDist + 2)) { bot.deactivateItem(); eatingUntil = 0; ev('eat-abort', {}) }   // a mob behind a corner counts too (no line of sight is not safe)
       else { beh = 'eat'; control({ ...c }); return }
     }
     const wantEat = (food_ <= P.eatFood || (hp <= P.eatHealth && food_ < 20)) && !!food()
-    if (wantEat && !fusing && !incoming && (!nearest || nearest.reach > P.eatSafeDist)) {
+    if (wantEat && !fusing && !incoming && (!nearest || nearest.reach > P.eatSafeDist) && !threats.some(t => t.d < P.eatSafeDist)) {   // never with any hostile within eatSafeDist, in sight or not (16:11: bread in hand with a skeleton 1-4 blocks off)
       shield(false)
       const f = food(); if (holdSlot(f)) { bot.activateItem(); eatingUntil = tickN + 36; stats.eats++; ev('eat', { hp, food: food_ }); control(c); return }
     }
