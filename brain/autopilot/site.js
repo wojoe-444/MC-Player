@@ -111,7 +111,12 @@ module.exports = function site(G, S, M, api, log) {
   }
 
   async function replant(cfg, trunk) {
-    const soil = S.block(trunk.offset(0, -1, 0)), cell = S.block(trunk)
+    const soil = S.block(trunk.offset(0, -1, 0))
+    let cell = S.block(trunk)
+    // something else growing on a tree spot (a berry bush planted by mistake, 03:05): take it out first, a tree spot holds a birch sapling only
+    if (cell && /sweet_berry_bush|_sapling$|short_grass|tall_grass|fern|dandelion|poppy/.test(cell.name) && cell.name !== cfg.sapling) {
+      if (eyeDist(cell.position) > 4.4) await S.goto(new goals.GoalNear(trunk.x, trunk.y, trunk.z, 2), { dig: false, ms: 20000 })
+      try { await S.digBlock(cell, { force: true }) } catch {} await wait(300); cell = S.block(trunk) }
     if (!soil || !/dirt|grass|podzol/.test(soil.name) || !cell || !S.isAir(cell)) return false
     if (!S.items().some(i => i.name === cfg.sapling)) return false
     if (eyeDist(soil.position) > 4.4) await S.goto(new goals.GoalNear(trunk.x, trunk.y, trunk.z, 2), { dig: false, ms: 20000 })

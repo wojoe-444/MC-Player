@@ -426,7 +426,12 @@ module.exports = function makeSkills({ bot, api, log }) {
     if (bot._meleeClose && Date.now() - (bot._meleeCloseAt || 0) < 500) return false   // a mob in reach: no placing while combat holds the sword
     markPlacing(bot, 2500)
     await bot.equip(it, 'hand').catch(() => {})
+    // only ever place what was asked for: an equip that failed under lag (or a food swap by another layer) left sweet berries in the hand
+    // and Smeo planted a berry bush on a birch spot (Walter, 03:05)
+    if (!bot.heldItem || bot.heldItem.name !== itemName) { await S.wait(200); const it2 = bot.inventory.items().find(i => i.name === itemName); if (it2) await bot.equip(it2, 'hand').catch(() => {}) }
+    if (!bot.heldItem || bot.heldItem.name !== itemName) { log('PLACE_FAIL', `${itemName}: not in hand (holding ${bot.heldItem ? bot.heldItem.name : 'nothing'})`); return false }
     try { await bot.lookAt(v(ref.position.x + 0.5 + face.x * 0.5, ref.position.y + 0.5 + face.y * 0.5, ref.position.z + 0.5 + face.z * 0.5), true) } catch {}
+    if (!bot.heldItem || bot.heldItem.name !== itemName) return false
     try { await bot.placeBlock(ref, face); return true } catch (e) { log('PLACE_FAIL', `${itemName}: ${e.message}`); return false }
   }
   // Find an open floor cell next to the bot and place `itemName` there. Returns the placed block or null.
