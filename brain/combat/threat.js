@@ -48,6 +48,7 @@ function assess(bot, tracks, P) {
       continue
     }
     const kind = kindOf(e); if (!kind || d > P.scanRange) continue
+    if (bot._mobIgnored && bot._mobIgnored(e)) continue            // contained in one of Walter's mob farms (zone.json ignoreMobs)
     // a mob in Thorns armor (brain/hurt marks it): not a combat target at all, so no approach, no swing, no meleeClose; safety's retreat and
     // walling in deal with it (hitting it cost OzoGo444 7.4 hp a swing). Marks expire after 5 minutes.
     { const tm = bot._thornsMobs && bot._thornsMobs.get(e.id); if (tm && Date.now() - tm < 5 * 60000) continue }
