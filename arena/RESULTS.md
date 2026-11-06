@@ -44,3 +44,10 @@ Eating more or "smart" eating (HP stays full until the swarm arrives, then damag
 
 ## Rules for the live bot
 This layer never digs or places blocks (the fire trap is off and needs flint), never chats, never uses slash commands. Arena commands (`/give`, `/tp`, `/summon`) are harness-only.
+
+## Cave-fight trial (2026-11-05, `eval/trial-cave.js`)
+Real brain modules (safety, combat, breath, optionally the autopilot's cave reflex with `--ap`) on a throwaway offline server, in a stone slab with a 1-wide corridor and an open chamber. Scenarios replay the 16:11 / 17:13 / 17:46 / 18:21 deaths: point-blank and far skeletons, a sword only in the main inventory, four zombies plus a creeper, creepers with no shield or armor. `node eval/trial-cave.js 25599 all --runs 2 --ap` (server steps in the file header). One line per run: survived, min hp, swings, items held, safety phases.
+- Unpatched main: plain skeleton and creeper cases pass; **four zombies in the corridor**: 1 death in 4 runs, min hp 1.3, 7.1, 0.7 in others. Cause: safety's pathfinder flee (`too many mobs`, maxFighters 3) running on top of the combat reflex; the two pulled the controls apart.
+- Fix: safety does not pathfinder-flee while combat is on, health is above minFightHealth and the threat is within 8 blocks (creepers were already combat's). Combat's `holdSlot` swaps in a sword/food that is not in the hotbar; combat does not start eating, and aborts eating, with any hostile within 10 blocks even without line of sight.
+- After: 8 of 8 corridor runs at 13 hp or better, and the full 16-scenario set (2 runs each, `--ap`) had no deaths, min hp 14.3.
+- Caveat: small samples, flat world, one bot; the first run of a batch was the worst in both arms.
