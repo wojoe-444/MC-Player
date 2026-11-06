@@ -662,7 +662,12 @@ module.exports = function plan(G, S, M, api, log) {
       Mv.exclusionStep = function (block) { let w = Mv._origExStep2.call(this, block); try { const r = bot._roofBox && bot._roofBox(), p = block.position
         if (r && p && p.y >= r.y && p.y <= r.y + 1 && p.x >= r.x0 && p.x <= r.x1 && p.z >= r.z0 && p.z <= r.z1) w += 60 } catch {} return w } }
     if (!Mv._origGetBlock) Mv._origGetBlock = Mv.getBlock
-    Mv.getBlock = function (pos, dx, dy, dz) { const b = Mv._origGetBlock.call(this, pos, dx, dy, dz); if (b && b.name === 'sweet_berry_bush') { b.safe = false; b.physical = false } return b }
+    // the cells on top of the shelter roof are not a place to stand at all (a step cost was not enough: a timed-out search returns the
+    // partial path whose end is nearest the bed, and that end was the roof, 03:26). bot._roofBox: x0..x1, z0..z1 and the standing y.
+    Mv.getBlock = function (pos, dx, dy, dz) { const b = Mv._origGetBlock.call(this, pos, dx, dy, dz)
+      if (b && b.name === 'sweet_berry_bush') { b.safe = false; b.physical = false }
+      try { const r = bot._roofBox && bot._roofBox(); if (b && r && b.position && b.position.y >= r.y && b.position.y <= r.y + 1 && b.position.x >= r.x0 && b.position.x <= r.x1 && b.position.z >= r.z0 && b.position.z <= r.z1 && b.boundingBox === 'empty') b.safe = false } catch {}
+      return b }
   } catch (e) { log('PLAN', 'exclusions not installed: ' + e.message) }
 
   // ---- loop breaker (Walter 2026-11-03: the goal is hillclimbing, not a no-cheats run): three deaths in one spot within 30 min, or 25 min with no
@@ -947,7 +952,10 @@ module.exports = function plan(G, S, M, api, log) {
       const b = S.block(p); if (!b || !SCAFFOLD.test(b.name)) return false
       if (inBox(p, hb) || nearList(p, st.farm, 1) || nearList(p, st.grove, 1)) return false
       // nothing in or around the shelter (walls, roof, floor, the ground at the door): it took the floor out by the door (22:31)
-      { const sb = st._shelterBox; if (sb && p.x >= sb.x0 - 3 && p.x <= sb.x1 + 3 && p.z >= sb.z0 - 3 && p.z <= sb.z1 + 3 && p.y >= sb.y - 2 && p.y <= sb.y + 3) return false }
+      // ...but only the shelter's own cells: pillars the escalating go-to left against its walls and on its roof are scaffold like any other
+      // (a 4-high column at 192,-293 and blocks on the roof let the walk home end up on the roof, 03:26)
+      { const sb = st._shelterBox; if (sb && p.x >= sb.x0 - 3 && p.x <= sb.x1 + 3 && p.z >= sb.z0 - 3 && p.z <= sb.z1 + 3 && p.y >= sb.y - 2 && p.y <= sb.y + 3) {
+          const pl = shelterPlan(); if (!pl || pl.walls.concat(pl.roof, pl.floor || []).some(q => q.equals(p))) return false } }
       // surface scaffold only: blocks under ground are tunnel plugs, cave walls and pillars that keep the mine closed. Tidy walked down into
       // the cave under home to take them apart and the bot died there at 20:43 (fell in, two zombies)
       // (exposure, not height: valleys and the island shore sit below the bed and their pillars must still go; a block with solid
