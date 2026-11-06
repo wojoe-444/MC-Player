@@ -199,7 +199,7 @@ module.exports = function plan(G, S, M, api, log) {
 
     // tree farm (Walter: birch, saplings with 3 blocks between them, well lit): a 4-block lattice around home, a torch in the middle of each
     // lattice square, every sapling spot needs open sky above for the tree; spots are remembered and replanted when a tree is felled
-    { id: 'grove', budget: 180000, need: () => !!home() && S.items().some(i => /_sapling$/.test(i.name)) && (st.grove || []).filter(q => { const b = S.block(v(q[0], q[1], q[2])); return b && (/_sapling$|_log$/.test(b.name)) }).length < 24 && !S.isNight(), cool: 90000, run: async () => {
+    { id: 'grove', budget: 180000, need: () => !!home() && Date.now() > (st.groveRestUntil || 0) && S.items().some(i => /_sapling$/.test(i.name)) && (st.grove || []).filter(q => { const b = S.block(v(q[0], q[1], q[2])); return b && (/_sapling$|_log$/.test(b.name)) }).length < 24 && !S.isNight(), cool: 90000, run: async () => {
       const h = home(); st.grove = (st.grove || [])
       const live = (q) => { const b = S.block(v(q[0], q[1], q[2])); return b && /_sapling$|_log$/.test(b.name) }
       const spots = []
@@ -232,6 +232,8 @@ module.exports = function plan(G, S, M, api, log) {
           if (cnt('torch') > 2 && tg && S.solid(tg) && tc && S.isAir(tc) && !bot.findBlock({ matching: ids(/^(torch|wall_torch)$/), maxDistance: 3, point: tp })) await S.placeAgainst(tg, v(0, 1, 0), 'torch')
         }
       }
+      // nowhere left to plant on the lattice: rest the step an hour instead of retrying every few minutes (failed x6 by 08:51)
+      if (!planted) st.groveRestUntil = Date.now() + 3600000
       G.save(); note(`grove: planted ${planted}, ${st.grove.filter(live).length} live trees/saplings on the lattice`)
       return planted > 0 } },
 
