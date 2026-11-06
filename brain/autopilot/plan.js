@@ -796,7 +796,8 @@ module.exports = function plan(G, S, M, api, log) {
     const floor = []
     for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) if (!cells.some(c => c.x === x && c.z === z)) floor.push(v(x, y - 1, z))
     // and the ground under the walls: a hole under a wall cell left only a chest to place against (a click opens it), 188,71,-290 at 00:54
-    for (const w of walls) if (w.y === y && !sealsChest(w)) floor.push(w.offset(0, -1, 0))
+    // (only where the wall block itself is missing: a wall over a drop stands fine without it, and the cell below may be out of reach)
+    for (const w of walls) if (w.y === y && !sealsChest(w)) { const wb = S.block(w); if (wb && (S.isAir(wb) || wb.boundingBox === 'empty')) floor.push(w.offset(0, -1, 0)) }
     for (const d of doors) { const o = outOf(d), across = o.x === d.x ? [[1, 0], [-1, 0]] : [[0, 1], [0, -1]]; floor.push(d.offset(0, -1, 0), o.offset(0, -1, 0), ...across.map(([a, b]) => o.offset(a, -1, b))) }
     return { walls: walls.filter(p => !sealsChest(p)), roof: roof.filter(p => !sealsChest(p)), floor, door, doors, outs: doors.map(outOf), out, inside: v(midX, y, midZ), box: { x0, x1, z0, z1, y } }
   }
@@ -812,6 +813,7 @@ module.exports = function plan(G, S, M, api, log) {
     if (c.y < b.y - 1 || c.y > b.y + 1) return false
     return (c.x >= b.x0 && c.x <= b.x1 && c.z >= b.z0 && c.z <= b.z1) || pl.doors.concat(pl.outs).some(q => c.x === q.x && c.z === q.z) }
   const missingShelter = (pl) => pl.walls.concat(pl.roof, pl.floor || []).filter(p => { const b = S.block(p); return b && (S.isAir(b) || b.boundingBox === 'empty') && !/torch|_bed|door/.test(b.name) })
+  bot._shelterMissing = () => { const pl = shelterPlan(); return pl ? missingShelter(pl).map(p => [p.x, p.y, p.z]) : null }   // for the live pilot
   const shelterTorch = (pl) => bot.findBlocks({ matching: ids(/^(torch|wall_torch)$/), point: pl.inside, maxDistance: 3, count: 3 }).some(p => p.x >= pl.box.x0 && p.x <= pl.box.x1 && p.z >= pl.box.z0 && p.z <= pl.box.z1)
   const doorIn = (pl) => (pl.doors || [pl.door]).every(d => /door/.test((S.block(d) || {}).name || ''))
   const shelterTodo = (pl) => missingShelter(pl).length + (!shelterTorch(pl) && cnt('torch') > 0 ? 1 : 0) + (!doorIn(pl) && S.items().some(i => /_door$/.test(i.name)) ? 1 : 0)
