@@ -23,7 +23,9 @@ module.exports = function mobfarm(G, S, M, api, log) {
 
   async function getSword(c) {
     if (S.items().some(i => i.name === 'stone_sword')) return true
-    if (sword() && S.count('cobblestone') < 2) return true
+    // with the wooden stand-in already in hand, try for cobblestone at most every 20 minutes
+    if (sword() && Date.now() - (st.mobSwordTry || 0) < 20 * 60000) return true
+    st.mobSwordTry = Date.now()
     if (S.count('cobblestone') < 2 || !S.has('stick')) {
       // cobblestone from the birch farm's stores (the same chests Walter said to take it from for axes)
       try {
@@ -36,6 +38,20 @@ module.exports = function mobfarm(G, S, M, api, log) {
           try { const cob = box.containerItems().find(i => i.name === 'cobblestone'); if (cob) await box.withdraw(cob.type, null, Math.min(cob.count, 8)) } catch {} finally { try { box.close() } catch {} }
         }
       } catch {}
+    }
+    // still none: it carries smooth stone (42 of it). A stone block set down at stoneSpot (by the farm gate, where the zone allows its
+    // own stone block) and mined again with the pickaxe drops cobblestone. Survival-legit, no digging of Walter's builds or the land.
+    for (let i = 0; i < 3 && S.count('cobblestone') < 2 && S.count('stone') > 0 && S.toolTier('pickaxe') >= 1; i++) {
+      try {
+        // mobfarm.json stoneSpot: one cell outside the fence where the zone allows its own stone block (by the gate)
+        const cell = c.stoneSpot ? v(...c.stoneSpot) : null
+        if (!cell) break
+        await S.goto(new goals.GoalNear(cell.x, cell.y, cell.z, 2), { dig: false, ms: 40000, escalate: false })
+        if (!(await S.placeAgainst(S.block(cell.offset(0, -1, 0)), v(0, 1, 0), 'stone'))) break
+        await S.wait(300)
+        const sb = S.block(cell); if (!sb || sb.name !== 'stone') break
+        await S.digBlock(sb, { force: true }); await S.pickup(4, 3000)
+      } catch { break }
     }
     if (!S.has('stick') && S.planks() + S.logs() * 4 >= 2) await S.craft('stick', 4).catch(() => false)
     if (S.count('cobblestone') >= 2) await S.craft('stone_sword', 1).catch(() => false)
