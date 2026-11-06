@@ -1095,6 +1095,8 @@ module.exports = function plan(G, S, M, api, log) {
   insertAfter('wood-stock', [steps.find(s => s.id === 'scout'), steps.find(s => s.id === 'storage')])
   // routine work at a fixed site (site.json; Smeo444's birch farm), right after the survival basics
   try { delete require.cache[require.resolve('./site')]; insertAfter('tool-kit', [require('./site')(G, S, M, api, log)]) } catch (e) { log('PLAN', 'site not loaded: ' + e.message) }
+  // the assistant's second routine: finishing the mobs in Walter's mob farm (mobfarm.json), right after the birch farm
+  try { delete require.cache[require.resolve('./mobfarm')]; insertAfter('site-work', [require('./mobfarm')(G, S, M, api, log)]) } catch (e) { log('PLAN', 'mobfarm not loaded: ' + e.message) }
   // long goals from brain/state/goals.json, expanded through the recipe tree (pursue.js)
   try { delete require.cache[require.resolve('./pursue')]; G.steps.push(require('./pursue')(G, S, M, api, log, { daylightOk: () => true })) } catch (e) { log('PLAN', 'pursue not loaded: ' + e.message) }
   log('PLAN', 'survival processes loaded: ' + G.steps.map(s => s.id).join(' > '))

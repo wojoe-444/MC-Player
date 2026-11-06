@@ -191,8 +191,12 @@ module.exports = function makeSkills({ bot, api, log }) {
   // mobs inside one of Walter's mob farms (zone.json ignoreMobs boxes) are contained: not a threat for the reflexes unless one is
   // right next to the bot. Walter 2026-11-06 built a mob farm beside the birch farm; Smeo444 must not panic about the mobs in it.
   bot._mobIgnored = (e) => { try { const z = S.zone(); if (!z || !z.ignoreMobs || !e || !e.position) return false
-    if (bot.entity && e.position.distanceTo(bot.entity.position) < 2.5) return false
+    // while the mob-farm routine works the kill spot, the shaft's mobs are its job alone (it stands within 2.5 of them on purpose)
+    if (!bot._mobFarmWork && bot.entity && e.position.distanceTo(bot.entity.position) < 2.5) return false
     const p = e.position; return z.ignoreMobs.some(b => p.x >= b.x0 && p.x <= b.x1 + 1 && p.y >= b.y0 && p.y <= b.y1 + 1 && p.z >= b.z0 && p.z <= b.z1 + 1) } catch { return false } }
+  // the bot is at or next to one of Walter's mob farms: no walling in, no torches, no blocks set down there at all
+  bot._nearMobFarm = (m = 6) => { try { const z = S.zone(); if (!z || !z.ignoreMobs || !bot.entity) return false; const p = bot.entity.position
+    return z.ignoreMobs.some(b => p.x >= b.x0 - m && p.x <= b.x1 + 1 + m && p.z >= b.z0 - m && p.z <= b.z1 + 1 + m && p.y >= b.y0 - m && p.y <= b.y1 + 1 + m) } catch { return false } }
   S.noDigAt = (p, name) => { const z = S.zone(); if (!z || !z.noDig) return false
     if (name && (z.allow || []).some(a => p.x >= a.x0 && p.x <= a.x1 && p.y >= a.y0 && p.y <= a.y1 && p.z >= a.z0 && p.z <= a.z1 && new RegExp(a.blocks).test(name))) return false
     return z.noDig.some(c => Math.hypot(p.x - c.x, p.z - c.z) <= c.r) }
