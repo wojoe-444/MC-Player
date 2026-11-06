@@ -738,7 +738,9 @@ module.exports = function plan(G, S, M, api, log) {
   // blocks up the outside wall and left the bot on the roof (14:48, 15:20, 21:29 'cannot sleep: the bed is too far')
   G.enterShelter = async () => {
     const h = home(); if (!h || !st.shelterDoor) return { ok: false, err: 'no shelter' }
-    const d = v(...st.shelterDoor), out = d.offset(Math.sign(d.x - h.x), 0, Math.sign(d.z - h.z))
+    // the doorway whose outside cell is nearest
+    const ds = [st.shelterDoor, st.shelterDoor2].filter(Boolean).map(q => v(...q)), outs = ds.map(d => d.offset(Math.sign(d.x - h.x), 0, Math.sign(d.z - h.z)))
+    const out = outs.sort((a, b) => S.dist(a) - S.dist(b))[0]
     if (S.dist(h) > 2.2) {
       const g = new goals.GoalNear(out.x, out.y, out.z, 1), far = S.dist(h) > 12
       const w = await S.goto(g, { dig: false, ms: 90000, escalate: far })
@@ -769,6 +771,14 @@ module.exports = function plan(G, S, M, api, log) {
       : [v(x1 + 1, y, midZ), v(x0 - 1, y, midZ), v(midX, y, z1 + 1), v(midX, y, z0 - 1)].find(passable)
     if (!door) return null
     if (!kept || !kept.equals(door)) { st.shelterDoor = [door.x, door.y, door.z]; G.save() }
+    // a second doorway on another walkable side: four times a walk home ended against the north wall (189,71,-289) with the only door on the
+    // east side out of reach of a slow path search, and the bot slept outside or not at all (22:31, 00:42)
+    const sides = [v(x1 + 1, y, midZ), v(x0 - 1, y, midZ), v(midX, y, z1 + 1), v(midX, y, z0 - 1)]
+    const kept2 = st.shelterDoor2 && v(...st.shelterDoor2)
+    const door2 = kept2 && sides.some(d => d.equals(kept2)) && !kept2.equals(door) ? kept2 : sides.filter(d => !d.equals(door) && d.x !== door.x && d.z !== door.z).find(passable) || sides.find(d => !d.equals(door) && passable(d))
+    if (door2 && (!kept2 || !kept2.equals(door2))) { st.shelterDoor2 = [door2.x, door2.y, door2.z]; G.save() }
+    const haveDoor = S.items().some(i => /_door$/.test(i.name)) || S.planks() + S.logs() * 4 >= 6
+    const doors = [door].concat(door2 && (haveDoor || /door/.test((S.block(door2) || {}).name || '')) ? [door2] : [])
     const sealsChest = (p) => { const b = S.block(p), below = S.block(p.offset(0, -1, 0)); return (b && CONTAINER.test(b.name)) || (below && CONTAINER.test(below.name)) }
     const walls = [], roof = []
     for (let x = x0 - 1; x <= x1 + 1; x++) for (let z = z0 - 1; z <= z1 + 1; z++) {
@@ -776,32 +786,38 @@ module.exports = function plan(G, S, M, api, log) {
       // corner columns close nothing (no mob gets through a diagonal between two wall blocks) and one at 187,71,-295 could not be
       // placed from inside (the only neighbour face points outward), so the step came back for it every ten minutes
       const corner = (x === x0 - 1 || x === x1 + 1) && (z === z0 - 1 || z === z1 + 1)
-      if (edge && !corner && !(x === door.x && z === door.z)) { walls.push(v(x, y, z)); walls.push(v(x, y + 1, z)) }
+      if (edge && !corner && !doors.some(d => x === d.x && z === d.z)) { walls.push(v(x, y, z)); walls.push(v(x, y + 1, z)) }
       roof.push(v(x, y + 2, z))
     }
     // the floor too: inside, under the doorway, under the cell in front of it and the two cells beside that one. Holes there (taken out
     // as 'scaffold' by tidy) left the doorway reachable only by a jump and the bot stood outside the wall at night (22:31)
-    const out = door.offset(Math.sign(door.x - midX), 0, Math.sign(door.z - midZ)), across = out.x === door.x ? [[1, 0], [-1, 0]] : [[0, 1], [0, -1]]
+    const outOf = (d) => d.offset(Math.sign(d.x - midX), 0, Math.sign(d.z - midZ)), out = outOf(door)
     st._shelterBox = { x0, x1, z0, z1, y }
     const floor = []
     for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) if (!cells.some(c => c.x === x && c.z === z)) floor.push(v(x, y - 1, z))
-    floor.push(door.offset(0, -1, 0), out.offset(0, -1, 0), ...across.map(([a, b]) => out.offset(a, -1, b)))
-    return { walls: walls.filter(p => !sealsChest(p)), roof: roof.filter(p => !sealsChest(p)), floor, door, out, inside: v(midX, y, midZ), box: { x0, x1, z0, z1, y } }
+    for (const d of doors) { const o = outOf(d), across = o.x === d.x ? [[1, 0], [-1, 0]] : [[0, 1], [0, -1]]; floor.push(d.offset(0, -1, 0), o.offset(0, -1, 0), ...across.map(([a, b]) => o.offset(a, -1, b))) }
+    return { walls: walls.filter(p => !sealsChest(p)), roof: roof.filter(p => !sealsChest(p)), floor, door, doors, outs: doors.map(outOf), out, inside: v(midX, y, midZ), box: { x0, x1, z0, z1, y } }
   }
+  // inside the shelter (walls and roof included) and the way out: used by S.goto so nothing digs through the walls from inside
+  S.inShelter = (p) => { const b = st._shelterBox; if (!b || G.role === 'assistant' || !st.shelterDoor) return false
+    return p.x >= b.x0 - 1 && p.x < b.x1 + 2 && p.z >= b.z0 - 1 && p.z < b.z1 + 2 && p.y >= b.y - 1 && p.y < b.y + 3 }
+  S.shelterOut = () => { const h = home(); if (!h) return null
+    const outs = [st.shelterDoor, st.shelterDoor2].filter(Boolean).map(q => v(...q)).filter(d => /door/.test((S.block(d) || {}).name || '')).map(d => d.offset(Math.sign(d.x - h.x), 0, Math.sign(d.z - h.z)))
+    return outs.sort((a, b) => S.dist(a) - S.dist(b))[0] || null }
   // the shelter's floor, its doorway and the cell in front of it stay free: nothing is set down there (tables, furnaces, chests)
   S.keepClear = (c) => { const pl = st.shelterDoor && home() && G.role !== 'assistant' ? shelterPlan() : null; if (!pl) return false
-    const b = pl.box, d = pl.door, out = d.offset(Math.sign(d.x - pl.inside.x), 0, Math.sign(d.z - pl.inside.z))
+    const b = pl.box
     if (c.y < b.y - 1 || c.y > b.y + 1) return false
-    return (c.x >= b.x0 && c.x <= b.x1 && c.z >= b.z0 && c.z <= b.z1) || (c.x === d.x && c.z === d.z) || (c.x === out.x && c.z === out.z) }
+    return (c.x >= b.x0 && c.x <= b.x1 && c.z >= b.z0 && c.z <= b.z1) || pl.doors.concat(pl.outs).some(q => c.x === q.x && c.z === q.z) }
   const missingShelter = (pl) => pl.walls.concat(pl.roof, pl.floor || []).filter(p => { const b = S.block(p); return b && (S.isAir(b) || b.boundingBox === 'empty') && !/torch|_bed|door/.test(b.name) })
   const shelterTorch = (pl) => bot.findBlocks({ matching: ids(/^(torch|wall_torch)$/), point: pl.inside, maxDistance: 3, count: 3 }).some(p => p.x >= pl.box.x0 && p.x <= pl.box.x1 && p.z >= pl.box.z0 && p.z <= pl.box.z1)
-  const doorIn = (pl) => /door/.test((S.block(pl.door) || {}).name || '')
+  const doorIn = (pl) => (pl.doors || [pl.door]).every(d => /door/.test((S.block(d) || {}).name || ''))
   const shelterTodo = (pl) => missingShelter(pl).length + (!shelterTorch(pl) && cnt('torch') > 0 ? 1 : 0) + (!doorIn(pl) && S.items().some(i => /_door$/.test(i.name)) ? 1 : 0)
   steps.push({ id: 'shelter', budget: 240000, cool: 600000, need: () => {
       if (G.role === 'assistant' || S.isNight() || !home() || Date.now() < (st.shelterPauseUntil || 0)) return false
       if (Date.now() - (st._shelterAt || 0) < 120000) return !!st._shelterNeed
       st._shelterAt = Date.now(); const pl = shelterPlan()
-      st._shelterNeed = !!pl && (missingShelter(pl).length > 0 || (!shelterTorch(pl) && cnt('torch') > 0) || (!/door/.test((S.block(pl.door) || {}).name || '') && S.items().some(i => /_door$/.test(i.name))))
+      st._shelterNeed = !!pl && (missingShelter(pl).length > 0 || (!shelterTorch(pl) && cnt('torch') > 0) || (!doorIn(pl) && (S.items().some(i => /_door$/.test(i.name)) || S.planks() + S.logs() * 4 >= 6)))
       return st._shelterNeed }, run: async () => {
     const pl = shelterPlan(); if (!pl) { note('shelter: no walkable side for a doorway, not building'); st.shelterPauseUntil = Date.now() + 3600000; return false }
     const FILL = /^(cobblestone|cobbled_deepslate|stone|andesite|diorite|granite|dirt|tuff)$/
@@ -844,14 +860,21 @@ module.exports = function plan(G, S, M, api, log) {
         if (await S.placeAgainst(g, v(0, 1, 0), 'torch')) { placed++; break }
       }
     }
-    // the door, in the doorway that stays open otherwise
-    const db = S.block(pl.door), da = S.block(pl.door.offset(0, 1, 0))
-    if (db && !/door/.test(db.name)) {
+    // a door in every doorway (each stays open otherwise)
+    for (const dr of pl.doors || [pl.door]) {
+      let db = S.block(dr), da = S.block(dr.offset(0, 1, 0))
+      if (!db || /door/.test(db.name)) continue
       if (!S.items().some(i => /_door$/.test(i.name)) && S.planks() + S.logs() * 4 >= 6) await S.craft('oak_door', 1).catch(() => false)
       const dItem = S.items().find(i => /_door$/.test(i.name))
-      const floor = S.block(pl.door.offset(0, -1, 0))
-      if (dItem && floor && floor.boundingBox === 'block' && db && S.isAir(db) && da && S.isAir(da)) {
-        await S.goto(new goals.GoalNear(pl.door.x, pl.door.y, pl.door.z, 2), { dig: false, ms: 20000, escalate: false })
+      // a doorway that is still walled up (the second one, cut into its own wall): take the two wall blocks out first, with the door in the bag
+      if (dItem && [db, da].some(b => b && b.boundingBox === 'block' && FILL.test(b.name))) {
+        await S.goto(new goals.GoalNear(dr.x, dr.y, dr.z, 2), { dig: false, ms: 20000, escalate: false })
+        for (const b of [da, db]) if (b && b.boundingBox === 'block' && FILL.test(b.name)) { try { await S.digBlock(b, { force: true }) } catch {} }
+        db = S.block(dr); da = S.block(dr.offset(0, 1, 0))
+      }
+      const floor = S.block(dr.offset(0, -1, 0))
+      if (dItem && floor && floor.boundingBox === 'block' && S.isAir(db) && da && S.isAir(da)) {
+        await S.goto(new goals.GoalNear(dr.x, dr.y, dr.z, 2), { dig: false, ms: 20000, escalate: false })
         if (await S.placeAgainst(floor, v(0, 1, 0), dItem.name)) placed++
       }
     }

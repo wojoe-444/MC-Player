@@ -198,6 +198,12 @@ module.exports = function makeSkills({ bot, api, log }) {
       const w = z.workZone, me = bot.entity.position
       if (Math.hypot(tg.x - w.x, tg.z - w.z) >= Math.hypot(me.x - w.x, me.z - w.z)) { log('ZONE', 'refused goto outside the work zone ' + Math.round(tg.x) + ',' + Math.round(tg.z)); return { ok: false, why: 'outside work zone' } }
     }
+    // out of the hillclimber's shelter through a doorway first, and never an escalating go-to from inside it: at 00:45 a no-path to the mine
+    // escalated and dug through the north wall (plan.js defines S.inShelter / S.shelterOut)
+    if (S.inShelter && !o._leaving && S.inShelter(bot.entity.position)) {
+      if (tg && !S.inShelter({ x: tg.x, y: bot.entity.position.y, z: tg.z })) { const out = S.shelterOut && S.shelterOut(); if (out) await S.goto(new goals.GoalNear(out.x, out.y, out.z, 1), { dig: false, ms: 30000, escalate: false, _leaving: true }) }
+      if (S.inShelter(bot.entity.position)) o = { ...o, escalate: false, dig: false }
+    }
     if (o.dig && S.noDigAt(bot.entity.position)) o = { ...o, dig: false }
     // the navigator's escalation digs, pillars and towers whatever dig says: never inside a no-dig area (Walter's bases)
     if (S.noDigAt(bot.entity.position) || (tg && S.noDigAt({ x: tg.x, y: 64, z: tg.z }))) o = { ...o, escalate: false }
