@@ -201,7 +201,14 @@ module.exports = function makeMining(S, api, log) {
         let ok = true
         for (const cell of [top, b, c]) { const r = await S.clearCell(cell); if (r !== 'ok') { ok = false; break } }
         if (!ok) continue
-        const g = await S.goto(new goals.GoalBlock(b.x, b.y, b.z), { dig: false, ms: 12000 })
+        // one stair up, walked directly with a jump (like M.descend: the pathfinder took up to a minute a stair here and the climb out
+        // ended in 'no way up' resets, 09:45); the pathfinder without escalation only if the jump does not land
+        let g = { ok: false }
+        try {
+          await bot.lookAt(v(b.x + 0.5, b.y + 1.6, b.z + 0.5), true); bot.setControlState('forward', true); bot.setControlState('jump', true)
+          const t0 = Date.now(); while (Date.now() - t0 < 1600) { await S.wait(100); const q = S.flo(bot.entity.position); if (q.x === b.x && q.z === b.z && q.y === b.y) { g = { ok: true }; break } }
+        } catch {} finally { bot.setControlState('forward', false); bot.setControlState('jump', false) }
+        if (!g.ok) g = await S.goto(new goals.GoalBlock(b.x, b.y, b.z), { dig: false, ms: 12000, escalate: false })
         if (!g.ok) continue
         moved = true; dirIdx = (dirIdx + t) % 4
       }
