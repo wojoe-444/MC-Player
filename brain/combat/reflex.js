@@ -62,7 +62,7 @@ function create(bot, overrides = {}, hooks = {}) {
   const sword = () => { for (const n of gear.SWORDS) { const it = items().find(i => i.name === n); if (it) return it } return null }
   const bowItem = () => find(/^bow$/)
   const arrows = () => items().filter(i => /arrow$/.test(i.name)).reduce((s, i) => s + i.count, 0)
-  const food = () => items().find(i => /^(cooked_beef|cooked_porkchop|cooked_mutton|cooked_chicken|bread|golden_carrot|apple|baked_potato|cooked_salmon|cooked_cod)$/.test(i.name))
+  const food = () => items().find(i => /^(cooked_beef|cooked_porkchop|cooked_mutton|cooked_chicken|bread|golden_carrot|apple|baked_potato|cooked_salmon|cooked_cod)$/.test(i.name)) || items().find(i => /^(carrot|sweet_berries|melon_slice|cookie|dried_kelp)$/.test(i.name))
   const hasShield = () => { const o = bot.inventory.slots[45]; return !!o && o.name === 'shield' }
 
   function shield(on) {
@@ -292,7 +292,9 @@ function create(bot, overrides = {}, hooks = {}) {
     if (nearest) lastEngagedTick = tickN
     if (!nearest) {
       beh = 'idle'
-      if (P.yieldIdle) { shield(false); if (sword()) holdSlot(sword()); return }   // course mode: hand the controls back to navigation
+      // (not while the bot is eating or drinking something: the idle sword swap every tick cancelled every bite, and Smeo sat at 3.7 hp
+      // with 26 berries in the bag, the eat step parked twice, 09:40)
+      if (P.yieldIdle) { shield(false); if (sword() && !bot.usingHeldItem) holdSlot(sword()); return }   // course mode: hand the controls back to navigation
       shield(false)
       // only right after a fight: forcing the sword into the hand on every quiet tick broke pickaxe use, torches and scaffold placement
       if (sword() && tickN - lastEngagedTick < 40) holdSlot(sword())
