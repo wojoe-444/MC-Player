@@ -16,6 +16,7 @@ module.exports = function plan(G, S, M, api, log) {
   const note = (m) => { try { G.note(m) } catch { log('PLAN', m) } }
   const tier = (k) => S.toolTier(k)
   const cnt = (re) => S.count(re)
+  M.st = st                                                       // mining.js keeps seen spawners in the plan state
   const cobbleRe = /^(cobblestone|cobbled_deepslate)$/
   const ids = (re) => bot.registry.blocksArray.filter(b => re.test(b.name)).map(b => b.id)
 
@@ -485,10 +486,12 @@ module.exports = function plan(G, S, M, api, log) {
             // GoalNearXZ is met at any height: at 16:07 it walked into a cave under spot 82 and 'dug' a 0-step shaft from y20, so the
             // shaft's entry was underground and climbing 'out via the shaft' ended down there. A spot reached far below home is skipped.
             const deep = f.y < h.y - 10
-            if ((wet || deep || Math.hypot(f.x - h.x - o[0], f.z - h.z - o[1]) > 8) && (st.mineSkips || 0) < OFF.length) {
+            // a spawner the bot has seen within 24 (any depth from y-10 to y45, where the shafts go): not here
+            const spawnerNear = (st.spawners || []).some(q => Math.hypot(f.x - q[0], f.z - q[2]) < 24 && q[1] > -10 && q[1] < 45)
+            if ((wet || deep || spawnerNear || Math.hypot(f.x - h.x - o[0], f.z - h.z - o[1]) > 8) && (st.mineSkips || 0) < OFF.length) {
               st.mineSkips = (st.mineSkips || 0) + 1; st.mineSpot = (st.mineSpot || 0) + 1
               if (st.mineSite && o[0] === st.mineSite[0] - h.x && o[1] === st.mineSite[2] - h.z) st.mineSite = null
-              G.save(); note(`mine: spot ${h.x + o[0]},${h.z + o[1]} is ${wet ? 'by water' : deep ? 'under ground (a cave)' : 'out of reach'}, trying the next one (${st.mineSkips} skipped)`)
+              G.save(); note(`mine: spot ${h.x + o[0]},${h.z + o[1]} is ${wet ? 'by water' : deep ? 'under ground (a cave)' : spawnerNear ? 'by a spawner' : 'out of reach'}, trying the next one (${st.mineSkips} skipped)`)
               if (deep && !S.skyVisible()) { const up = await M.goSurface(); note('mine: back out of the cave first (' + up + ')') }
               return false } }
           const entry = bot.entity.position.floored(), dir0 = st.mineDir == null ? 0 : st.mineDir
