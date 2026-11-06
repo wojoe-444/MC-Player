@@ -795,6 +795,8 @@ module.exports = function plan(G, S, M, api, log) {
     st._shelterBox = { x0, x1, z0, z1, y }
     const floor = []
     for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) if (!cells.some(c => c.x === x && c.z === z)) floor.push(v(x, y - 1, z))
+    // and the ground under the walls: a hole under a wall cell left only a chest to place against (a click opens it), 188,71,-290 at 00:54
+    for (const w of walls) if (w.y === y && !sealsChest(w)) floor.push(w.offset(0, -1, 0))
     for (const d of doors) { const o = outOf(d), across = o.x === d.x ? [[1, 0], [-1, 0]] : [[0, 1], [0, -1]]; floor.push(d.offset(0, -1, 0), o.offset(0, -1, 0), ...across.map(([a, b]) => o.offset(a, -1, b))) }
     return { walls: walls.filter(p => !sealsChest(p)), roof: roof.filter(p => !sealsChest(p)), floor, door, doors, outs: doors.map(outOf), out, inside: v(midX, y, midZ), box: { x0, x1, z0, z1, y } }
   }
@@ -848,7 +850,7 @@ module.exports = function plan(G, S, M, api, log) {
         const it = filler(); if (!it) break
         if (S.eye().distanceTo(p.offset(0.5, 0.5, 0.5)) > 4.4) continue
         // something solid to place against: below first, then the sides, then above
-        const ref = [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]].map(([dx, dy, dz]) => [S.block(p.offset(dx, dy, dz)), v(-dx, -dy, -dz)]).find(([b]) => b && b.boundingBox === 'block')
+        const ref = [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]].map(([dx, dy, dz]) => [S.block(p.offset(dx, dy, dz)), v(-dx, -dy, -dz)]).find(([b]) => b && b.boundingBox === 'block' && !CONTAINER.test(b.name) && !/door|_bed$|crafting_table/.test(b.name))
         if (ref && await S.placeAgainst(ref[0], ref[1], it)) placed++
       }
     }
