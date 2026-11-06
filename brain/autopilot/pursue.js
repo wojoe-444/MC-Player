@@ -71,7 +71,8 @@ module.exports = function pursue(G, S, M, api, log, helpers) {
     const plan = miss.map(m => ({ ...m, src: SOURCES[m.name] })).filter(m => m.src)
     note(`pursue ${goal.name}: missing ${miss.map(m => m.n + ' ' + m.name).join(', ') || 'nothing raw'}`)
     // the first raw material we can get with the tools we have now
-    const next = plan.find(m => !m.src.tool || S.toolTier('pickaxe') >= m.src.tool)
+    // iron-tier ores are searched for with the stone pickaxe: the iron one is made in the tunnel only when such an ore is in sight (Walter 2026-11-06)
+    const next = plan.find(m => !m.src.tool || S.toolTier('pickaxe') >= m.src.tool || (m.src.tool === 3 && S.toolTier('pickaxe') >= 2 && S.count('iron_ingot') + S.count('raw_iron') >= 3))
     if (!next) {
       const tierNeed = Math.min(...plan.map(m => m.src.tool || 0)), pick = TIER_PICK[tierNeed]
       if (pick && depth < 2 && pick !== goal.name && cnt(pick) === 0) { note(`pursue ${goal.name}: needs a ${pick} first`); return work({ name: pick, n: 1 }, depth + 1) }
