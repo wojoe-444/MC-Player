@@ -68,6 +68,11 @@ module.exports = function plan(G, S, M, api, log) {
   const ironUnits = () => cnt('iron_ingot') + cnt('raw_iron')
   const ARMOR = [['iron_chestplate', 8, 'torso'], ['iron_leggings', 7, 'legs'], ['iron_helmet', 5, 'head'], ['iron_boots', 4, 'feet']]
   const worn = (slot) => { try { return bot.inventory.slots[bot.getEquipmentDestSlot(slot)] } catch { return null } }
+  // armor tiers: an item counts as an upgrade only over an empty slot or a lower tier
+  const ARMOR_TIER = { leather: 1, golden: 2, chainmail: 3, iron: 4, diamond: 5, netherite: 6, turtle: 2 }
+  const armorUp = (it) => { const m = /^([a-z]+)_(helmet|chestplate|leggings|boots)$/.exec(it.name); if (!m) return false
+    const w = worn({ helmet: 'head', chestplate: 'torso', leggings: 'legs', boots: 'feet' }[m[2]]); if (!w) return true
+    const wm = /^([a-z]+)_/.exec(w.name); return (ARMOR_TIER[m[1]] || 0) > (ARMOR_TIER[wm && wm[1]] || 0) }
   const hasShield = () => S.has('shield') || (worn('off-hand') && worn('off-hand').name === 'shield')
 
   const steps = [
@@ -192,8 +197,9 @@ module.exports = function plan(G, S, M, api, log) {
         note(n + ' ' + (ok ? 'made and worn' : 'craft failed')); return ok
       }
       return false } },
-    { id: 'wear', need: () => S.items().some(i => /_(helmet|chestplate|leggings|boots)$/.test(i.name)) || (S.has('shield') && !(worn('off-hand') && worn('off-hand').name === 'shield')), cool: 30000, run: async () => {
-      for (const it of S.items()) { const m = /_(helmet|chestplate|leggings|boots)$/.exec(it.name); if (m) { try { await bot.equip(it, { helmet: 'head', chestplate: 'torso', leggings: 'legs', boots: 'feet' }[m[1]]) } catch {} } }
+    // only an upgrade over what is worn (Smeo kept 'wearing' spare golden leggings over chainmail ones and the loop detector parked the step)
+    { id: 'wear', need: () => S.items().some(i => armorUp(i)) || (S.has('shield') && !(worn('off-hand') && worn('off-hand').name === 'shield')), cool: 30000, run: async () => {
+      for (const it of S.items()) { const m = /_(helmet|chestplate|leggings|boots)$/.exec(it.name); if (m && armorUp(it)) { try { await bot.equip(it, { helmet: 'head', chestplate: 'torso', leggings: 'legs', boots: 'feet' }[m[1]]) } catch {} } }
       const sh = S.items().find(i => i.name === 'shield'); if (sh) { try { await bot.equip(sh, 'off-hand') } catch {} }
       return true } },
 
