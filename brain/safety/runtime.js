@@ -183,6 +183,7 @@ module.exports = function install({
       const known = PROFILES[e.name]
       if (!known && e.type !== 'hostile') continue
       if (d3(bot.entity.position, e.position) > 32) continue
+      if (bot._mobIgnored && bot._mobIgnored(e)) continue          // inside one of Walter's mob farms (zone.json ignoreMobs)
       mobs.push({ id: e.id, name: e.name, pos: e.position, entity: e })
     }
     lastMobs = mobs

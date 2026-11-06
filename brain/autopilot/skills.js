@@ -188,6 +188,11 @@ module.exports = function makeSkills({ bot, api, log }) {
   S.inZone = (p) => { const z = S.zone(); if (!z || !z.workZone) return true; const w = z.workZone; return Math.hypot(p.x - w.x, p.z - w.z) <= w.r }
   // zone.json allow: [{ x0, x1, y0, y1, z0, z1, blocks: 'regex' }]: a job site inside a no-dig area where only those blocks may be broken
   // (Walter 2026-11-04: Smeo444 harvests his birch farm, logs and leaves only)
+  // mobs inside one of Walter's mob farms (zone.json ignoreMobs boxes) are contained: not a threat for the reflexes unless one is
+  // right next to the bot. Walter 2026-11-06 built a mob farm beside the birch farm; Smeo444 must not panic about the mobs in it.
+  bot._mobIgnored = (e) => { try { const z = S.zone(); if (!z || !z.ignoreMobs || !e || !e.position) return false
+    if (bot.entity && e.position.distanceTo(bot.entity.position) < 2.5) return false
+    const p = e.position; return z.ignoreMobs.some(b => p.x >= b.x0 && p.x <= b.x1 + 1 && p.y >= b.y0 && p.y <= b.y1 + 1 && p.z >= b.z0 && p.z <= b.z1 + 1) } catch { return false } }
   S.noDigAt = (p, name) => { const z = S.zone(); if (!z || !z.noDig) return false
     if (name && (z.allow || []).some(a => p.x >= a.x0 && p.x <= a.x1 && p.y >= a.y0 && p.y <= a.y1 && p.z >= a.z0 && p.z <= a.z1 && new RegExp(a.blocks).test(name))) return false
     return z.noDig.some(c => Math.hypot(p.x - c.x, p.z - c.z) <= c.r) }
@@ -716,6 +721,7 @@ module.exports = function makeSkills({ bot, api, log }) {
     for (const e of Object.values(bot.entities)) {
       if (!e || !e.position || e === bot.entity) continue
       if (!HOSTILE.test(e.name || '')) continue
+      if (bot._mobIgnored && bot._mobIgnored(e)) continue
       // a calm enderman is no threat (metadata 17/18: angry/staring); counting it held the cave reflex on for 14 minutes (03:49)
       if (e.name === 'enderman') { const md = e.metadata || []; if (md[17] !== true && md[18] !== true) continue }
       if (e.position.distanceTo(me) <= r) out.push(e)
