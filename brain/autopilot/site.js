@@ -259,6 +259,9 @@ module.exports = function site(G, S, M, api, log) {
       return st._siteTrees >= 3 || st._siteSaplingSpots > 0 || S.items().some(i => /_log$/.test(i.name) && S.count(i.name) >= 32) },
     run: async () => {
       const cfg = read(); if (!cfg) return false
+      // no cobblestone for the pillar: planks from the farm's own logs instead (site.json kept being written back with 'cobblestone' by a
+      // run that had read it earlier, and the tops went uncut, 06:13)
+      if ((cfg.pillar || 'cobblestone') === 'cobblestone' && S.count('cobblestone') < 4) cfg.pillar = (cfg.log || 'oak_log').replace(/_log$/, '_planks')
       G.sitePhase = 'stock'   // phases for the behavior view (brain/behavior)
       await food(cfg); if (S.foodPoints() < 4) st._siteNoFoodAt = Date.now()
       if (!(await axe(cfg))) note(`${cfg.name}: no axe yet (cobblestone ${S.count('cobblestone')}), chopping by hand`)
