@@ -150,7 +150,11 @@ module.exports = function makeMining(S, api, log) {
       let g = { ok: false }
       try {
         await bot.lookAt(v(c0.x + 0.5, c0.y + 1.6, c0.z + 0.5), true); bot.setControlState('forward', true)
-        const t0 = Date.now(); while (Date.now() - t0 < 2000) { await S.wait(100); const q = bot.entity.position; if (Math.hypot(q.x - (c0.x + 0.5), q.z - (c0.z + 0.5)) < 0.45 && Math.floor(q.y) === c0.y) { g = { ok: true }; break } }
+        // a hop when it has not moved after 0.7 s: standing in a cell with a floor torch the bot sat at onGround false, held in place
+        // (TUNNEL stuck at 165.5,21.0,-368.7 'here torch', 15:00)
+        const t0 = Date.now(), p0 = bot.entity.position.clone(); let hopped = false
+        while (Date.now() - t0 < 2200) { await S.wait(100); const q = bot.entity.position; if (Math.hypot(q.x - (c0.x + 0.5), q.z - (c0.z + 0.5)) < 0.45 && Math.floor(q.y) === c0.y) { g = { ok: true }; break }
+          if (!hopped && Date.now() - t0 > 700 && q.distanceTo(p0) < 0.2) { hopped = true; bot.setControlState('jump', true); await S.wait(250); bot.setControlState('jump', false) } }
       } catch {} finally { bot.setControlState('forward', false) }
       if (!g.ok) g = await S.goto(new goals.GoalBlock(c0.x, c0.y, c0.z), { dig: false, ms: 10000 })
       if (!g.ok) { try { const q = bot.entity.position, nm = (o) => { const b = S.block(o); return b ? b.name : '?' }; api.log('autopilot', `TUNNEL stuck at ${q.x.toFixed(2)},${q.y.toFixed(2)},${q.z.toFixed(2)} onGround ${bot.entity.onGround} -> c0 ${c0} ${nm(c0)}/${nm(c1)} floor ${nm(c0.offset(0, -1, 0))}, here ${nm(S.flo(q))}/${nm(S.flo(q).offset(0, 1, 0))}, goto ${g.err || g.why || ''}`) } catch {} reason = 'stuck'; break }
