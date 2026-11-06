@@ -3,6 +3,7 @@ const { Vec3 } = require('vec3')
 const { SIX, HORIZ, ORE_RE } = require('./skills').consts
 
 const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]]
+const IRON_TIER = /^(deepslate_)?(diamond|gold|redstone|emerald)_ore$/   // ores a stone pickaxe cannot harvest
 
 module.exports = function makeMining(S, api, log) {
   const { goals } = S
@@ -140,6 +141,12 @@ module.exports = function makeMining(S, api, log) {
         const o = S.seen(targets, { radius: 7, needSight: true })
         const c = o.find(b => !S.hazardNear(b.position, 1).lava)
         if (!c) break
+        // ores that need an iron pickaxe: the only time one is made (Walter 2026-11-06), here and now, from ingots carried; without one
+        // the ore stays in the wall (a stone pickaxe would break it for nothing)
+        if (IRON_TIER.test(c.name) && S.toolTier('pickaxe') < 3) {
+          if (S.count('iron_ingot') >= 3 && S.has('stick')) { const ok = await S.craft('iron_pickaxe', 1).catch(() => false); api.log('autopilot', `GOAL iron pickaxe for ${c.name}: ${ok}`) }
+          if (S.toolTier('pickaxe') < 3) break
+        }
         const back = S.flo(bot.entity.position)
         if (await S.mine(c, { dig: true })) mined++
         else break

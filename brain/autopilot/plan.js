@@ -182,9 +182,9 @@ module.exports = function plan(G, S, M, api, log) {
       const ok = await S.craft('shield', 1); const it = S.items().find(i => i.name === 'shield'); if (it) { try { await bot.equip(it, 'off-hand') } catch {} }
       note('shield ' + (ok ? 'made and worn' : 'craft failed')); return ok } },
     { id: 'iron-smelt', need: () => cnt('raw_iron') >= 3, cool: 60000, run: async () => { const got = await S.smelt('raw_iron', cnt('raw_iron')); note('smelted iron ' + got); return got > 0 } },
-    { id: 'iron-gear', need: () => (cnt('iron_ingot') >= 3 && tier('pickaxe') < 3) || (cnt('iron_ingot') >= 2 && !S.has('iron_sword') && S.has('iron_pickaxe')) || ARMOR.some(([n, c, s]) => !S.has(n) && !(worn(s) && worn(s).name === n) && cnt('iron_ingot') >= c && S.has('iron_pickaxe') && S.has('iron_sword')), run: async () => {
-      if (tier('pickaxe') < 3 && cnt('iron_ingot') >= 3) { const ok = await S.craft('iron_pickaxe', 1); note('iron pickaxe ' + ok); return ok }
-      if (!S.has('iron_sword') && cnt('iron_ingot') >= 2) { const ok = await S.craft('iron_sword', 1); note('iron sword ' + ok); return ok }
+    // Walter 2026-11-06: no iron tools, they waste iron (they went with every death). Stone tools are the default; iron goes into armor
+    // (and the shield). The one iron pickaxe is made in the tunnel when an ore that needs it (diamond, gold, redstone, emerald) is in sight.
+    { id: 'iron-gear', need: () => ARMOR.some(([n, c, s]) => !S.has(n) && !(worn(s) && worn(s).name === n) && cnt('iron_ingot') >= c), run: async () => {
       for (const [n, c, s] of ARMOR) {
         if (S.has(n) || (worn(s) && worn(s).name === n) || cnt('iron_ingot') < c) continue
         const ok = await S.craft(n, 1); const it = S.items().find(i => i.name === n); if (it) { try { await bot.equip(it, s) } catch {} }
