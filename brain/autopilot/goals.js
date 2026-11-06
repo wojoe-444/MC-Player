@@ -167,7 +167,9 @@ module.exports = function makeGoals(S, M, api, log) {
 
   // ---------- decide & run ----------
   const NIGHT_SKIP = new Set(['wood-stock', 'scout', 'hunt-memory', 'food', 'grove', 'seeds', 'farm', 'tend', 'fish', 'string', 'berries', 'harvest', 'tidy', 'pursue'])
-  const SURFACE = new Set(['harvest', 'berries', 'tend', 'seeds', 'farm', 'grove', 'light-home', 'tidy', 'wood-stock', 'scout', 'hunt-memory', 'food', 'fish', 'storage', 'stash', 'restock', 'night-home', 'rebed', 'take-cover', 'wood'])
+  // tool-kit, iron-smelt, furnace and cook walk to a table or furnace at home: from the mine that walk is up the shaft first. At 03:15
+  // tool-kit went for the table 49 blocks straight above the tunnel, the escalating go-to pillared up through an aquifer and the bot drowned
+  const SURFACE = new Set(['tool-kit', 'iron-smelt', 'furnace', 'cook', 'harvest', 'berries', 'tend', 'seeds', 'farm', 'grove', 'light-home', 'tidy', 'wood-stock', 'scout', 'hunt-memory', 'food', 'fish', 'storage', 'stash', 'restock', 'night-home', 'rebed', 'take-cover', 'wood'])
   // the assistant's routine: keep itself alive and equipped, keep the base fed, lit, stocked and tidy; no mining trips, no exploring, no long goals
   const ASSISTANT_STEPS = new Set(['eat', 'take-cover', 'rebed', 'recover', 'cook', 'night-home', 'restock', 'tool-kit', 'site-work', 'mob-farm', 'harvest', 'berries', 'tend', 'seeds', 'wooden-tools', 'stone-tools', 'furnace', 'torches', 'wood-stock', 'storage', 'stash', 'grove', 'light-home', 'tidy', 'wear', 'shield'])
   G.pick = () => {
