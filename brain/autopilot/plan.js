@@ -491,6 +491,9 @@ module.exports = function plan(G, S, M, api, log) {
             let best = null
             for (const c of cols.values()) {
               if (c.wet || c.top == null || Math.hypot(c.x - h.x, c.z - h.z) < 14 || near(c.x, c.z) || (st.wetSites || []).some(q => Math.hypot(q[0] - c.x, q[1] - c.z) < 20)) continue
+              // never in or by the farm, the grove or anything built (it picked 177,71,-316, right by Walter's starter wheat farm, 11:29)
+              if ((st.farm || []).concat(st.grove || []).some(q => Math.abs(q[0] - c.x) <= 6 && Math.abs(q[2] - c.z) <= 6)) continue
+              { const tb = S.block(v(c.x, c.top, c.z)); if (!tb || /farmland|planks|cobblestone|_slab|_stairs|fence|glass|bricks|wool|chest|torch/.test(tb.name) || (S.isEstablished && S.isEstablished(tb))) continue }
               const dry = wets.reduce((m, w) => Math.min(m, Math.hypot(w.x - c.x, w.z - c.z)), 99)
               const score = dry - Math.hypot(c.x - h.x, c.z - h.z) / 12          // far from water first, then nearer home
               if (!best || score > best.score) best = { ...c, dry, score }
