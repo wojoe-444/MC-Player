@@ -535,7 +535,8 @@ module.exports = function plan(G, S, M, api, log) {
           const r = await M.descend(20, { maxSteps: 120, dir0 })
           const bottom = bot.entity.position.floored()
           note('mine: dug the shaft from ' + entry + ' down to y' + bottom.y + ' ' + JSON.stringify(r))
-          if (bottom.y > 56) return false
+          // stopped near the top (a cave right under the site, 'no floor' on every side): this site is no good, the scan must not pick it again
+          if (bottom.y > 56) { st.wetSites = (st.wetSites || []).concat([[entry.x, entry.z]]).slice(-40); st.mineSite = null; st.mineSkips = Math.max(3, st.mineSkips || 0); st.landScanAt = 0; G.save(); return false }
           // never record a shaft that starts deep under ground or was not dug at all (the fallback after a full round of skipped spots
           // could still start one in a cave; descend's 'blocked' exit has no steps count, so depth is measured by y): go home instead
           if (entry.y < h.y - 10 || bottom.y >= entry.y) { st.mineSpot = (st.mineSpot || 0) + 1; G.save(); note(`mine: no shaft recorded (entry y${entry.y}, ${entry.y - bottom.y} blocks down), heading home`); await M.goSurface(); await S.goto(new goals.GoalNear(h.x, h.y, h.z, 3), { dig: false, ms: 120000 }); return false }
