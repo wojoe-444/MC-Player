@@ -57,7 +57,9 @@ function create(bot, overrides = {}, hooks = {}) {
     // not in the hotbar (a sword that was just crafted, food picked up with a full hotbar): swap it in through the inventory instead of giving up. One swap at a time.
     if (!equipping && (!bot.heldItem || bot.heldItem.name !== it.name)) { equipping = true; stats.invEquips = (stats.invEquips || 0) + 1; Promise.resolve(bot.equip(it, 'hand')).catch(() => {}).then(() => { equipping = false }) }
     return false }
-  const sword = () => find(/_sword$/)
+  // the best sword, the same choice as safety's gear.bestWeapon: the first one in the bag (a wooden sword) against safety's stone sword
+  // swapped the hand every 0.3 s, every swap reset the attack cooldown, and one zombie killed the bot without taking a hit (01:44)
+  const sword = () => { for (const n of gear.SWORDS) { const it = items().find(i => i.name === n); if (it) return it } return null }
   const bowItem = () => find(/^bow$/)
   const arrows = () => items().filter(i => /arrow$/.test(i.name)).reduce((s, i) => s + i.count, 0)
   const food = () => items().find(i => /^(cooked_beef|cooked_porkchop|cooked_mutton|cooked_chicken|bread|golden_carrot|apple|baked_potato|cooked_salmon|cooked_cod)$/.test(i.name))
