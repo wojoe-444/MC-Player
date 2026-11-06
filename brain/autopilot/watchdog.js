@@ -312,6 +312,9 @@ module.exports = function watchdog(ap, api, log) {
   }
   function caveReflex() {
     const S = ap.S; if (!S || !bot.entity || !S.hostilesNear || bot.isSleeping) return
+    // the assistant works on the surface at Walter's farms: no cave retreat (its 'retreat to shelter' at 23:29 ran it off the birch farm
+    // into a cave at y57 where a zombie killed it); safety and combat still fight or wall in
+    if (ap.G && ap.G.role === 'assistant') return
     const now = Date.now(), t = taskName()
     if (handled(now)) { if (ap.dangerUntil) { ap.dangerUntil = 0; ap.keepTaskOff = false } reflexClearSince = 0; return }
     const under = underRock() && bot.game && bot.game.dimension === 'overworld'
