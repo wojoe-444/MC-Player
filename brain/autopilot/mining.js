@@ -78,7 +78,7 @@ module.exports = function makeMining(S, api, log) {
       S.check()
       if (S.hostilesNear(7).length) { await S.wait(500) }
       const p = S.flo(bot.entity.position)
-      let moved = false
+      let moved = false; const why = []
       for (let t = 0; t < 4 && !moved; t++) {
         const [dx, dz] = DIRS[(dirIdx + t) % 4]
         const c1 = p.offset(dx, 1, dz), c0 = p.offset(dx, 0, dz), n = p.offset(dx, -1, dz), under = n.offset(0, -1, 0)
@@ -86,14 +86,14 @@ module.exports = function makeMining(S, api, log) {
         // air under the next stair (a cave below): set a block there and keep the staircase going, instead of calling the whole shaft
         // 'blocked' after a few steps (three shafts in a row stopped at y62-70, 10:24-11:07). Never over lava or water.
         if (bu && !S.solid(bu) && !S.isLiquid(bu) && !S.hazardNear(under, 1).lava && t === 3 && S.count(/^(cobblestone|cobbled_deepslate|dirt|stone|andesite|diorite|granite|tuff)$/) > 8) { try { if (await M.fill(under)) bu = S.block(under) } catch {} }
-        if (!bu || !S.solid(bu) || bu.name === 'magma_block') continue          // would drop into a cave/lava: try another way
+        if (!bu || !S.solid(bu) || bu.name === 'magma_block') { why.push('no floor (' + (bu && bu.name) + ')'); continue }          // would drop into a cave/lava: try another way
         const nb = S.block(n), c0b = S.block(c0), c1b = S.block(c1)
-        if (!nb || !c0b || !c1b) continue
-        if (S.hazardNear(n, 1).lava || S.hazardNear(c0, 1).lava || S.isLiquid(nb) || S.isLiquid(c0b) || S.isLiquid(c1b)) continue
-        if (S.hazardNear(n, 1).water || S.hazardNear(c0, 1).water) continue
+        if (!nb || !c0b || !c1b) { why.push('unloaded'); continue }
+        if (S.hazardNear(n, 1).lava || S.hazardNear(c0, 1).lava || S.isLiquid(nb) || S.isLiquid(c0b) || S.isLiquid(c1b)) { why.push('lava/liquid'); continue }
+        if (S.hazardNear(n, 1).water || S.hazardNear(c0, 1).water) { why.push('water near'); continue }
         let ok = true
         for (const c of [c1, c0, n]) { const r = await S.clearCell(c); if (r !== 'ok') { ok = false; break } }
-        if (!ok) continue
+        if (!ok) { why.push('cell would not clear'); continue }
         // one stair down: walk onto it directly (the pathfinder took up to a minute per stair on this machine, timing out and escalating,
         // so a whole shaft ran past the step's 10-minute budget at y34, 09:29); the pathfinder only when the direct step does not land
         let r = { ok: false }
@@ -102,11 +102,11 @@ module.exports = function makeMining(S, api, log) {
           const t0 = Date.now(); while (Date.now() - t0 < 1500) { await S.wait(100); const q = S.flo(bot.entity.position); if (q.x === n.x && q.z === n.z && q.y === n.y) { r = { ok: true }; break } }
         } catch {} finally { bot.setControlState('forward', false) }
         if (!r.ok) r = await S.goto(new goals.GoalBlock(n.x, n.y, n.z), { dig: false, ms: 12000, escalate: false })
-        if (!r.ok) { await S.wait(200); continue }
+        if (!r.ok) { why.push('step did not land'); await S.wait(200); continue }
         moved = true; dirIdx = (dirIdx + t) % 4
         if (t) turns++
       }
-      if (!moved) return { ok: false, y: Math.floor(bot.entity.position.y), reason: 'blocked' }
+      if (!moved) return { ok: false, y: Math.floor(bot.entity.position.y), reason: 'blocked', why: why.join('; ') }
       steps++
       if (steps % 6 === 0) await S.pickup(5, 2500)
       if (steps % 10 === 0) await M.torch()
