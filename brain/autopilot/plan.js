@@ -460,6 +460,8 @@ module.exports = function plan(G, S, M, api, log) {
       // water or lava on every side, three times running (17:05: a spot under home by an aquifer, 15 minutes of retries): this site is done.
       // Back to the surface; the shaft is given up and the next one starts at another spot around home.
       if ((st.mineBlocked || 0) >= 3) {
+        // remembered as wet underground, so the land-site scan does not pick it again (it chose the same flooded site twice, 10:20 and 10:46)
+        { const e = st.mine && st.mine.entry ? st.mine.entry : [Math.floor(bot.entity.position.x), 0, Math.floor(bot.entity.position.z)]; st.wetSites = (st.wetSites || []).concat([[e[0], e[2]]]).slice(-40) }
         const up = await M.goSurface(); st.mineBlocked = 0; st.mine = null; st.mineSite = null; st.mineSpot = (st.mineSpot || 0) + 1; G.save()
         note('mine: blocked by water three times here, giving this shaft up (surfaced ' + up + '); next shaft at spot ' + st.mineSpot); return false
       }
@@ -488,7 +490,7 @@ module.exports = function plan(G, S, M, api, log) {
             const wets = [...cols.values()].filter(c => c.wet || c.top == null)
             let best = null
             for (const c of cols.values()) {
-              if (c.wet || c.top == null || Math.hypot(c.x - h.x, c.z - h.z) < 14 || near(c.x, c.z)) continue
+              if (c.wet || c.top == null || Math.hypot(c.x - h.x, c.z - h.z) < 14 || near(c.x, c.z) || (st.wetSites || []).some(q => Math.hypot(q[0] - c.x, q[1] - c.z) < 20)) continue
               const dry = wets.reduce((m, w) => Math.min(m, Math.hypot(w.x - c.x, w.z - c.z)), 99)
               const score = dry - Math.hypot(c.x - h.x, c.z - h.z) / 12          // far from water first, then nearer home
               if (!best || score > best.score) best = { ...c, dry, score }
