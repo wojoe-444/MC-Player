@@ -91,7 +91,14 @@ module.exports = function makeMining(S, api, log) {
         let ok = true
         for (const c of [c1, c0, n]) { const r = await S.clearCell(c); if (r !== 'ok') { ok = false; break } }
         if (!ok) continue
-        const r = await S.goto(new goals.GoalBlock(n.x, n.y, n.z), { dig: false, ms: 12000 })
+        // one stair down: walk onto it directly (the pathfinder took up to a minute per stair on this machine, timing out and escalating,
+        // so a whole shaft ran past the step's 10-minute budget at y34, 09:29); the pathfinder only when the direct step does not land
+        let r = { ok: false }
+        try {
+          await bot.lookAt(v(n.x + 0.5, n.y + 1.6, n.z + 0.5), true); bot.setControlState('forward', true)
+          const t0 = Date.now(); while (Date.now() - t0 < 1500) { await S.wait(100); const q = S.flo(bot.entity.position); if (q.x === n.x && q.z === n.z && q.y === n.y) { r = { ok: true }; break } }
+        } catch {} finally { bot.setControlState('forward', false) }
+        if (!r.ok) r = await S.goto(new goals.GoalBlock(n.x, n.y, n.z), { dig: false, ms: 12000, escalate: false })
         if (!r.ok) { await S.wait(200); continue }
         moved = true; dirIdx = (dirIdx + t) % 4
         if (t) turns++
