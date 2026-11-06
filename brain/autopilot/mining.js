@@ -82,7 +82,10 @@ module.exports = function makeMining(S, api, log) {
       for (let t = 0; t < 4 && !moved; t++) {
         const [dx, dz] = DIRS[(dirIdx + t) % 4]
         const c1 = p.offset(dx, 1, dz), c0 = p.offset(dx, 0, dz), n = p.offset(dx, -1, dz), under = n.offset(0, -1, 0)
-        const bu = S.block(under)
+        let bu = S.block(under)
+        // air under the next stair (a cave below): set a block there and keep the staircase going, instead of calling the whole shaft
+        // 'blocked' after a few steps (three shafts in a row stopped at y62-70, 10:24-11:07). Never over lava or water.
+        if (bu && !S.solid(bu) && !S.isLiquid(bu) && !S.hazardNear(under, 1).lava && t === 3 && S.count(/^(cobblestone|cobbled_deepslate|dirt|stone|andesite|diorite|granite|tuff)$/) > 8) { try { if (await M.fill(under)) bu = S.block(under) } catch {} }
         if (!bu || !S.solid(bu) || bu.name === 'magma_block') continue          // would drop into a cave/lava: try another way
         const nb = S.block(n), c0b = S.block(c0), c1b = S.block(c1)
         if (!nb || !c0b || !c1b) continue
