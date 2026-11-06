@@ -474,6 +474,28 @@ module.exports = function plan(G, S, M, api, log) {
           // the first shaft: next to home (not inside the house), away from places where the bot died
           const OFF = [[6, 6], [-10, 6], [10, -10], [-10, -10], [0, 16], [16, 0], [-16, 0], [0, -16], [-30, 10], [-24, 24], [-40, -4], [-20, 30], [30, 24], [-36, -30], [50, 0], [0, 50], [-50, 0], [0, -50], [45, 45], [-45, 45], [45, -45], [-45, -45], [64, 20], [-64, -20], [20, -64], [-20, 64]], /* farther spots (up to ~45 out) so an avoided deadly shaft does not cover them all; a ring at 50-67 for the water and caves near home (07:48: the zombie pocket and water ruled out every closer spot) */ near = (x, z) => (st.avoid || []).some(q => Math.hypot(q[0] - x, q[2] - z) < 12) || (st.avoidMines || []).some(q => Math.hypot(q[0] - x, q[2] - z) < (q[3] || 48))   // and no new shaft within reach of a deadly old one
           let k = 0; while (k < OFF.length && near(h.x + OFF[(st.mineSpot || 0) % OFF.length][0], h.z + OFF[(st.mineSpot || 0) % OFF.length][1])) { st.mineSpot = (st.mineSpot || 0) + 1; k++ }
+          // no chosen site, or the listed spots keep turning out wet: find the land farthest from water within 72 of home from the surface
+          // the bot can see (the loaded terrain, a 6-block grid, yielding every row). Around OzoGo444's home nearly every listed spot was
+          // water (10:19, iron failed x7).
+          if (!st.mineSite && (st.mineSkips || 0) >= 3 && Date.now() - (st.landScanAt || 0) > 30 * 60000) {
+            st.landScanAt = Date.now()
+            const G6 = 6, R = 72, cols = new Map()
+            for (let dx = -R; dx <= R; dx += G6) { for (let dz = -R; dz <= R; dz += G6) {
+                const x = h.x + dx, z = h.z + dz; let top = null, wet = false
+                for (let y = h.y + 30; y > h.y - 25; y--) { const b = S.block(v(x, y, z)); if (!b) { top = undefined; break } if (/water|kelp|seagrass/.test(b.name)) wet = true; if (b.boundingBox === 'block' && !/_leaves$|_log$/.test(b.name)) { top = y; break } }
+                if (top !== undefined) cols.set(dx + ',' + dz, { x, z, top, wet })
+              } await S.wait(0) }
+            const wets = [...cols.values()].filter(c => c.wet || c.top == null)
+            let best = null
+            for (const c of cols.values()) {
+              if (c.wet || c.top == null || Math.hypot(c.x - h.x, c.z - h.z) < 14 || near(c.x, c.z)) continue
+              const dry = wets.reduce((m, w) => Math.min(m, Math.hypot(w.x - c.x, w.z - c.z)), 99)
+              const score = dry - Math.hypot(c.x - h.x, c.z - h.z) / 12          // far from water first, then nearer home
+              if (!best || score > best.score) best = { ...c, dry, score }
+            }
+            if (best && best.dry >= 12) { st.mineSite = [best.x, best.top + 1, best.z]; st.mineSkips = 0; G.save(); note(`mine: land site ${best.x},${best.top + 1},${best.z} picked, ${Math.round(best.dry)} blocks from the nearest water`) }
+            else note('mine: no dry land site found within 72 of home')
+          }
           // a chosen site (st.mineSite: the land spot farthest from open water, 2026-11-05; every shaft dug by the sea flooded) comes first
           const o = st.mineSite && !near(st.mineSite[0], st.mineSite[2]) ? [st.mineSite[0] - h.x, st.mineSite[2] - h.z] : OFF[(st.mineSpot || 0) % OFF.length]
           // by x/z only (spots up to 45 out sit on hills or in hollows), and only on dry land: a spot out at sea or on the shore is skipped
