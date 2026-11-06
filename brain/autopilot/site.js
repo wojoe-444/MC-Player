@@ -202,14 +202,20 @@ module.exports = function site(G, S, M, api, log) {
     await S.pickup(5, 3000)
   }
   async function axe(cfg) {
-    if (S.count(cfg.pillar || 'cobblestone') < 4) await cobble(cfg, 16)
-    if (S.items().some(i => /_axe$/.test(i.name))) return true
+    // the pillar block: planks are made from the harvest (no cobblestone around Smeo's farm, 05:57), anything else comes from the stores
+    if (/_planks$/.test(cfg.pillar || '')) { if (S.count(cfg.pillar) < 8 && S.count(cfg.log) >= 2) await S.craft(cfg.pillar, Math.min(4, Math.floor(S.count(cfg.log) / 2))).catch(() => false) }
+    else if (S.count(cfg.pillar || 'cobblestone') < 4) await cobble(cfg, 16)
+    if (S.items().some(i => i.name === 'stone_axe' || /^(iron|diamond|netherite)_axe$/.test(i.name))) return true
+    if (S.items().some(i => i.name === 'wooden_axe') && S.count('cobblestone') < 3 && Date.now() - (st._axeTry || 0) < 20 * 60000) return true
+    st._axeTry = Date.now()
     if (S.count('cobblestone') < 3) await cobble(cfg, 8)
     // none in the stores either: its own smooth stone turned into cobblestone by the gate (mobfarm.js G.makeCobble)
     if (S.count('cobblestone') < 3 && G.makeCobble) await G.makeCobble(3).catch(() => false)
     if (S.count('stick') < 2 && S.planks() < 2 && S.logs()) await S.craft(S.items().find(i => /_log$/.test(i.name)).name.replace('_log', '_planks'), 4)
     if (S.count('stick') < 2) await S.craft('stick', 4)
-    await S.craft('stone_axe', 1)
+    if (S.count('cobblestone') >= 3) await S.craft('stone_axe', 1)
+    // no cobblestone to be had: a wooden axe still beats bare hands (Walter wants stone; it is made as soon as there is cobblestone)
+    else if (!S.items().some(i => /_axe$/.test(i.name))) await S.craft('wooden_axe', 1).catch(() => false)
     await takeBackTables()
     return S.items().some(i => /_axe$/.test(i.name))
   }
