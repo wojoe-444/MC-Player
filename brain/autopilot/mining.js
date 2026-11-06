@@ -153,7 +153,7 @@ module.exports = function makeMining(S, api, log) {
         const t0 = Date.now(); while (Date.now() - t0 < 2000) { await S.wait(100); const q = bot.entity.position; if (Math.hypot(q.x - (c0.x + 0.5), q.z - (c0.z + 0.5)) < 0.45 && Math.floor(q.y) === c0.y) { g = { ok: true }; break } }
       } catch {} finally { bot.setControlState('forward', false) }
       if (!g.ok) g = await S.goto(new goals.GoalBlock(c0.x, c0.y, c0.z), { dig: false, ms: 10000 })
-      if (!g.ok) { reason = 'stuck'; break }
+      if (!g.ok) { try { const q = bot.entity.position, nm = (o) => { const b = S.block(o); return b ? b.name : '?' }; api.log('autopilot', `TUNNEL stuck at ${q.x.toFixed(2)},${q.y.toFixed(2)},${q.z.toFixed(2)} onGround ${bot.entity.onGround} -> c0 ${c0} ${nm(c0)}/${nm(c1)} floor ${nm(c0.offset(0, -1, 0))}, here ${nm(S.flo(q))}/${nm(S.flo(q).offset(0, 1, 0))}, goto ${g.err || g.why || ''}`) } catch {} reason = 'stuck'; break }
       done++
       if (i % 3 === 0) await S.pickup(5, 2500)
       // ores in plain view (exposed by our own tunnel or a cave)
