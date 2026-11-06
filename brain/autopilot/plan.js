@@ -470,7 +470,7 @@ module.exports = function plan(G, S, M, api, log) {
           if (!r.ok && Math.floor(bot.entity.position.y) > 56) { st.mine.fails = (st.mine.fails || 0) + 1; if (st.mine.fails >= 3) { note('mine: the shaft is lost, a new one will be dug'); st.mine = null } G.save(); return false }
         } else {
           // the first shaft: next to home (not inside the house), away from places where the bot died
-          const OFF = [[6, 6], [-10, 6], [10, -10], [-10, -10], [0, 16], [16, 0], [-16, 0], [0, -16], [-30, 10], [-24, 24], [-40, -4], [-20, 30], [30, 24], [-36, -30]], /* farther spots (up to ~45 out) so an avoided deadly shaft does not cover them all */ near = (x, z) => (st.avoid || []).some(q => Math.hypot(q[0] - x, q[2] - z) < 12) || (st.avoidMines || []).some(q => Math.hypot(q[0] - x, q[2] - z) < 48)   // and no new shaft within reach of a deadly old one
+          const OFF = [[6, 6], [-10, 6], [10, -10], [-10, -10], [0, 16], [16, 0], [-16, 0], [0, -16], [-30, 10], [-24, 24], [-40, -4], [-20, 30], [30, 24], [-36, -30]], /* farther spots (up to ~45 out) so an avoided deadly shaft does not cover them all */ near = (x, z) => (st.avoid || []).some(q => Math.hypot(q[0] - x, q[2] - z) < 12) || (st.avoidMines || []).some(q => Math.hypot(q[0] - x, q[2] - z) < (q[3] || 48))   // and no new shaft within reach of a deadly old one
           let k = 0; while (k < OFF.length && near(h.x + OFF[(st.mineSpot || 0) % OFF.length][0], h.z + OFF[(st.mineSpot || 0) % OFF.length][1])) { st.mineSpot = (st.mineSpot || 0) + 1; k++ }
           // a chosen site (st.mineSite: the land spot farthest from open water, 2026-11-05; every shaft dug by the sea flooded) comes first
           const o = st.mineSite && !near(st.mineSite[0], st.mineSite[2]) ? [st.mineSite[0] - h.x, st.mineSite[2] - h.z] : OFF[(st.mineSpot || 0) % OFF.length]
@@ -495,6 +495,11 @@ module.exports = function plan(G, S, M, api, log) {
               G.save(); note(`mine: spot ${h.x + o[0]},${h.z + o[1]} is ${wet ? 'by water' : deep ? 'under ground (a cave)' : spawnerNear ? 'by a spawner' : 'out of reach'}, trying the next one (${st.mineSkips} skipped)`)
               if (deep && !S.skyVisible()) { const up = await M.goSurface(); note('mine: back out of the cave first (' + up + ')') }
               return false } }
+          // (an avoidMines entry may carry its own radius as a 4th number; 48 otherwise)
+          // never here when here is near a place the bot gave up (deaths, the zombie spawner pocket under home): the fallback after a
+          // round of skipped spots dug a new shaft 6 blocks from it and a zombie killed the bot down there (06:29 shaft, 06:45 death)
+          { const f2 = S.flo(bot.entity.position)
+            if ((st.avoidMines || []).some(q => Math.hypot(f2.x - q[0], f2.z - q[2]) < (q[3] || 48))) { st.mineSkips = 0; st.mineSpot = (st.mineSpot || 0) + 1; G.cool.iron = Date.now() + 20 * 60000; G.save(); note('mine: no spot away from the avoided places this round, iron paused 20 min'); return false } }
           const entry = bot.entity.position.floored(), dir0 = st.mineDir == null ? 0 : st.mineDir
           const r = await M.descend(20, { maxSteps: 120, dir0 })
           const bottom = bot.entity.position.floored()
@@ -526,7 +531,7 @@ module.exports = function plan(G, S, M, api, log) {
       }
       st.mineDir = ((st.mineDir || 0) + 1) % 4
       { const here = S.flo(bot.entity.position), D = [[1, 0], [0, 1], [-1, 0], [0, -1]]   // the order M.tunnel uses
-        const bad = (d) => (st.avoidMines || []).some(q => Math.hypot(here.x + D[d][0] * 40 - q[0], here.z + D[d][1] * 40 - q[2]) < 48)
+        const bad = (d) => (st.avoidMines || []).some(q => Math.hypot(here.x + D[d][0] * 40 - q[0], here.z + D[d][1] * 40 - q[2]) < (q[3] || 48))
         for (let k = 0; k < 4 && bad(st.mineDir); k++) st.mineDir = (st.mineDir + 1) % 4 }
       const before = ironUnits()
       const t = await M.tunnel(st.mineDir, 40, { targets: /^(deepslate_)?(iron|coal|copper|gold|diamond|redstone|lapis)_ore$/, torchEvery: 6, stop: () => S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 })
