@@ -314,12 +314,12 @@ module.exports = function install({
     const losTo = (m) => { try { const eye = bot.entity.position.offset(0, 1.62, 0), tg = m.pos.offset(0, 1, 0), dv = tg.minus(eye), dist = dv.norm(); return !bot.world.raycast(eye, dv.scaled(1 / dist), dist) } catch { return true } }
     let cavePreempt = false
     try { cavePreempt = !entombed && light.underground() && (snap.mobs.some(m => (PROFILES[m.name] || {}).kind !== 'neutral' && d3(snap.me.pos, m.pos) <= 15 && losTo(m)) || (snap.now - lastHurtAt < 3000 && snap.mobs.some(m => (PROFILES[m.name] || {}).kind !== 'neutral' && d3(snap.me.pos, m.pos) <= 24))) } catch { cavePreempt = false }
-    if (C.emergencyEntomb && !entombed && !entombBusy && !wantEntomb && snap.now - entombFailedAt > 60000 && (snap.health <= C.minFightHealth || recovering || cavePreempt || (fell && snap.health <= C.fallEntombHealth))) {
+    if (C.emergencyEntomb && !entombed && !entombBusy && !wantEntomb && !(bot._nearMobFarm && bot._nearMobFarm()) && snap.now - entombFailedAt > 60000 && (snap.health <= C.minFightHealth || recovering || cavePreempt || (fell && snap.health <= C.fallEntombHealth))) {
       const hostile = snap.mobs.some(m => d3(snap.me.pos, m.pos) <= (fell || cavePreempt ? 16 : 12) && (PROFILES[m.name] || {}).kind !== 'neutral')
       if (hostile && !snap.shelter && entombMod.countFiller(bot.inventory.items()) >= C.entombMinFiller) { wantEntomb = true; slog(`entomb wanted: health ${Math.round(snap.health)}${fell ? ', after a big fall' : ''}${cavePreempt ? ', cave hostile in sight (preempt)' : ''}, no reachable shelter, hostile close`) }
     }
     // Narrow ground / a bridge: do not run (the bot fell 40 blocks off the y26 mining bridge). Wall in on the spot when allowed, else stand and hold.
-    if (C.emergencyEntomb && !entombed && !entombBusy && !wantEntomb && env.narrow && d.action === 'flee' && snap.now - entombFailedAt > 60000 &&
+    if (C.emergencyEntomb && !entombed && !entombBusy && !wantEntomb && env.narrow && !(bot._nearMobFarm && bot._nearMobFarm()) && d.action === 'flee' && snap.now - entombFailedAt > 60000 &&
         entombMod.countFiller(bot.inventory.items()) >= C.entombMinFiller) { wantEntomb = true; slog(`entomb wanted: fleeing on narrow ground (${d.reason})`) }
     // post-mortem material: what we were doing, with what, how hurt
     try {
@@ -333,7 +333,7 @@ module.exports = function install({
     } catch { /* never break the scan */ }
     const act = d.action === 'fight' || d.action === 'flee' || d.action === 'shoot' || wantEntomb || entombed
     // torch as you go: underground, dark, nothing hostile about, nothing else using the hand
-    if (!act && !holding && light.due() && !(safehand && safehand.holdingLava()) && !bot.currentWindow && !snap.mobs.some(m => d3(snap.me.pos, m.pos) <= 12) && bot.entity.onGround !== false) {
+    if (!act && !holding && !(bot._nearMobFarm && bot._nearMobFarm()) && light.due() && !(safehand && safehand.holdingLava()) && !bot.currentWindow && !snap.mobs.some(m => d3(snap.me.pos, m.pos) <= 12) && bot.entity.onGround !== false) {
       light.lightHere().then(r => { if (!r.ok && r.why !== 'cooldown' && r.why !== 'busy') slogOnce('light:' + r.why, `light: not placed (${r.why})`, 60000) }).catch(() => {})
     }
     if (act || holding) {
