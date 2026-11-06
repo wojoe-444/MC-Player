@@ -101,7 +101,8 @@ module.exports = function makeMining(S, api, log) {
           await bot.lookAt(v(n.x + 0.5, n.y + 1.6, n.z + 0.5), true); bot.setControlState('forward', true)
           const t0 = Date.now(); while (Date.now() - t0 < 1500) { await S.wait(100); const q = S.flo(bot.entity.position); if (q.x === n.x && q.z === n.z && q.y === n.y) { r = { ok: true }; break } }
         } catch {} finally { bot.setControlState('forward', false) }
-        if (!r.ok) r = await S.goto(new goals.GoalBlock(n.x, n.y, n.z), { dig: false, ms: 12000, escalate: false })
+        // (the old escalating go-to stays the fallback: without it every shaft since #89 stopped at y62-70 with 'step did not land')
+        if (!r.ok) r = await S.goto(new goals.GoalBlock(n.x, n.y, n.z), { dig: false, ms: 12000 })
         if (!r.ok) { why.push('step did not land'); await S.wait(200); continue }
         moved = true; dirIdx = (dirIdx + t) % 4
         if (t) turns++
@@ -211,7 +212,7 @@ module.exports = function makeMining(S, api, log) {
           await bot.lookAt(v(b.x + 0.5, b.y + 1.6, b.z + 0.5), true); bot.setControlState('forward', true); bot.setControlState('jump', true)
           const t0 = Date.now(); while (Date.now() - t0 < 1600) { await S.wait(100); const q = S.flo(bot.entity.position); if (q.x === b.x && q.z === b.z && q.y === b.y) { g = { ok: true }; break } }
         } catch {} finally { bot.setControlState('forward', false); bot.setControlState('jump', false) }
-        if (!g.ok) g = await S.goto(new goals.GoalBlock(b.x, b.y, b.z), { dig: false, ms: 12000, escalate: false })
+        if (!g.ok) g = await S.goto(new goals.GoalBlock(b.x, b.y, b.z), { dig: false, ms: 12000 })
         if (!g.ok) continue
         moved = true; dirIdx = (dirIdx + t) % 4
       }
