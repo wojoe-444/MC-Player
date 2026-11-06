@@ -166,7 +166,8 @@ module.exports = function makeGoals(S, M, api, log) {
   G.steps = steps
 
   // ---------- decide & run ----------
-  const NIGHT_SKIP = new Set(['wood-stock', 'scout', 'hunt-memory', 'food', 'grove', 'seeds', 'farm', 'tend', 'fish', 'string', 'berries', 'harvest', 'tidy', 'pursue'])
+  // (restock too: walking out to the chests by night got OzoGo444 shot by a skeleton, 23:34)
+  const NIGHT_SKIP = new Set(['restock', 'wood-stock', 'scout', 'hunt-memory', 'food', 'grove', 'seeds', 'farm', 'tend', 'fish', 'string', 'berries', 'harvest', 'tidy', 'pursue'])
   // tool-kit, iron-smelt, furnace and cook walk to a table or furnace at home: from the mine that walk is up the shaft first. At 03:15
   // tool-kit went for the table 49 blocks straight above the tunnel, the escalating go-to pillared up through an aquifer and the bot drowned
   const SURFACE = new Set(['tool-kit', 'iron-smelt', 'furnace', 'cook', 'harvest', 'berries', 'tend', 'seeds', 'farm', 'grove', 'light-home', 'tidy', 'wood-stock', 'scout', 'hunt-memory', 'food', 'fish', 'storage', 'stash', 'restock', 'night-home', 'rebed', 'take-cover', 'wood'])
