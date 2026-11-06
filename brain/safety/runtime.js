@@ -429,7 +429,9 @@ module.exports = function install({
             // pulled the controls the other way and the bot stood still while the creeper walked up and blew (18:21, 20 hp on the surface)
             // mobs that are already on us, healthy, combat on: the combat reflex fights, kites and breaks out of a ring itself. A pathfinder flee on top of it
             // pulled the controls the other way and ran the bot down a dead-end corridor into four zombies (arena, zombies-4: 1 death in 4, hp 20 -> 0.7).
-            const combatFights = !!bot._combat && e.name !== 'creeper' && bot.health > C.minFightHealth && nearestThreatDist() <= 8
+            // only while combat really is engaged (a live threat it can hurt or be hurt by): a zombie behind a wall left safety skipping the
+            // flee and holding the scheduler for 6 minutes (02:01, 'flee skipped' every 5 s, autopilot stalled)
+            const combatFights = !!bot._combat && e.name !== 'creeper' && bot.health > C.minFightHealth && nearestThreatDist() <= 8 && (typeof bot._combat.engaged !== 'function' || bot._combat.engaged())
             if (combatFights) slogOnce('flee-skip', `flee skipped: combat fights ${e.name} (${d.reason}), health ${Math.round(bot.health)}`, 5000)
             if (!(e.name === 'creeper' && bot._combat) && !combatFights) await retreat(L, e, d)
           }
