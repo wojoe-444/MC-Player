@@ -581,7 +581,8 @@ module.exports = function plan(G, S, M, api, log) {
       // the four tunnels from this bottom are dug out: walking them again mines nothing (06:56, "tunnel 40 blocks, mined 0" in 11 s).
       // Two empty walks in a row: a new level 8 blocks further down the same shaft, which becomes the shaft bottom
       if (t.mined === 0 && t.len >= 30) st.mineEmpty = (st.mineEmpty || 0) + 1; else if (t.mined > 0) st.mineEmpty = 0
-      if ((st.mineEmpty || 0) >= 2 && st.mine && st.mine.bottom && st.mine.bottom[1] > -48) {
+      // not below y4: the deepslate caves under that killed the bot at y-8 (two skeleton arrows, 23:26), and iron is best around y16
+      if ((st.mineEmpty || 0) >= 2 && st.mine && st.mine.bottom && st.mine.bottom[1] - 8 >= 4) {
         const target = st.mine.bottom[1] - 8
         const r = await M.descend(target, { maxSteps: 40, dir0: st.mine.dir0 })
         const b = S.flo(bot.entity.position)
