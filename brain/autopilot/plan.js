@@ -843,7 +843,9 @@ module.exports = function plan(G, S, M, api, log) {
       // corner columns close nothing (no mob gets through a diagonal between two wall blocks) and one at 187,71,-295 could not be
       // placed from inside (the only neighbour face points outward), so the step came back for it every ten minutes
       const corner = (x === x0 - 1 || x === x1 + 1) && (z === z0 - 1 || z === z1 + 1)
-      if (edge && !corner && !doors.some(d => x === d.x && z === d.z)) { walls.push(v(x, y, z)); walls.push(v(x, y + 1, z)) }
+      // corners back in (arrows and line of sight pass a missing corner: OzoGo444 was shot at its bed through one, 23:34); a corner that
+      // will not take a block is dropped from the plan after three tries (st.shelterSkip), so it cannot hold the step forever
+      if (edge && !doors.some(d => x === d.x && z === d.z) && !(corner && (st.shelterSkip || []).includes(x + ',' + z))) { walls.push(v(x, y, z)); walls.push(v(x, y + 1, z)) }
       roof.push(v(x, y + 2, z))
     }
     // the floor too: inside, under the doorway, under the cell in front of it and the two cells beside that one. Holes there (taken out
@@ -911,6 +913,7 @@ module.exports = function plan(G, S, M, api, log) {
         // something solid to place against: below first, then the sides, then above
         const ref = [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]].map(([dx, dy, dz]) => [S.block(p.offset(dx, dy, dz)), v(-dx, -dy, -dz)]).find(([b]) => b && b.boundingBox === 'block' && !CONTAINER.test(b.name) && !/door|_bed$|crafting_table/.test(b.name))
         if (ref && await S.placeAgainst(ref[0], ref[1], it)) placed++
+        else if (pl.box && (p.x === pl.box.x0 - 1 || p.x === pl.box.x1 + 1) && (p.z === pl.box.z0 - 1 || p.z === pl.box.z1 + 1)) { const k = p.x + ',' + p.z; st.shelterTries = st.shelterTries || {}; st.shelterTries[k] = (st.shelterTries[k] || 0) + 1; if (st.shelterTries[k] >= 3) { st.shelterSkip = (st.shelterSkip || []).concat([k]) } }
       }
     }
     // a torch inside, so nothing spawns next to the bed
