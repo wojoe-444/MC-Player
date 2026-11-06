@@ -79,6 +79,7 @@ module.exports = function register(api) {
       last = { at: new Date().toISOString(), bot: bot.username, role: (G && G.role) || 'hillclimber', step: G && G.lastStep, hp: Math.round(bot.health), food: bot.food,
         time: bot.time && bot.time.timeOfDay, sleeping: !!bot.isSleeping, home: G && G.state && G.state.home, bag,
         armor: bot.inventory.slots.slice(5, 9).filter(Boolean).map(i => i.name),
+        xp: bot.experience ? { level: bot.experience.level || 0, points: bot.experience.points || 0, progress: Math.round((bot.experience.progress || 0) * 1000) / 1000 } : null,
         inv: { held: bot.quickBarSlot, slots: bot.inventory.slots.map((it, s) => it ? { s, n: it.name, c: it.count } : null).filter(Boolean) },
         me: d.me, spawnable: (d.dark || []).length, torches: d.torches.length, top: !!a, pov: !!b,
         lookingAt: info && info.lookingAt, inView: info && info.entitiesInView }

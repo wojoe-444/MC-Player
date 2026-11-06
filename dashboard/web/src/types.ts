@@ -17,6 +17,8 @@ export type BotStatus = {
   torches?: number
   lookingAt?: { block: string; dist: number } | null
   /** slot-level inventory (mineflayer slot numbers: 5-8 armor, 9-35 main, 36-44 hotbar, 45 offhand); published by the bot */
+  /** experience: level, total points, progress 0..1 toward the next level; published by the bot's senses module */
+  xp?: { level: number; points: number; progress: number } | null
   inv?: { slots: { s: number; n: string; c: number; d?: number }[]; held: number }
   _img?: { top?: number; pov?: number; slice?: number }
 }

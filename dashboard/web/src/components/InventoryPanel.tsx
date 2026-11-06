@@ -2,11 +2,30 @@ import { useState } from "react"
 import { InfoIcon } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ago, useNow } from "@/useDashboard"
 import type { BotStatus } from "@/types"
 
 type Stack = { n: string; c: number }
+
+/** Experience level, progress toward the next level, and total points. */
+function XpBar({ xp }: { xp: BotStatus["xp"] }) {
+  if (!xp) {
+    return <p className="text-xs text-muted-foreground">Experience: not published yet. It appears once the bot's senses module writes <code className="font-mono">xp</code> to views/latest.json.</p>
+  }
+  const pct = Math.round(Math.max(0, Math.min(1, xp.progress)) * 100)
+  return (
+    <div className="flex max-w-md flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted-foreground">Experience</span>
+        <Badge>level {xp.level}</Badge>
+        <span className="text-xs text-muted-foreground tabular-nums">{xp.points} points · {pct}% to level {xp.level + 1}</span>
+      </div>
+      <Progress value={pct} aria-label={`Experience progress to level ${xp.level + 1}`} />
+    </div>
+  )
+}
 
 const pretty = (n: string) => n.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase())
 const SINGLE = /(_pickaxe|_axe|_shovel|_hoe|_sword|_helmet|_chestplate|_leggings|_boots|_bed|bucket|shield|bow|crossbow|elytra|shears|flint_and_steel|fishing_rod|totem|boat|minecart)$/
@@ -69,6 +88,7 @@ export function InventoryPanel({ status }: { status: BotStatus }) {
             The bot currently reports item totals, not which slot holds what. Stacks below are the totals split into plausible stacks, so hotbar, offhand and armor positions are unknown. It switches to the real layout once the bot adds <code className="font-mono">inv</code> to its views/latest.json.
           </AlertDescription>
         </Alert>
+        <XpBar xp={status.xp} />
         <div className="grid w-fit grid-cols-9 gap-1">{cells.map((s, i) => <Slot key={i} stack={s} />)}</div>
         {(status.armor ?? []).length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
@@ -93,6 +113,7 @@ export function InventoryPanel({ status }: { status: BotStatus }) {
         <Badge variant={heldStack ? "default" : "outline"}>{heldStack ? `${pretty(heldStack.n)} × ${heldStack.c}` : "empty hand"}</Badge>
         <span className="text-xs text-muted-foreground">hotbar slot {held + 1} · snapshot {ago(age)}</span>
       </div>
+      <XpBar xp={status.xp} />
       <div className="flex flex-wrap items-start gap-6">
         <div className="flex flex-col gap-1">
           <span className="text-xs text-muted-foreground">Armor</span>
