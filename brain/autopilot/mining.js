@@ -99,7 +99,7 @@ module.exports = function makeMining(S, api, log) {
         let r = { ok: false }
         try {
           await bot.lookAt(v(n.x + 0.5, n.y + 1.6, n.z + 0.5), true); bot.setControlState('forward', true)
-          const t0 = Date.now(); while (Date.now() - t0 < 1500) { await S.wait(100); const q = S.flo(bot.entity.position); if (q.x === n.x && q.z === n.z && q.y === n.y) { r = { ok: true }; break } }
+          const t0 = Date.now(); while (Date.now() - t0 < 1500) { await S.wait(100); const q = bot.entity.position; if (Math.hypot(q.x - (n.x + 0.5), q.z - (n.z + 0.5)) < 0.45 && Math.floor(q.y) === n.y) { r = { ok: true }; break } }
         } catch {} finally { bot.setControlState('forward', false) }
         // (the old escalating go-to stays the fallback: without it every shaft since #89 stopped at y62-70 with 'step did not land')
         if (!r.ok) r = await S.goto(new goals.GoalBlock(n.x, n.y, n.z), { dig: false, ms: 12000 })
@@ -145,7 +145,14 @@ module.exports = function makeMining(S, api, log) {
       let r = await S.clearCell(c1); if (r !== 'ok') { reason = 'clear-' + r; break }
       r = await S.clearCell(c0); if (r !== 'ok') { reason = 'clear-' + r; break }
       if (!floorOk(c0)) { const f = await M.fill(c0.offset(0, -1, 0)); if (!f) { reason = 'nofloor'; break } }
-      const g = await S.goto(new goals.GoalBlock(c0.x, c0.y, c0.z), { dig: false, ms: 10000 })
+      // one block forward, walked directly (the pathfinder timed out on the single step again and again and every tunnel ended 'stuck'
+      // after 3-7 blocks, 12:19-14:00); the go-to only as the fallback
+      let g = { ok: false }
+      try {
+        await bot.lookAt(v(c0.x + 0.5, c0.y + 1.6, c0.z + 0.5), true); bot.setControlState('forward', true)
+        const t0 = Date.now(); while (Date.now() - t0 < 2000) { await S.wait(100); const q = bot.entity.position; if (Math.hypot(q.x - (c0.x + 0.5), q.z - (c0.z + 0.5)) < 0.45 && Math.floor(q.y) === c0.y) { g = { ok: true }; break } }
+      } catch {} finally { bot.setControlState('forward', false) }
+      if (!g.ok) g = await S.goto(new goals.GoalBlock(c0.x, c0.y, c0.z), { dig: false, ms: 10000 })
       if (!g.ok) { reason = 'stuck'; break }
       done++
       if (i % 3 === 0) await S.pickup(5, 2500)
@@ -210,7 +217,7 @@ module.exports = function makeMining(S, api, log) {
         let g = { ok: false }
         try {
           await bot.lookAt(v(b.x + 0.5, b.y + 1.6, b.z + 0.5), true); bot.setControlState('forward', true); bot.setControlState('jump', true)
-          const t0 = Date.now(); while (Date.now() - t0 < 1600) { await S.wait(100); const q = S.flo(bot.entity.position); if (q.x === b.x && q.z === b.z && q.y === b.y) { g = { ok: true }; break } }
+          const t0 = Date.now(); while (Date.now() - t0 < 1600) { await S.wait(100); const q = bot.entity.position; if (Math.hypot(q.x - (b.x + 0.5), q.z - (b.z + 0.5)) < 0.45 && Math.floor(q.y) === b.y) { g = { ok: true }; break } }
         } catch {} finally { bot.setControlState('forward', false); bot.setControlState('jump', false) }
         if (!g.ok) g = await S.goto(new goals.GoalBlock(b.x, b.y, b.z), { dig: false, ms: 12000 })
         if (!g.ok) continue
