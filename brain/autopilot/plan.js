@@ -530,7 +530,7 @@ module.exports = function plan(G, S, M, api, log) {
           // never here when here is near a place the bot gave up (deaths, the zombie spawner pocket under home): the fallback after a
           // round of skipped spots dug a new shaft 6 blocks from it and a zombie killed the bot down there (06:29 shaft, 06:45 death)
           { const f2 = S.flo(bot.entity.position)
-            if ((st.avoidMines || []).some(q => Math.hypot(f2.x - q[0], f2.z - q[2]) < (q[3] || 48))) { st.mineSkips = 0; st.mineSpot = (st.mineSpot || 0) + 1; G.cool.iron = Date.now() + 20 * 60000; G.save(); note('mine: no spot away from the avoided places this round, iron paused 20 min'); return false } }
+            if ((st.avoidMines || []).some(q => Math.hypot(f2.x - q[0], f2.z - q[2]) < (q[3] || 48))) { st.mineSkips = 3;   /* the land-site scan runs on the next pass */ st.mineSpot = (st.mineSpot || 0) + 1; G.cool.iron = Date.now() + 20 * 60000; G.save(); note('mine: no spot away from the avoided places this round, iron paused 20 min'); return false } }
           const entry = bot.entity.position.floored(), dir0 = st.mineDir == null ? 0 : st.mineDir
           const r = await M.descend(20, { maxSteps: 120, dir0 })
           const bottom = bot.entity.position.floored()
