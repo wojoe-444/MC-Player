@@ -334,7 +334,12 @@ module.exports = function watchdog(ap, api, log) {
       if (first || (t !== 'safety' && t !== 'wd-retreat' && now - (W.lastRetreatAt || 0) > 15000)) {
         W.lastRetreatAt = now; W.reflexes = (W.reflexes || 0) + 1
         // retreat to the bot's own home bed (the fixed -1051,151,2320 was a shelter in an earlier world: the walk went nowhere)
-        const hm = ap.G && ap.G.state && ap.G.state.home, SH = hm ? new (require('vec3').Vec3)(hm[0], hm[1], hm[2]) : new (require('vec3').Vec3)(-1051, 151, 2320)
+        const hm = ap.G && ap.G.state && ap.G.state.home, V3 = require('vec3').Vec3
+        let SH = hm ? new V3(hm[0], hm[1], hm[2]) : new V3(-1051, 151, 2320)
+        // down its own mine: up its own shaft to the entry, not straight for a home 100 blocks off (06:52-06:55: that walk went under the
+        // sea at y49 from the shaft at 213,-388 and the bot drowned)
+        try { const mn = ap.G.state.mine, me = bot.entity.position
+          if (mn && mn.entry) { const e = new V3(mn.entry[0], mn.entry[1], mn.entry[2]); if (Math.hypot(e.x - me.x, e.z - me.z) < Math.hypot(SH.x - me.x, SH.z - me.z)) SH = e } } catch {}
         const filler = bot.inventory.items().filter(i => FILLER_RE.test(i.name)).reduce((s, i) => s + i.count, 0)
         const msg = `cave reflex #${W.reflexes}: ${seen.map(e => e.name).slice(0, 3).join('+') || 'ranged hit'} in sight underground at ${bot.entity.position.floored()} (hp ${Math.round(bot.health)}, filler ${filler}); task ${t} cancelled, retreating to shelter`
         log('REFLEX', msg)
