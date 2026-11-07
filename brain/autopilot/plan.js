@@ -1203,6 +1203,8 @@ module.exports = function plan(G, S, M, api, log) {
       const path = (st.mine.path || []).map(q => v(...q))
       if (path.length > 3) {
         let i = path.reduce((bi, q, k) => (S.dist(q.offset(0.5, 0, 0.5)) < S.dist(path[bi].offset(0.5, 0, 0.5)) ? k : bi), 0)
+        // out along a tunnel: to the nearest stair cell first (16 blocks off at 12:40, and the stairs were skipped)
+        if (S.dist(path[i].offset(0.5, 0, 0.5)) >= 4 && S.dist(path[i]) < 48) { const q = path[i]; await S.goto(new goals.GoalNear(q.x, q.y, q.z, 1), { dig: false, ms: 60000, escalate: false }) }
         log('PLAN', `goSurface: stairs from cell ${i}/${path.length} (${path[i]}), ${S.dist(path[i].offset(0.5, 0, 0.5)).toFixed(1)} away`)
         if (S.dist(path[i].offset(0.5, 0, 0.5)) < 4) {
           let fails = 0
