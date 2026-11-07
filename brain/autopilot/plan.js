@@ -556,7 +556,11 @@ module.exports = function plan(G, S, M, api, log) {
           { const f2 = S.flo(bot.entity.position)
             if ((st.avoidMines || []).some(q => Math.hypot(f2.x - q[0], f2.z - q[2]) < (q[3] || 48))) { st.mineSkips = 3;   /* the land-site scan runs on the next pass */ st.mineSpot = (st.mineSpot || 0) + 1; G.cool.iron = Date.now() + 20 * 60000; G.save(); note('mine: no spot away from the avoided places this round, iron paused 20 min'); return false } }
           const entry = bot.entity.position.floored(), dir0 = st.mineDir == null ? 0 : st.mineDir
-          const r = await M.descend(20, { maxSteps: 120, dir0 })
+          // a shaft cut short by the step's time budget is kept as far as it got (05:39: 35 blocks dug to y30, the budget ran out, nothing
+          // was recorded, and the next trip started a fresh staircase); the next trip walks down it and carries on from there
+          let r
+          try { r = await M.descend(20, { maxSteps: 120, dir0 }) }
+          finally { const b = bot.entity.position.floored(); if (!st.mine && b.y <= 56 && entry.y >= h.y - 10 && b.y < entry.y - 4) { st.mine = { entry: [entry.x, entry.y, entry.z], bottom: [b.x, b.y, b.z], dir0, since: Date.now(), partial: true }; G.save() } }
           const bottom = bot.entity.position.floored()
           note('mine: dug the shaft from ' + entry + ' down to y' + bottom.y + ' ' + JSON.stringify(r))
           // stopped near the top (a cave right under the site, 'no floor' on every side): this site is no good, the scan must not pick it again
