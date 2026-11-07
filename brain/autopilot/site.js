@@ -106,7 +106,8 @@ module.exports = function site(G, S, M, api, log) {
       for (const p of lv) { const b = S.block(p); if (b && LV.test(b.name) && await dig(b, true)) { const a = S.block(p); if (a && S.isAir(a)) leaves++ } }
     }
     // down again: the pillar block goes, and the stump cell is soil again for the sapling
-    if (stand) { const pb = S.block(stand); if (pb && pb.name === (cfg.pillar || 'cobblestone')) { bot.setControlState('sneak', false); await dig(pb) } await wait(500) }
+    // (forced: its own block just set down; planks count as a built block, and the plain dig refused it at 05:03 and left the pillar)
+    if (stand) { const pb = S.block(stand); if (pb && pb.name === (cfg.pillar || 'cobblestone')) { bot.setControlState('sneak', false); if (!(await dig(pb))) await S.digBlock(pb, { force: true }) } await wait(500) }
     return { logs, leaves, left: column().length }
   }
 
