@@ -59,6 +59,7 @@ module.exports = function pursue(G, S, M, api, log, helpers) {
     if (r) await S.craft(name, n)
     return cnt(name) >= n
   }
+  const ironUnitsLow = () => (cnt('raw_iron') + cnt('iron_ingot') + cnt('iron_block') * 9) < 32   // the iron step mines while below this
   function current() { for (const g of goalList()) { const [name, n] = Array.isArray(g) ? g : [g, 1]; if (cnt(name) < n && !(st.goalsDone || []).includes(name)) return { name, n } } return null }
 
   // the pickaxe each tool tier needs (SOURCES[..].tool): a goal blocked by tier pursues that pickaxe first
@@ -80,6 +81,9 @@ module.exports = function pursue(G, S, M, api, log, helpers) {
     }
     const src = next.src, before = cnt(next.name)
     if (src.ore) {
+      // with a mine, ores come from the iron step's trips (its stairs, its dusk and dawn rules, its 20-block tunnels): pursue's own walk
+      // down by a cave route and 48-block tunnel kept it below at nightfall, and creepers at the shaft entry killed it (14:42)
+      if (st.mine && st.mine.bottom && (st.mine.path || []).length > 3 && ironUnitsLow()) { note(`pursue ${goal.name}: ${next.name} comes from the mine trips`); G.cool.pursue = Date.now() + 20 * 60000; return false }
       // ores come through the one established shaft (the iron step digs it); without it, digging down from wherever the bot stands breached
       // new holes and ran into water
       if (!(st.mine && st.mine.bottom) && Math.floor(bot.entity.position.y) > src.y + 6) { note(`pursue ${goal.name}: waiting for the mine shaft`); G.cool.pursue = Date.now() + 10 * 60000; return false }
