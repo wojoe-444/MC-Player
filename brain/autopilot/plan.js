@@ -201,7 +201,7 @@ module.exports = function plan(G, S, M, api, log) {
       const ok = await S.craft('shield', 1); const it = S.items().find(i => i.name === 'shield'); if (it) { try { await bot.equip(it, 'off-hand') } catch {} }
       note('shield ' + (ok ? 'made and worn' : 'craft failed')); return ok } },
     { id: 'iron-smelt', need: () => cnt('raw_iron') >= 3 || (cnt('raw_iron') >= 1 && nextGearCost() != null && ironUnits() >= nextGearCost()), cool: 60000,   // (fewer than 3 when that is what the next armor piece needs: the shield takes 1)
-      run: async () => { const got = await S.smelt('raw_iron', cnt('raw_iron')); note('smelted iron ' + got); return got > 0 } },
+      run: async () => { const got = await S.smelt('raw_iron', cnt('raw_iron')); note('smelted iron ' + got); G.dayCount('ingots', got); return got > 0 } },
     // Walter 2026-11-06: no iron tools, they waste iron (they went with every death). Stone tools are the default; iron goes into armor
     // (and the shield). The one iron pickaxe is made in the tunnel when an ore that needs it (diamond, gold, redstone, emerald) is in sight.
     { id: 'iron-gear', need: () => ARMOR.some(([n, c, s]) => !S.has(n) && !(worn(s) && worn(s).name === n) && cnt('iron_ingot') >= c), run: async () => {
@@ -653,6 +653,7 @@ module.exports = function plan(G, S, M, api, log) {
       // through the deep caves, and zombies killed the bot at y-8 (00:17)
       const t = await M.tunnel(st.mineDir, 20, { targets: /^(deepslate_)?(iron|coal|copper|gold|diamond|redstone|lapis)_ore$/, torchEvery: 6, stop: () => S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 || (farMine() && daylightLeft() < 2600) || (nextGearCost() != null && ironUnits() >= nextGearCost()) })
       note(`mine: tunnel ${t.len} blocks, mined ${t.mined}, iron +${ironUnits() - before} (${t.reason})`)
+      G.dayCount('iron', Math.max(0, ironUnits() - before)); G.dayCount('tunnels', 1)
       if (ironUnits() - before >= 3) st.mineDeaths = 0   // a good haul: the shaft is worth keeping
       // the four tunnels from this bottom are dug out: walking them again mines nothing (06:56, "tunnel 40 blocks, mined 0" in 11 s).
       // Two empty walks in a row: a new level 8 blocks further down the same shaft, which becomes the shaft bottom
@@ -807,7 +808,21 @@ module.exports = function plan(G, S, M, api, log) {
   // ---- loop breaker (Walter 2026-11-03: the goal is hillclimbing, not a no-cheats run): three deaths in one spot within 30 min, or 25 min with no
   // step succeeding, or stuck far below home with no pickaxe -> teleport home and reset the respawn point to the home bed. Logged, never silent. ----
   st.deathLog = (st.deathLog || []).filter(d => Date.now() - d[3] < 30 * 60000)
-  const onDeathLoop = () => { try { const p = bot.entity.position; st.deathLog = (st.deathLog || []).concat([[Math.floor(p.x), Math.floor(p.y), Math.floor(p.z), Date.now()]]).slice(-10); G.save() } catch {} }
+  // progress per in-game day (Walter: judge it by what it gets done, not by deaths alone): iron mined, ingots smelted, tunnels, deaths, and
+  // armor worn at the day's end. One line per day in the log and st.dayStats (the last 30 days).
+  G.dayCount = (k, n) => { try { const d = (bot.time && bot.time.day) || 0; if (!st.dayStat || st.dayStat.day !== d) dayRoll(d); st.dayStat[k] = (st.dayStat[k] || 0) + n } catch {} }
+  const dayRoll = (d) => {
+    if (st.dayStat && st.dayStat.day != null) {
+      const armor = ['head', 'torso', 'legs', 'feet'].filter(sl => worn(sl)).map(sl => worn(sl).name.replace(/_(helmet|chestplate|leggings|boots)$/, '')).join('/') + (hasShield() ? '+shield' : '')
+      const done = { ...st.dayStat, armor: armor || 'none' }
+      st.dayStats = (st.dayStats || []).concat([done]).slice(-30)
+      note(`day ${done.day}: iron mined ${done.iron || 0}, ingots ${done.ingots || 0}, tunnels ${done.tunnels || 0}, deaths ${done.deaths || 0}, armor ${done.armor}`)
+    }
+    st.dayStat = { day: d }; G.save()
+  }
+  { const dayTimer = setInterval(() => { try { const d = (bot.time && bot.time.day) || 0; if (!st.dayStat || st.dayStat.day !== d) dayRoll(d) } catch {} }, 30000)
+    const prev = G.dispose; G.dispose = () => { clearInterval(dayTimer); if (prev) prev() } }
+  const onDeathLoop = () => { try { G.dayCount('deaths', 1) } catch {} try { const p = bot.entity.position; st.deathLog = (st.deathLog || []).concat([[Math.floor(p.x), Math.floor(p.y), Math.floor(p.z), Date.now()]]).slice(-10); G.save() } catch {} }
   bot.on('death', onDeathLoop)
   let lastDone = G.done || 0, lastDoneAt = Date.now()
   // the watchdog's last rung (its own fixes exhausted: thrashing between steps while mobs keep preempting, 17:20-17:37 under home at night)
