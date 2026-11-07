@@ -467,6 +467,17 @@ module.exports = function plan(G, S, M, api, log) {
       const h = home(), y = Math.floor(bot.entity.position.y)
       // water or lava on every side, three times running (17:05: a spot under home by an aquifer, 15 minutes of retries): this site is done.
       // Back to the surface; the shaft is given up and the next one starts at another spot around home.
+      // first a level 8 further down the same shaft (twice at most): the aquifer at y20 under 150,-298 ended the only dry shaft in
+      // reach at 03:37, and no other site was found for two hours after
+      if ((st.mineBlocked || 0) >= 3 && st.mine && st.mine.bottom && st.mine.bottom[1] - 8 >= 4 && (st.mine.wetDrops || 0) < 2) {
+        st.mine.wetDrops = (st.mine.wetDrops || 0) + 1; G.save()
+        const bb = v(...st.mine.bottom); if (S.dist(bb) > 3) await S.goto(new goals.GoalNear(bb.x, bb.y, bb.z, 1), { dig: false, ms: 90000, escalate: false })
+        if (S.dist(bb) <= 4) {
+          const r = await M.descend(st.mine.bottom[1] - 8, { maxSteps: 40, dir0: st.mine.dir0 })
+          const b = S.flo(bot.entity.position)
+          if (b.y < st.mine.bottom[1] - 3) { st.mine.bottom = [b.x, b.y, b.z]; st.mineBlocked = 0; st.mineEmpty = 0; G.save(); note(`mine: water all round at this level, new level at y${b.y} in the same shaft (${JSON.stringify(r)})`); return true }
+        }
+      }
       if ((st.mineBlocked || 0) >= 3) {
         // remembered as wet underground, so the land-site scan does not pick it again (it chose the same flooded site twice, 10:20 and 10:46)
         { const e = st.mine && st.mine.entry ? st.mine.entry : [Math.floor(bot.entity.position.x), 0, Math.floor(bot.entity.position.z)]; st.wetSites = (st.wetSites || []).concat([[e[0], e[2]]]).slice(-40) }
@@ -508,7 +519,7 @@ module.exports = function plan(G, S, M, api, log) {
               const score = dry - Math.hypot(c.x - h.x, c.z - h.z) / 12          // far from water first, then nearer home
               if (!best || score > best.score) best = { ...c, dry, score }
             }
-            if (best && best.dry >= 12) { st.mineSite = [best.x, best.top + 1, best.z]; st.mineSkips = 0; G.save(); note(`mine: land site ${best.x},${best.top + 1},${best.z} picked, ${Math.round(best.dry)} blocks from the nearest water`) }
+            if (best && best.dry >= 8) { st.mineSite = [best.x, best.top + 1, best.z]; st.mineSkips = 0; G.save(); note(`mine: land site ${best.x},${best.top + 1},${best.z} picked, ${Math.round(best.dry)} blocks from the nearest water`) }
             else note('mine: no dry land site found within 72 of home')
           }
           // a chosen site (st.mineSite: the land spot farthest from open water, 2026-11-05; every shaft dug by the sea flooded) comes first
