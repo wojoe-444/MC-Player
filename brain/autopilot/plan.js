@@ -368,10 +368,16 @@ module.exports = function plan(G, S, M, api, log) {
       for (let round = 0; round < chests.length + 2 && plan().length; round++) {
         let pos = chests[round]
         if (!pos) {
-          await S.goto(new goals.GoalNear(h.x, h.y, h.z, 4), { dig: false, ms: 60000 })
           if (!S.has('chest')) await S.craft('chest', 1)
-          const placed = S.has('chest') ? await S.placeNear('chest') : null
-          if (!placed) break
+          // a few places around the house, not just one: by the shelter every cell is kept clear, and with no chest placed the bag's
+          // rubble was dropped on the ground (179 items at 13:25, against Walter's no-item-piles rule)
+          let placed = null
+          for (const [ox, oz] of [[0, 0], [6, 0], [-6, 0], [0, 6], [0, -6]]) {
+            if (!S.has('chest') || placed) break
+            await S.goto(new goals.GoalNear(h.x + ox, h.y, h.z + oz, ox || oz ? 1 : 4), { dig: false, ms: 40000, escalate: false })
+            placed = await S.placeNear('chest')
+          }
+          if (!placed) { note('stash: chests full and no spot found for the new chest'); break }
           pos = placed.position; note('stash: new home chest at ' + pos)
         }
         const r = await S.goto(new goals.GoalLookAtBlock(pos, bot.world, { reach: 3.5 }), { dig: false, ms: 60000 }); if (!r.ok) continue
