@@ -581,6 +581,15 @@ module.exports = function plan(G, S, M, api, log) {
           G.save()
         }
       }
+      // underground but nowhere near the shaft bottom (a walk down that ended in a flooded cave at y40 over 211,-426, 10:20-10:26: three
+      // tunnels started there, each 'water'): to the bottom first, and up and out if that fails; tunnels only start at the bottom
+      if (st.mine && st.mine.bottom && !st.mine.partial && bot.entity.position.y < 57) {
+        const bb = v(...st.mine.bottom)
+        if (S.dist(bb) > 8 && Math.abs(bot.entity.position.y - bb.y) > 4) {
+          const r = await S.goto(new goals.GoalNear(bb.x, bb.y, bb.z, 2), { dig: false, ms: 90000 })
+          if (!r.ok && S.dist(bb) > 8) { st.mine.fails = (st.mine.fails || 0) + 1; G.save(); const up = await M.goSurface(); note('mine: could not get to the shaft bottom from y' + Math.floor(bot.entity.position.y) + ', back up (' + up + ')'); return false }
+        }
+      }
       // a shaft cut short by the time budget (#114) is dug on down to y20 from where it stopped, before any tunnel (06:25: it tunnelled at
       // y50 instead, under the new site at 213,-388)
       if (st.mine && st.mine.partial && st.mine.bottom && bot.entity.position.y < 57 && Math.floor(bot.entity.position.y) > 22 && S.dist(v(...st.mine.bottom)) < 4) {
