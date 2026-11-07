@@ -477,7 +477,7 @@ module.exports = function plan(G, S, M, api, log) {
       if (cnt('wheat') >= 3) await S.craft('bread', Math.floor(cnt('wheat') / 3))
       note(`harvest: ${n} wheat cut and replanted, bread ${cnt('bread')}`); return n > 0 } },
 
-    { id: 'iron', budget: 600000, need:() => !(farMine() && (daylightLeft() < 7000 || ((bot.time && bot.time.timeOfDay) || 0) < 2000) && bot.entity.position.y > 56) && !(S.isNight() && bot.entity.position.y > 56) && tier('pickaxe') >= 2 && spareTools() && cnt('torch') >= 12 && S.foodPoints() + S.rawFood() * 2 >= 6 && ironUnits() < 32 && S.freeSlots() > 6 && !!home(), cool: 60000, run: async () => {
+    { id: 'iron', budget: 600000, need:() => !(farMine() && (daylightLeft() < 4500 || ((bot.time && bot.time.timeOfDay) || 0) < 2000) && bot.entity.position.y > 56) && !(S.isNight() && bot.entity.position.y > 56) && tier('pickaxe') >= 2 && spareTools() && cnt('torch') >= 12 && S.foodPoints() + S.rawFood() * 2 >= 6 && ironUnits() < 32 && S.freeSlots() > 6 && !!home(), cool: 60000, run: async () => {
       // ONE established mine (Walter: a player builds one staircase and routes to it, instead of breaching the surface again and again).
       // st.mine = { entry: surface cell where the staircase starts, bottom: where it ends, path: cells walked on the way down }.
       // Going down = walk to the entry and down the existing stairs; only the very first trip (or a lost shaft) digs a new one.
