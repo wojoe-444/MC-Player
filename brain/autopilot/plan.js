@@ -501,12 +501,11 @@ module.exports = function plan(G, S, M, api, log) {
               for (; i < path.length && fails < 4; i++) {
                 S.check()
                 const q = path[i]
-                let rr = await S.goto(new goals.GoalBlock(q.x, q.y, q.z), { dig: false, ms: 8000, escalate: false })
-                if (!rr.ok) { for (const c of [q.offset(0, 1, 0), q]) { const bl = S.block(c); if (bl && bl.boundingBox === 'block' && !S.isLiquid(bl)) await S.digBlock(bl, { force: true }).catch(() => false) }
-                  rr = await S.goto(new goals.GoalBlock(q.x, q.y, q.z), { dig: false, ms: 8000, escalate: false }) }
-                if (!rr.ok) fails++
+                if (!(await M.stairStep(q))) fails++; else fails = 0
               }
               log('PLAN', `mine: stairs down to cell ${i - 1}/${path.length}, ${fails} fails, at ${S.flo(bot.entity.position)}`)
+              // stuck on the stairs: no cave route to the bottom instead (12:30 and 13:10 it went off toward the sea at y48 that way)
+              if (fails >= 4) { st.mine.fails = (st.mine.fails || 0) + 1; G.save(); const up = await M.goSurface(); note('mine: the stairs are blocked at y' + Math.floor(bot.entity.position.y) + ', back up (' + up + ')'); return false }
             } }
           const r = await S.goto(new goals.GoalNear(b.x, b.y, b.z, 2), { dig: false, ms: 150000 })
           note(`mine: walked down the shaft to y${Math.floor(bot.entity.position.y)} (${r.ok ? 'ok' : r.err || r.why})`)
@@ -1186,6 +1185,19 @@ module.exports = function plan(G, S, M, api, log) {
   const prevDispose = G.dispose
   G.dispose = () => { try { bot.removeListener('death', onDeathPlace) } catch {} if (prevDispose) prevDispose() }
 
+  // one recorded stair cell: walk onto it; if that fails, clear the solid cells on the straight way there (feet and head level, the
+  // bot's own stairs: a 2-cell gap in the record and scaffold dirt/diorite set into the stairs stopped the walk down at y42, 13:09)
+  M.stairStep = async (q) => {
+    let rr = await S.goto(new goals.GoalBlock(q.x, q.y, q.z), { dig: false, ms: 8000, escalate: false })
+    if (rr.ok) return true
+    const f = S.flo(bot.entity.position), cells = []
+    let x = f.x, z = f.z
+    while (x !== q.x || z !== q.z) { if (x !== q.x) x += Math.sign(q.x - x); else z += Math.sign(q.z - z); const y = Math.max(q.y, Math.min(f.y, q.y + 1)); cells.push(v(x, y, z)) }
+    cells.push(q)
+    for (const c of cells) for (const cc of [c, c.offset(0, 1, 0)]) { const bl = S.block(cc); if (bl && bl.boundingBox === 'block' && !S.isLiquid(bl) && !S.hazardNear(cc, 1).lava && !S.hazardNear(cc, 1).water) await S.digBlock(bl, { force: true }).catch(() => false) }
+    rr = await S.goto(new goals.GoalBlock(q.x, q.y, q.z), { dig: false, ms: 8000, escalate: false })
+    return !!rr.ok
+  }
   M.goSurface = async () => {
     if (S.skyVisible()) return 'already up'
     // at the shaft's own entry (or above it) is up, sky or not: the entry at 219,88,-402 is under a tree, and standing there read as 'no
@@ -1211,12 +1223,7 @@ module.exports = function plan(G, S, M, api, log) {
           for (; i >= 0 && fails < 4; i--) {
             S.check()
             const q = path[i]; if (S.dist(q.offset(0.5, 0, 0.5)) < 0.7) continue
-            let rr = await S.goto(new goals.GoalBlock(q.x, q.y, q.z), { dig: false, ms: 8000, escalate: false })
-            if (!rr.ok) {
-              for (const c of [q, q.offset(0, 1, 0)]) { const bl = S.block(c); if (bl && bl.boundingBox === 'block' && !S.isLiquid(bl)) await S.digBlock(bl, { force: true }).catch(() => false) }
-              rr = await S.goto(new goals.GoalBlock(q.x, q.y, q.z), { dig: false, ms: 8000, escalate: false })
-            }
-            if (!rr.ok) fails++
+            if (!(await M.stairStep(q))) fails++; else fails = 0
           }
           log('PLAN', `goSurface: stairs walk ended at cell ${Math.max(i, 0)} with ${fails} fails, at ${S.flo(bot.entity.position)}`)
           if (S.skyVisible() || atTop()) return 'via the stairs'
