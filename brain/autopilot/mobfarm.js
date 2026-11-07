@@ -72,7 +72,7 @@ module.exports = function mobfarm(G, S, M, api, log) {
     const k = v(...c.killSpot)
     if (S.dist(k.offset(0.5, 0, 0.5)) > 0.8) {
       const r = await S.goto(new goals.GoalBlock(k.x, k.y, k.z), { dig: false, ms: 60000, escalate: false })
-      if (!r.ok && S.dist(k.offset(0.5, 0, 0.5)) > 1.2) { note('mob farm: could not reach the kill spot'); return 0 }
+      if (!r.ok && S.dist(k.offset(0.5, 0, 0.5)) > 1.2) { note('mob farm: could not reach the kill spot'); return { hits: 0, kills: 0 } }
     }
     const sw = sword(); if (sw) { try { await bot.equip(sw, 'hand') } catch {} }
     let hits = 0, kills = 0, idle = 0
@@ -130,7 +130,11 @@ module.exports = function mobfarm(G, S, M, api, log) {
 
   return { id: 'mob-farm', budget: 150000, cool: 15000, need: () => {
       const c = read(); if (!c || bot.isSleeping) return false
-      return victims(c).length > 0 || (chestFull() && Date.now() - (st.mobChestAt || 0) > 120000)
+      // after a pass that hit nothing (mobs still falling, or out of reach above the slabs) wait a minute before the next one, unless a
+      // new mob has dropped in: back-to-back empty passes thrashed between the farm and home (05:01, 8 switches in 2 min)
+      const vs = victims(c)
+      if (Date.now() < (st.mobIdleUntil || 0) && vs.every(e => (st.mobIdleIds || []).includes(e.id))) return chestFull() && Date.now() - (st.mobChestAt || 0) > 120000
+      return vs.length > 0 || (chestFull() && Date.now() - (st.mobChestAt || 0) > 120000)
     }, run: async () => {
       const c = read(); if (!c) return false
       await getSword(c)
@@ -138,6 +142,7 @@ module.exports = function mobfarm(G, S, M, api, log) {
       let r = { hits: 0, kills: 0 }
       try { if (victims(c).length) r = await killPass(c) } finally { bot._mobFarmWork = false }
       st.mobChestAt = Date.now()
+      if (!r.hits) { st.mobIdleUntil = Date.now() + 60000; st.mobIdleIds = victims(c).map(e => e.id) } else st.mobIdleUntil = 0
       const moved = await emptyFarmChest(c)
       st.mobFarm = { at: Date.now(), hits: (st.mobFarm && st.mobFarm.hits || 0) + r.hits, kills: (st.mobFarm && st.mobFarm.kills || 0) + r.kills }
       note(`mob farm: ${r.kills} mobs finished (${r.hits} hits)${moved ? ', moved ' + moved + ' items to the overflow chests' : ''}${st.mobChestFull ? ', farm chest full' : ''}`)
