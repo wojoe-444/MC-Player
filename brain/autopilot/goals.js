@@ -208,6 +208,10 @@ module.exports = function makeGoals(S, M, api, log) {
         await S.wait(5000)
         return
       }
+      // down in its own mine with the iron step only cooling down: wait there, not walk the 100 blocks home to light ground and back
+      // (09:11, after a tunnel at y21 under 213,-388)
+      { const ir = steps.find(x => x.id === 'iron')
+        if (ir && G.role !== 'assistant' && st.mine && bot.entity.position.y < 56) { let ok = false; try { ok = !!ir.need() } catch {} if (ok) { G.lastStep = 'iron'; await S.wait(5000); return } } }
       // idle by day: extend the lit area around home (dark ground is where the creepers and skeletons come from) before wandering off
       const lh = steps.find(x => x.id === 'light-home')
       if (lh && G.role !== 'assistant' && st.home && S.count('torch') >= 8 && Date.now() - (G.idleLightAt || 0) > 60000) { G.idleLightAt = Date.now(); G.lastStep = 'light-home'; note('nothing to do: lighting more ground around home'); st.lightAt = 0; S.stepDeadline = Date.now() + 150000; try { await lh.run() } catch (e) { if (S.isAbort(e)) throw e } finally { S.stepDeadline = 0 } return }
