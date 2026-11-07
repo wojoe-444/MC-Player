@@ -120,7 +120,7 @@ module.exports = function makeMining(S, api, log) {
   // stop(): optional predicate to end early. Returns {len, mined, reason}.
   M.tunnel = async (dirIdx, len, { targets = ORE_RE, stop = null, torchEvery = 7, minY = -999 } = {}) => {
     const [dx, dz] = DIRS[dirIdx % 4]
-    let done = 0, mined = 0, reason = 'length', plugged = 0
+    let done = 0, mined = 0, reason = 'length', plugged = 0, resyncs = 0
     for (let i = 0; i < len; i++) {
       S.check()
       if (stop && stop()) { reason = 'stop'; break }
@@ -157,6 +157,16 @@ module.exports = function makeMining(S, api, log) {
           if (!hopped && Date.now() - t0 > 700 && q.distanceTo(p0) < 0.2) { hopped = true; bot.setControlState('jump', true); await S.wait(250); bot.setControlState('jump', false) } }
       } catch {} finally { bot.setControlState('forward', false) }
       if (!g.ok) g = await S.goto(new goals.GoalBlock(c0.x, c0.y, c0.z), { dig: false, ms: 10000 })
+      // held in place in front of cells that read as air: a ghost block (mineflayer marks a dug block air at once, even when the server
+      // kept it). Every tunnel since 05:49 ended 'stuck' this way after 3-7 blocks. A punch (start + cancel digging) on the two cells
+      // makes the server send their real state; then the same step again, three times per tunnel at most
+      if (!g.ok && resyncs < 3) {
+        resyncs++
+        for (const c of [c0, c1]) { try { bot._client.write('block_dig', { status: 0, location: c, face: 1 }); bot._client.write('block_dig', { status: 1, location: c, face: 1 }) } catch {} }
+        bot.setControlState('forward', false); await S.wait(600)
+        api.log('autopilot', `TUNNEL resync ${c0}: now ${(S.block(c0) || {}).name}/${(S.block(c1) || {}).name}`)
+        i--; continue
+      }
       if (!g.ok) { try { const q = bot.entity.position, nm = (o) => { const b = S.block(o); return b ? b.name : '?' }; api.log('autopilot', `TUNNEL stuck at ${q.x.toFixed(2)},${q.y.toFixed(2)},${q.z.toFixed(2)} onGround ${bot.entity.onGround} -> c0 ${c0} ${nm(c0)}/${nm(c1)} floor ${nm(c0.offset(0, -1, 0))}, here ${nm(S.flo(q))}/${nm(S.flo(q).offset(0, 1, 0))}, goto ${g.err || g.why || ''}`) } catch {} reason = 'stuck'; break }
       done++
       if (i % 3 === 0) await S.pickup(5, 2500)
