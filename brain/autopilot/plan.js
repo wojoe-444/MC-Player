@@ -1084,6 +1084,9 @@ module.exports = function plan(G, S, M, api, log) {
     return (st.placed || []).filter(q => now - q[4] > 10 * 60000 && SCAFFOLD.test(q[3])).map(q => v(q[0], q[1], q[2])).filter(p => {
       const b = S.block(p); if (!b || !SCAFFOLD.test(b.name)) return false
       if (inBox(p, hb) || nearList(p, st.farm, 1) || nearList(p, st.grove, 1)) return false
+      // near home only: scaffold left out on the routes to the far mine sent it 90 blocks out among the skeletons, and it died there
+      // (186-204,66-69,-379..-390, 15:59 and 16:05)
+      { const h1 = home(); if (h1 && Math.hypot(p.x - h1.x, p.z - h1.z) > 40) return false }
       // nothing in or around the shelter (walls, roof, floor, the ground at the door): it took the floor out by the door (22:31)
       // ...but only the shelter's own cells: pillars the escalating go-to left against its walls and on its roof are scaffold like any other
       // (a 4-high column at 192,-293 and blocks on the roof let the walk home end up on the roof, 03:26)
