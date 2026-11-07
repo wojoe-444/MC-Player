@@ -120,7 +120,9 @@ module.exports = function plan(G, S, M, api, log) {
     { id: 'restock', budget: 120000, need: () => !!home() && Date.now() > (st.restockAt || 0) && (tier('pickaxe') < 1 || cnt(cobbleRe) < 8 || cnt('torch') < 8 || S.foodPoints() < 8 || S.logs() + S.planks() < 4), cool: 60000, run: async () => {
       st.restockAt = Date.now() + 3 * 60000
       const h = home()
-      const chests = bot.findBlocks({ matching: ids(/^chest$/), maxDistance: 16, count: 6, point: h })
+      // the home chests at floor level only: two chests in the hollow under the shelter floor (188/191,68,-292) cannot be reached from the
+      // house, and the walk for them ended on the shelter roof, stuck, three times (06:58-07:06)
+      const chests = bot.findBlocks({ matching: ids(/^chest$/), maxDistance: 16, count: 10, point: h }).filter(p => Math.abs(p.y - h.y) <= 1).slice(0, 6)
       if (!chests.length) return false
       const want = [[cobbleRe, 48], [/_log$/, 16], [/_planks$/, 8], [/^stick$/, 8], [/^torch$/, 64], [/^(coal|charcoal)$/, 32], [/^(bread|dried_kelp|cooked_[a-z_]+|baked_potato|apple|sweet_berries|carrot)$/, 32], [/_pickaxe$|_sword$|_axe$|^shield$|_(helmet|chestplate|leggings|boots)$/, 9], [/^crafting_table$/, 1], [/^furnace$/, 1], [/_sapling$/, 8], [/^(raw_iron|iron_ingot)$/, 64], [/^dirt$/, 16], [/^(string|fishing_rod)$/, 8]]
       let took = 0
@@ -362,7 +364,7 @@ module.exports = function plan(G, S, M, api, log) {
         }
         return out }
       let moved = 0
-      const chests = bot.findBlocks({ matching: ids(/^chest$/), maxDistance: 12, count: 12, point: h })
+      const chests = bot.findBlocks({ matching: ids(/^chest$/), maxDistance: 12, count: 16, point: h }).filter(p => Math.abs(p.y - h.y) <= 1).slice(0, 12)   // (floor level only, as restock)
       for (let round = 0; round < chests.length + 2 && plan().length; round++) {
         let pos = chests[round]
         if (!pos) {
