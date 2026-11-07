@@ -64,6 +64,9 @@ module.exports = function plan(G, S, M, api, log) {
   // never go underground with a single pickaxe and no way to make another: that stranded the bot at y-22 with no tool and no wood (2026-11-03)
   const spareTools = () => S.count(/^(stone|iron|diamond)_pickaxe$/) >= 2 || (cnt(cobbleRe) >= 3 && (S.count('stick') >= 2 || S.logs() >= 1 || S.items().some(i => /_planks$/.test(i.name) && i.count >= 2)))
   // a trip away from home only starts with enough daylight to come back (died at dusk 80 blocks out with 2 hp, 23:24)
+  // a mine far from home (the dry sites are ~100 blocks out): the trip home takes a couple of minutes and the bot must be back before dark.
+  // It came up at the shaft at dusk and a zombie pack and a skeleton killed it on the walk home (13:44)
+  const farMine = () => { try { const h = home(); return !!(st.mine && st.mine.entry && h && Math.hypot(st.mine.entry[0] - h.x, st.mine.entry[2] - h.z) > 48) } catch { return false } }
   const daylightLeft = () => { const t = bot.time && bot.time.timeOfDay; return typeof t === 'number' && t < 11500 ? 11500 - t : 0 }
   const ironUnits = () => cnt('iron_ingot') + cnt('raw_iron')
   const ARMOR = [['iron_chestplate', 8, 'torso'], ['iron_leggings', 7, 'legs'], ['iron_helmet', 5, 'head'], ['iron_boots', 4, 'feet']]
@@ -470,7 +473,7 @@ module.exports = function plan(G, S, M, api, log) {
       if (cnt('wheat') >= 3) await S.craft('bread', Math.floor(cnt('wheat') / 3))
       note(`harvest: ${n} wheat cut and replanted, bread ${cnt('bread')}`); return n > 0 } },
 
-    { id: 'iron', budget: 600000, need:() => !(S.isNight() && bot.entity.position.y > 56) && tier('pickaxe') >= 2 && spareTools() && cnt('torch') >= 12 && S.foodPoints() + S.rawFood() * 2 >= 6 && ironUnits() < 32 && S.freeSlots() > 6 && !!home(), cool: 60000, run: async () => {
+    { id: 'iron', budget: 600000, need:() => !(farMine() && daylightLeft() < 7000 && bot.entity.position.y > 56) && !(S.isNight() && bot.entity.position.y > 56) && tier('pickaxe') >= 2 && spareTools() && cnt('torch') >= 12 && S.foodPoints() + S.rawFood() * 2 >= 6 && ironUnits() < 32 && S.freeSlots() > 6 && !!home(), cool: 60000, run: async () => {
       // ONE established mine (Walter: a player builds one staircase and routes to it, instead of breaching the surface again and again).
       // st.mine = { entry: surface cell where the staircase starts, bottom: where it ends, path: cells walked on the way down }.
       // Going down = walk to the entry and down the existing stairs; only the very first trip (or a lost shaft) digs a new one.
@@ -640,7 +643,7 @@ module.exports = function plan(G, S, M, api, log) {
       const before = ironUnits()
       // 20 blocks, not 40: the walk back to the shaft stays in its own tunnels. A bottom 45 blocks off its entry sent the pathfinder
       // through the deep caves, and zombies killed the bot at y-8 (00:17)
-      const t = await M.tunnel(st.mineDir, 20, { targets: /^(deepslate_)?(iron|coal|copper|gold|diamond|redstone|lapis)_ore$/, torchEvery: 6, stop: () => S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 })
+      const t = await M.tunnel(st.mineDir, 20, { targets: /^(deepslate_)?(iron|coal|copper|gold|diamond|redstone|lapis)_ore$/, torchEvery: 6, stop: () => S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 || (farMine() && daylightLeft() < 2600) })
       note(`mine: tunnel ${t.len} blocks, mined ${t.mined}, iron +${ironUnits() - before} (${t.reason})`)
       if (ironUnits() - before >= 3) st.mineDeaths = 0   // a good haul: the shaft is worth keeping
       // the four tunnels from this bottom are dug out: walking them again mines nothing (06:56, "tunnel 40 blocks, mined 0" in 11 s).
@@ -659,6 +662,11 @@ module.exports = function plan(G, S, M, api, log) {
       // blocked tunnels (water, lava): just branch another way next time, from the same shaft bottom; no new surface breach
       if (t.len === 0 && /water|lava|hazard|clear-fail|blocked/.test(String(t.reason))) { st.mineBlocked = (st.mineBlocked || 0) + 1; G.save() } else st.mineBlocked = 0
       if (S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 || ironUnits() >= 24) { const up = await M.goSurface(); note('mine: back up ' + up) }
+      else if (farMine() && daylightLeft() < 2600) {
+        const up = await M.goSurface(); const h = home()
+        note('mine: dusk, heading home from the far mine (' + up + ')')
+        if (h && S.skyVisible() !== null) await S.goto(new goals.GoalNear(h.x, h.y, h.z, 3), { dig: false, ms: 120000 })
+      }
       return true } }
   ]
 
