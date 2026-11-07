@@ -272,7 +272,7 @@ module.exports = function plan(G, S, M, api, log) {
       let placed = 0
       for (const p of missing) {
         if (placed >= 16 || cnt('torch') < 2 || (R > 24 && daylightLeft() < 1500)) break
-        const r = await S.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { dig: false, ms: 30000 }); if (!r.ok) continue
+        const r = await S.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { dig: false, ms: 20000, escalate: false }); if (!r.ok) continue
         const g = S.block(p.offset(0, -1, 0)), b = S.block(p)
         if (g && b && S.isAir(b) && await S.placeAgainst(g, v(0, 1, 0), 'torch')) placed++
       }
@@ -298,7 +298,7 @@ module.exports = function plan(G, S, M, api, log) {
       if (placed === missing.length) for (const p of dark.sort((a, b) => S.dist(a) - S.dist(b))) {
         if (filled >= 8 || cnt('torch') < 2) break
         if (lit.some(q => q.distanceTo(p) < 8)) continue
-        const r = await S.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { dig: false, ms: 25000 }); if (!r.ok) continue
+        const r = await S.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { dig: false, ms: 20000, escalate: false }); if (!r.ok) continue
         const g = S.block(p.offset(0, -1, 0))
         if (g && await S.placeAgainst(g, v(0, 1, 0), 'torch')) { filled++; lit.push(p) }
       }
@@ -331,7 +331,7 @@ module.exports = function plan(G, S, M, api, log) {
             if (darkNear) continue
             const b = S.block(t); if (!b || !/torch/.test(b.name)) continue
             // forced: torches count as built blocks, so the plain dig refused every one after the walk out to it (05:24-05:26, 90 s a torch)
-            if (await S.mine(b, { dig: false, force: true })) { removed++; gone.add(k(t)) }
+            if (await S.mine(b, { dig: false, force: true, escalate: false })) { removed++; gone.add(k(t)) }
           }
           if (removed) await S.pickup(6, 3000)
         }
