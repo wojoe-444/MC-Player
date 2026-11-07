@@ -1188,6 +1188,7 @@ module.exports = function plan(G, S, M, api, log) {
       const path = (st.mine.path || []).map(q => v(...q))
       if (path.length > 3) {
         let i = path.reduce((bi, q, k) => (S.dist(q.offset(0.5, 0, 0.5)) < S.dist(path[bi].offset(0.5, 0, 0.5)) ? k : bi), 0)
+        log('PLAN', `goSurface: stairs from cell ${i}/${path.length} (${path[i]}), ${S.dist(path[i].offset(0.5, 0, 0.5)).toFixed(1)} away`)
         if (S.dist(path[i].offset(0.5, 0, 0.5)) < 4) {
           let fails = 0
           for (; i >= 0 && fails < 4; i--) {
@@ -1200,6 +1201,7 @@ module.exports = function plan(G, S, M, api, log) {
             }
             if (!rr.ok) fails++
           }
+          log('PLAN', `goSurface: stairs walk ended at cell ${Math.max(i, 0)} with ${fails} fails, at ${S.flo(bot.entity.position)}`)
           if (S.skyVisible() || atTop()) return 'via the stairs'
         }
       }
