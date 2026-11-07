@@ -541,6 +541,9 @@ class Reach {
     const it = this.scaffoldItem(); if (!it) return false
     const ref = this.blk(f.x, f.y - 1, f.z)
     if (!ref || ref.boundingBox !== 'block') return false
+    // a torch (or grass, a flower) in the feet cell: the block cannot go there, so it goes first. The server refused the scaffold block
+    // into a wall torch 30 times running in OzoGo444's shaft (08:09-08:10) and the climb stalled
+    { const fb = this.blk(f.x, f.y, f.z); if (fb && fb.name !== 'air' && fb.name !== 'cave_air' && fb.boundingBox === 'empty' && !this.isHazard(fb) && !/water|lava/.test(fb.name)) { try { await bot.dig(fb, true) } catch {} await this.ticks(4, run) } }
     try {
       markPlacing(bot, 4000)
       await bot.equip(it, 'hand')
