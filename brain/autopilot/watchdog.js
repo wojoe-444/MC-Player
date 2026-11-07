@@ -347,7 +347,13 @@ module.exports = function watchdog(ap, api, log) {
         if (first) { try { fs.appendFileSync(lessonsFile, `\n- ${new Date().toISOString().slice(0, 10)} ${hhmm()} [watchdog] ${msg}.`) } catch {} }
         try {
           scheduler.submit({ name: 'wd-retreat', key: 'wd-retreat', priority: PRIORITY.RETREAT, onUserStop: 'cancel', replace: true,
-            async run(ctx) { await api.gotoNear({ pos: SH, radius: 3, label: 'shelter', ctx, ms: 120000 }); return { status: 'done' } } })
+            async run(ctx) {
+              // the target as of now, not as of the submit: a retreat queued before a death resumed after the respawn at home and ran the bot
+              // 100 blocks back out to the mine entry, into a zombie pack (16:05-16:06)
+              let T = hm ? new V3(hm[0], hm[1], hm[2]) : SH
+              try { const mn = ap.G.state.mine, me = bot.entity.position; if (mn && mn.entry && me.y < 60) { const e = new V3(mn.entry[0], mn.entry[1], mn.entry[2]); if (Math.hypot(e.x - me.x, e.z - me.z) < Math.hypot(T.x - me.x, T.z - me.z)) T = e } } catch {}
+              if (bot.entity.position.distanceTo(T) < 4) return { status: 'done' }
+              await api.gotoNear({ pos: T, radius: 3, label: 'shelter', ctx, ms: 120000 }); return { status: 'done' } } })
         } catch (e) { log('REFLEX', 'retreat submit failed ' + e.message) }
       }
     } else if (ap.dangerUntil) {
