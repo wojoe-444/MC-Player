@@ -101,7 +101,10 @@ module.exports = function mobfarm(G, S, M, api, log) {
       free = slots - box.containerItems().length
       st.mobChestFull = free <= 4
       if (st.mobChestFull) {
-        for (const it of box.containerItems()) { if (S.freeSlots() <= 2) break; try { await box.withdraw(it.type, null, it.count); moved += it.count } catch { break } }
+        let errs = 0
+        // one stack that will not come out (items with data: enchanted bows, damaged armor) must not stop the rest (17:00: 'farm chest full'
+        // three passes running with 25 free slots in the bag and nothing moved)
+        for (const it of box.containerItems()) { if (S.freeSlots() <= 2 || errs >= 6) break; try { await box.withdraw(it.type, it.metadata == null ? null : it.metadata, it.count, it.nbt || null); moved += it.count } catch (e) { errs++; if (errs === 1) log('MOBFARM', 'withdraw ' + it.name + ': ' + e.message) } }
       }
     } catch {} finally { try { box.close() } catch {} }
     // loot already in the bag goes too: with the bag full (05:43, 0 free slots, the overflow chests full) nothing could be withdrawn,
