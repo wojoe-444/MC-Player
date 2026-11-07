@@ -125,7 +125,10 @@ module.exports = function plan(G, S, M, api, log) {
       const want = [[cobbleRe, 48], [/_log$/, 16], [/_planks$/, 8], [/^stick$/, 8], [/^torch$/, 64], [/^(coal|charcoal)$/, 32], [/^(bread|dried_kelp|cooked_[a-z_]+|baked_potato|apple|sweet_berries|carrot)$/, 32], [/_pickaxe$|_sword$|_axe$|^shield$|_(helmet|chestplate|leggings|boots)$/, 9], [/^crafting_table$/, 1], [/^furnace$/, 1], [/_sapling$/, 8], [/^(raw_iron|iron_ingot)$/, 64], [/^dirt$/, 16], [/^(string|fishing_rod)$/, 8]]
       let took = 0
       for (const cp of chests) {
-        const r = await S.goto(new goals.GoalLookAtBlock(cp, bot.world, { reach: 3.5 }), { dig: false, ms: 60000 }); if (!r.ok) continue
+        // plain walking only: the escalating go-to climbed onto the shelter roof over the home chests and stood there, stuck (06:58, 07:03)
+        let r = await S.goto(new goals.GoalLookAtBlock(cp, bot.world, { reach: 3.5 }), { dig: false, ms: 25000, escalate: false })
+        if (!r.ok) r = await S.goto(new goals.GoalNear(cp.x, cp.y, cp.z, 2), { dig: false, ms: 20000, escalate: false })
+        if (!r.ok && S.eye().distanceTo(cp.offset(0.5, 0.5, 0.5)) > 4.4) continue
         let c; S.closeWindows(); try { c = await bot.openContainer(bot.blockAt(cp)) } catch { continue }
         try {
           for (const it of c.containerItems()) {
