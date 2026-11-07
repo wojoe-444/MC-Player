@@ -1173,6 +1173,10 @@ module.exports = function plan(G, S, M, api, log) {
 
   M.goSurface = async () => {
     if (S.skyVisible()) return 'already up'
+    // at the shaft's own entry (or above it) is up, sky or not: the entry at 219,88,-402 is under a tree, and standing there read as 'no
+    // way up from y88', a reset (11:48)
+    const atTop = () => { try { if (!st.mine || !st.mine.entry) return false; const e = v(...st.mine.entry); return S.dist(e) < 4 || (bot.entity.position.y >= e.y - 1 && Math.hypot(bot.entity.position.x - e.x, bot.entity.position.z - e.z) < 12) } catch { return false } }
+    if (atTop()) return 'already up (at the shaft entry)'
     if (st.mine && st.mine.bottom) {
       // straight for the entry (going to the bottom first sent it 30 blocks down from halfway up the shaft); digging allowed on a second try
       const e = v(...st.mine.entry), b = v(...st.mine.bottom)
@@ -1196,12 +1200,12 @@ module.exports = function plan(G, S, M, api, log) {
             }
             if (!rr.ok) fails++
           }
-          if (S.skyVisible() || S.dist(e) < 4) return 'via the stairs'
+          if (S.skyVisible() || atTop()) return 'via the stairs'
         }
       }
       let r = await S.goto(new goals.GoalNear(e.x, e.y, e.z, 2), { dig: false, ms: 120000 })
       if (!r.ok && !S.skyVisible()) r = await S.goto(new goals.GoalNear(e.x, e.y, e.z, 2), { dig: true, ms: 120000 })
-      if (r.ok || S.skyVisible()) return 'via the shaft'
+      if (r.ok || S.skyVisible() || atTop()) return 'via the shaft'
     }
     const d = await M.surface()
     if (S.skyVisible()) return 'dug: ' + JSON.stringify(d)
