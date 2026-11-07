@@ -261,7 +261,8 @@ module.exports = function plan(G, S, M, api, log) {
     { id: 'light-home', budget: 180000, need: () => !!home() && cnt('torch') >= 4 && nearHome(72) && Date.now() > (st.lightAt || 0), cool: 60000, run: async () => {
       // 32 by day (64 and then 40 still took 230 s on this machine with the server alongside and the watchdog reset the bot mid-step,
       // 01:02 and 05:59), 24 near dusk
-      const h = home(), GRID = 10, R = daylightLeft() > 2500 ? 32 : 24
+      // (st._lightCenter: the light-mine step runs this same pass around the far mine's entry)
+      const h = (st._lightCenter && v(...st._lightCenter)) || home(), GRID = 10, R = st._lightCenter ? 24 : (daylightLeft() > 2500 ? 32 : 24)
       const torchIds = ids(/^(torch|wall_torch)$/)
       // the walkable top of a column (not on leaves, not in water), or null
       const surface = (x, z) => { for (let y = h.y + 20; y >= h.y - 16; y--) { const g = S.block(v(x, y - 1, z)); if (!g) return null
@@ -346,6 +347,7 @@ module.exports = function plan(G, S, M, api, log) {
           if (removed) await S.pickup(6, 3000)
         }
       }
+      if (st._lightCenter) st.lightMineLeft = dark.length - filled + (missing.length - placed); else
       st.lightAt = Date.now() + (missing.length > placed || dark.length > filled ? 60000 : 5 * 60000)
       st.lightGrid = { grid: grid.length, missing: missing.length - placed, dark: dark.length - filled }
       note(`light-home: grid ${grid.length - missing.length + placed}/${grid.length} torches within ${R}, +${placed} grid, +${filled} fill-in, ${dark.length - filled} spawnable cells left, ${removed} redundant torches taken down`)
@@ -1104,7 +1106,15 @@ module.exports = function plan(G, S, M, api, log) {
   // replaced by the light-home grid pruning (it keeps grid torches and checks the light before taking one down)
   const extraTorches = () => []
   const crowdedTorches = () => (st.placed || []).filter(q => q[3] === 'torch').map(q => v(q[0], q[1], q[2])).filter(p => { const b = S.block(p); if (!b || !/torch/.test(b.name)) return false; return bot.findBlocks({ matching: ids(/^(torch|wall_torch)$/), maxDistance: 3, count: 4, point: p }).some(o => !o.equals(p)) })
-  steps.push({ id: 'tidy', budget: 150000, cool: 300000, need: () => !S.isNight() && !!home() && (tidyList().length > 0 || extraTorches().length > 0), run: async () => {
+  // the forest round the far mine is where the skeletons are (five arrow hits and two deaths at 221-230,86-87,-360..-413 today): by day,
+  // light it the way home is lit, from the shaft's entry
+  { const lh = steps.find(x => x.id === 'light-home')
+    if (lh) steps.push({ id: 'light-mine', budget: 180000, cool: 60000, need: () => !S.isNight() && farMine() && daylightLeft() > 3500 && ((bot.time && bot.time.timeOfDay) || 0) >= 2000 && cnt('torch') >= 16 && Date.now() > (st.lightMineAt || 0), run: async () => {
+      st._lightCenter = st.mine.entry.slice()
+      try { await lh.run() } finally { st._lightCenter = null }
+      st.lightMineAt = Date.now() + ((st.lightMineLeft || 0) > 0 ? 20 : 90) * 60000; G.save()
+      return true } }) }
+  steps.push({ id: 'tidy', budget: 150000, cool: 300000, need: () => !S.isNight() && ((bot.time && bot.time.timeOfDay) || 0) >= 2000 && !!home() && (tidyList().length > 0 || extraTorches().length > 0), run: async () => {
     let n = 0
     let tn = 0
     for (const p of extraTorches().slice(0, 30)) { if (bot.findBlocks({ matching: ids(/^(torch|wall_torch)$/), maxDistance: 3, count: 4, point: p }).filter(o => !o.equals(p)).length === 0) continue; const tb = S.block(p); if (tb && await S.mine(tb, { dig: false })) tn++ }
@@ -1271,7 +1281,7 @@ module.exports = function plan(G, S, M, api, log) {
   insertAfter('furnace', [byId.torches, byId['wood-stock'], byId.wear, byId.shield, byId['iron-smelt'], byId['iron-gear']])
   insertAfter('food', ['berries', 'fish', 'rod', 'string', 'hunt-memory', 'tend'].map(id => steps.find(s => s.id === id)).concat([byId.seeds, byId.farm]))   // kelp diving dropped: it drowned the bot
   // iron before upkeep: grove, lighting and tidying kept winning every pick and the hillclimber never went mining (02:50)
-  insertAfter('coal', [byId.stash, byId.shelter, byId.iron, byId.grove, byId['light-home'], steps.find(s => s.id === 'tidy')])
+  insertAfter('coal', [byId.stash, byId.shelter, byId.iron, byId.grove, byId['light-home'], steps.find(s => s.id === 'light-mine'), steps.find(s => s.id === 'tidy')].filter(Boolean))
   insertAfter('wood-stock', [steps.find(s => s.id === 'scout'), steps.find(s => s.id === 'storage')])
   // routine work at a fixed site (site.json; Smeo444's birch farm), right after the survival basics
   try { delete require.cache[require.resolve('./site')]; insertAfter('tool-kit', [require('./site')(G, S, M, api, log)]) } catch (e) { log('PLAN', 'site not loaded: ' + e.message) }
