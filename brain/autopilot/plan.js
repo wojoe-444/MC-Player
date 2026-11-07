@@ -200,7 +200,8 @@ module.exports = function plan(G, S, M, api, log) {
     { id: 'shield', need:() => !hasShield() && cnt('iron_ingot') >= 1 && S.logs() * 4 + S.planks() >= 6, run: async () => {
       const ok = await S.craft('shield', 1); const it = S.items().find(i => i.name === 'shield'); if (it) { try { await bot.equip(it, 'off-hand') } catch {} }
       note('shield ' + (ok ? 'made and worn' : 'craft failed')); return ok } },
-    { id: 'iron-smelt', need: () => cnt('raw_iron') >= 3, cool: 60000, run: async () => { const got = await S.smelt('raw_iron', cnt('raw_iron')); note('smelted iron ' + got); return got > 0 } },
+    { id: 'iron-smelt', need: () => cnt('raw_iron') >= 3 || (cnt('raw_iron') >= 1 && nextGearCost() != null && ironUnits() >= nextGearCost()), cool: 60000,   // (fewer than 3 when that is what the next armor piece needs: the shield takes 1)
+      run: async () => { const got = await S.smelt('raw_iron', cnt('raw_iron')); note('smelted iron ' + got); return got > 0 } },
     // Walter 2026-11-06: no iron tools, they waste iron (they went with every death). Stone tools are the default; iron goes into armor
     // (and the shield). The one iron pickaxe is made in the tunnel when an ore that needs it (diamond, gold, redstone, emerald) is in sight.
     { id: 'iron-gear', need: () => ARMOR.some(([n, c, s]) => !S.has(n) && !(worn(s) && worn(s).name === n) && cnt('iron_ingot') >= c), run: async () => {
