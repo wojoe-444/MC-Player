@@ -1146,13 +1146,35 @@ module.exports = function plan(G, S, M, api, log) {
   // replaced by the light-home grid pruning (it keeps grid torches and checks the light before taking one down)
   const extraTorches = () => []
   const crowdedTorches = () => (st.placed || []).filter(q => q[3] === 'torch').map(q => v(q[0], q[1], q[2])).filter(p => { const b = S.block(p); if (!b || !/torch/.test(b.name)) return false; return bot.findBlocks({ matching: ids(/^(torch|wall_torch)$/), maxDistance: 3, count: 4, point: p }).some(o => !o.equals(p)) })
-  // the forest round the far mine is where the skeletons are (five arrow hits and two deaths at 221-230,86-87,-360..-413 today): by day,
-  // light it the way home is lit, from the shaft's entry
+  // ---- its own danger map instead of hand-written rules: every time a mob hurts it (and every death) the place is written down
+  // (st.hurtLog). A 12x12 cell with 3+ mob hits or a death in the last two days is a hotspot. By day the light-home pass runs centred on each
+  // hotspot near home and on a far mine's entry, so the dark ground the mobs come from gets lit. (2026-11-07: 28 skeleton arrows and
+  // five deaths in the forest on the way to the far mine, each answered with one more narrow rule.) ----
+  const onHurtMap = (e) => { try { if (e !== bot.entity) return
+    const p = bot.entity.position, mob = Object.values(bot.entities).some(m => m && m !== bot.entity && m.position && /^(zombie|husk|drowned|skeleton|stray|spider|cave_spider|creeper|witch|pillager|vindicator|zombie_villager|phantom|bogged|slime|enderman)$/.test(m.name || '') && m.position.distanceTo(p) < 20)
+    if (!mob) return
+    st.hurtLog = (st.hurtLog || []).filter(h => Date.now() - h[3] < 2 * 86400000).concat([[Math.floor(p.x), Math.floor(p.y), Math.floor(p.z), Date.now()]]).slice(-300) } catch {} }
+  bot.on('entityHurt', onHurtMap)
+  { const prev = G.dispose; G.dispose = () => { try { bot.removeListener('entityHurt', onHurtMap) } catch {} if (prev) prev() } }
+  const hotspots = () => {
+    const now = Date.now(), cells = new Map()
+    const add = (x, y, z, w) => { const k = Math.floor(x / 12) + ',' + Math.floor(z / 12); const c = cells.get(k) || { x: 0, y: 0, z: 0, n: 0, w: 0 }; c.x += x; c.y += y; c.z += z; c.n++; c.w += w; cells.set(k, c) }
+    for (const h of st.hurtLog || []) if (now - h[3] < 2 * 86400000) add(h[0], h[1], h[2], 1)
+    for (const d of st.deathLog || []) if (now - d[3] < 2 * 86400000) add(d[0], d[1], d[2], 3)
+    const h0 = home()
+    return [...cells.values()].filter(c => c.w >= 3).map(c => [Math.round(c.x / c.n), Math.round(c.y / c.n), Math.round(c.z / c.n), c.w])
+      .filter(c => !h0 || (Math.hypot(c[0] - h0.x, c[2] - h0.z) < 96 && Math.hypot(c[0] - h0.x, c[2] - h0.z) > 20 && c[1] > h0.y - 12))   // surface spots near home; home has its own pass
+      .sort((a, b) => b[3] - a[3])
+  }
+  G.hotspots = hotspots
   { const lh = steps.find(x => x.id === 'light-home')
-    if (lh) steps.push({ id: 'light-mine', budget: 180000, cool: 60000, need: () => !S.isNight() && farMine() && daylightLeft() > 3500 && ((bot.time && bot.time.timeOfDay) || 0) >= 2000 && cnt('torch') >= 16 && Date.now() > (st.lightMineAt || 0), run: async () => {
-      st._lightCenter = st.mine.entry.slice()
+    const centers = () => { const out = hotspots().map(c => c.slice(0, 3)); if (farMine()) out.unshift(st.mine.entry.slice()); return out.filter(c => Date.now() > ((st.litSpots || {})[c[0] + ',' + c[2]] || 0)) }
+    if (lh) steps.push({ id: 'light-mine', budget: 180000, cool: 60000, need: () => !S.isNight() && daylightLeft() > 3500 && ((bot.time && bot.time.timeOfDay) || 0) >= 2000 && cnt('torch') >= 16 && centers().length > 0, run: async () => {
+      const c = centers()[0]
+      st._lightCenter = c
       try { await lh.run() } finally { st._lightCenter = null }
-      st.lightMineAt = Date.now() + ((st.lightMineLeft || 0) > 0 ? 20 : 90) * 60000; G.save()
+      st.litSpots = st.litSpots || {}; st.litSpots[c[0] + ',' + c[2]] = Date.now() + ((st.lightMineLeft || 0) > 0 ? 20 : 120) * 60000; G.save()
+      note(`light-mine: lit round ${c.join(',')} (a danger spot: ${hotspots().length} known), ${st.lightMineLeft || 0} dark cells left`)
       return true } }) }
   steps.push({ id: 'tidy', budget: 150000, cool: 300000, need: () => !S.isNight() && ((bot.time && bot.time.timeOfDay) || 0) >= 2000 && !!home() && (tidyList().length > 0 || extraTorches().length > 0), run: async () => {
     let n = 0
