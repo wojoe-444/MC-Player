@@ -1194,6 +1194,8 @@ module.exports = function plan(G, S, M, api, log) {
   // one recorded stair cell: walk onto it; if that fails, clear the solid cells on the straight way there (feet and head level, the
   // bot's own stairs: a 2-cell gap in the record and scaffold dirt/diorite set into the stairs stopped the walk down at y42, 13:09)
   M.stairStep = async (q) => {
+    // a stair whose floor is gone (a cave opened under 220,41,-400; nothing can stand there, 13:26): a block under it first
+    { const fl = S.block(q.offset(0, -1, 0)); if (fl && fl.boundingBox !== 'block' && !S.isLiquid(fl) && M.fill) { try { await M.fill(q.offset(0, -1, 0)) } catch {} } }
     let rr = await S.goto(new goals.GoalBlock(q.x, q.y, q.z), { dig: false, ms: 8000, escalate: false })
     if (rr.ok) return true
     const f = S.flo(bot.entity.position), cells = []
