@@ -575,15 +575,19 @@ module.exports = function plan(G, S, M, api, log) {
         const bad = (d) => (st.avoidMines || []).some(q => Math.hypot(here.x + D[d][0] * 40 - q[0], here.z + D[d][1] * 40 - q[2]) < (q[3] || 48))
         for (let k = 0; k < 4 && bad(st.mineDir); k++) st.mineDir = (st.mineDir + 1) % 4 }
       const before = ironUnits()
-      const t = await M.tunnel(st.mineDir, 40, { targets: /^(deepslate_)?(iron|coal|copper|gold|diamond|redstone|lapis)_ore$/, torchEvery: 6, stop: () => S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 })
+      // 20 blocks, not 40: the walk back to the shaft stays in its own tunnels. A bottom 45 blocks off its entry sent the pathfinder
+      // through the deep caves, and zombies killed the bot at y-8 (00:17)
+      const t = await M.tunnel(st.mineDir, 20, { targets: /^(deepslate_)?(iron|coal|copper|gold|diamond|redstone|lapis)_ore$/, torchEvery: 6, stop: () => S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 })
       note(`mine: tunnel ${t.len} blocks, mined ${t.mined}, iron +${ironUnits() - before} (${t.reason})`)
       if (ironUnits() - before >= 3) st.mineDeaths = 0   // a good haul: the shaft is worth keeping
       // the four tunnels from this bottom are dug out: walking them again mines nothing (06:56, "tunnel 40 blocks, mined 0" in 11 s).
       // Two empty walks in a row: a new level 8 blocks further down the same shaft, which becomes the shaft bottom
-      if (t.mined === 0 && t.len >= 30) st.mineEmpty = (st.mineEmpty || 0) + 1; else if (t.mined > 0) st.mineEmpty = 0
+      if (t.mined === 0 && t.len >= 16) st.mineEmpty = (st.mineEmpty || 0) + 1; else if (t.mined > 0) st.mineEmpty = 0
       // not below y4: the deepslate caves under that killed the bot at y-8 (two skeleton arrows, 23:26), and iron is best around y16
       if ((st.mineEmpty || 0) >= 2 && st.mine && st.mine.bottom && st.mine.bottom[1] - 8 >= 4) {
         const target = st.mine.bottom[1] - 8
+        // from the foot of the shaft, back along its own tunnel, so each new level stays under the shaft (it used to start at the tunnel's far end)
+        { const bb = v(...st.mine.bottom); if (S.dist(bb) > 3) await S.goto(new goals.GoalNear(bb.x, bb.y, bb.z, 1), { dig: false, ms: 90000, escalate: false }) }
         const r = await M.descend(target, { maxSteps: 40, dir0: st.mine.dir0 })
         const b = S.flo(bot.entity.position)
         if (b.y < st.mine.bottom[1]) { st.mine.bottom = [b.x, b.y, b.z]; st.mineEmpty = 0; note(`mine: new level at y${b.y} below the worked-out one (${JSON.stringify(r)})`) }
