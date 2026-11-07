@@ -493,6 +493,21 @@ module.exports = function plan(G, S, M, api, log) {
         if (st.mine && st.mine.bottom) {
           const e = v(...st.mine.entry), b = v(...st.mine.bottom)
           await S.goto(new goals.GoalNear(e.x, e.y, e.z, 2), { dig: false, ms: 120000 })
+          // down by the recorded stairs, cell by cell (the go-to to the bottom took a cave route instead and stopped at y48 31 blocks off
+          // the stairs, 12:30); the go-to below finishes or stands in when there is no record
+          { const path = (st.mine.path || []).map(q => v(...q))
+            if (path.length > 3 && S.dist(path[0].offset(0.5, 0, 0.5)) < 5) {
+              let fails = 0, i = 1
+              for (; i < path.length && fails < 4; i++) {
+                S.check()
+                const q = path[i]
+                let rr = await S.goto(new goals.GoalBlock(q.x, q.y, q.z), { dig: false, ms: 8000, escalate: false })
+                if (!rr.ok) { for (const c of [q.offset(0, 1, 0), q]) { const bl = S.block(c); if (bl && bl.boundingBox === 'block' && !S.isLiquid(bl)) await S.digBlock(bl, { force: true }).catch(() => false) }
+                  rr = await S.goto(new goals.GoalBlock(q.x, q.y, q.z), { dig: false, ms: 8000, escalate: false }) }
+                if (!rr.ok) fails++
+              }
+              log('PLAN', `mine: stairs down to cell ${i - 1}/${path.length}, ${fails} fails, at ${S.flo(bot.entity.position)}`)
+            } }
           const r = await S.goto(new goals.GoalNear(b.x, b.y, b.z, 2), { dig: false, ms: 150000 })
           note(`mine: walked down the shaft to y${Math.floor(bot.entity.position.y)} (${r.ok ? 'ok' : r.err || r.why})`)
           if (!r.ok && Math.floor(bot.entity.position.y) > 56) { st.mine.fails = (st.mine.fails || 0) + 1; if (st.mine.fails >= 3) { note('mine: the shaft is lost, a new one will be dug'); st.mine = null } G.save(); return false }
