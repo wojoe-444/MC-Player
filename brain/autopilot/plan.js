@@ -451,7 +451,8 @@ module.exports = function plan(G, S, M, api, log) {
       while (ripe.length) {
         ripe.sort((a, b) => a.distanceTo(at) - b.distanceTo(at)); const p = ripe.shift(), c = S.block(p)
         if (!c || c.name !== 'wheat' || c.metadata < 7) continue
-        if (await S.mine(c, { dig: false })) { n++; const f = S.block(p.offset(0, -1, 0)); if (f && f.name === 'farmland' && cnt('wheat_seeds')) await S.placeAgainst(f, v(0, 1, 0), 'wheat_seeds') }
+        // plain walking only: crops on open farmland need no escalation, and its sidesteps spent ~50 s a stalk (05:27-05:29, 4 wheat in 2 min)
+        if (await S.mine(c, { dig: false, escalate: false })) { n++; const f = S.block(p.offset(0, -1, 0)); if (f && f.name === 'farmland' && cnt('wheat_seeds')) await S.placeAgainst(f, v(0, 1, 0), 'wheat_seeds') }
         at = bot.entity.position
       }
       await S.pickup(8, 4000)
