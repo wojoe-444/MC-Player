@@ -500,7 +500,7 @@ module.exports = function plan(G, S, M, api, log) {
           // water (10:19, iron failed x7).
           if (!st.mineSite && (st.mineSkips || 0) >= 3 && Date.now() - (st.landScanAt || 0) > 30 * 60000) {
             st.landScanAt = Date.now()
-            const G6 = 6, R = 72, cols = new Map()
+            const G6 = 8, R = 112, cols = new Map()     // (72 found nothing dry around OzoGo444's island for hours, 2026-11-07)
             for (let dx = -R; dx <= R; dx += G6) { for (let dz = -R; dz <= R; dz += G6) {
                 const x = h.x + dx, z = h.z + dz; let top = null, wet = false
                 for (let y = h.y + 30; y > h.y - 25; y--) { const b = S.block(v(x, y, z)); if (!b) { top = undefined; break } if (/water|kelp|seagrass/.test(b.name)) wet = true; if (b.boundingBox === 'block' && !/_leaves$|_log$/.test(b.name)) { top = y; break } }
@@ -520,7 +520,7 @@ module.exports = function plan(G, S, M, api, log) {
               if (!best || score > best.score) best = { ...c, dry, score }
             }
             if (best && best.dry >= 8) { st.mineSite = [best.x, best.top + 1, best.z]; st.mineSkips = 0; G.save(); note(`mine: land site ${best.x},${best.top + 1},${best.z} picked, ${Math.round(best.dry)} blocks from the nearest water`) }
-            else note('mine: no dry land site found within 72 of home')
+            else note('mine: no dry land site found within 112 of home')
           }
           // a chosen site (st.mineSite: the land spot farthest from open water, 2026-11-05; every shaft dug by the sea flooded) comes first
           const o = st.mineSite && !near(st.mineSite[0], st.mineSite[2]) ? [st.mineSite[0] - h.x, st.mineSite[2] - h.z] : OFF[(st.mineSpot || 0) % OFF.length]
