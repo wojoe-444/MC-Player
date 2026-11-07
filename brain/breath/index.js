@@ -26,6 +26,7 @@ module.exports = function register(api) {
     }
     return best
   }
+  let recovering = 0
   function release() { try { bot.setControlState('jump', false); bot.setControlState('forward', false); bot.setControlState('sprint', false) } catch {} }
   // suffocation: falling gravel/sand (or a bad step) puts the head inside a block; a player breaks it at once
   let digging = false, unburied = 0, lastErrAt = 0
@@ -123,7 +124,13 @@ module.exports = function register(api) {
     } else if (active && !wet) {
       active = false; saves++; release(); if (reflex) reflex.release('body')
       api.log('breath', `head in air again after ${Math.round((now - since) / 1000)}s`)
-    }
+      // low on air: stay with the head in air until the bar is nearly full again. The tasks walked it straight back under each time it
+      // came up for a second, with less air every time (air 15, 14, 14, 11), until it drowned in a flooded cave at y40 (10:27)
+      if (air < 17) { recovering = now; api.log('breath', `catching breath (air ${air})`) }
+    } else if (recovering && !wet) {
+      if (air >= 18 || now - recovering > 20000) { recovering = 0; if (reflex) reflex.release('body') }
+      else { bot._breathBusyUntil = now + 800; holdBody(800, 'catching breath'); try { if (bot.pathfinder && bot.pathfinder.goal) bot.pathfinder.setGoal(null) } catch {} release() }
+    } else if (recovering && wet) recovering = 0
   }
   return {
     name: 'breath',
