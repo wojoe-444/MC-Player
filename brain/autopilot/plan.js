@@ -78,6 +78,9 @@ module.exports = function plan(G, S, M, api, log) {
   const armorUp = (it) => { const m = /^([a-z]+)_(helmet|chestplate|leggings|boots)$/.exec(it.name); if (!m) return false
     const w = worn({ helmet: 'head', chestplate: 'torso', leggings: 'legs', boots: 'feet' }[m[2]]); if (!w) return true
     const wm = /^([a-z]+)_/.exec(w.name); return (ARMOR_TIER[m[1]] || 0) > (ARMOR_TIER[wm && wm[1]] || 0) }
+  // armor first: the iron for the next piece of protection, banked as soon as it is in the bag (78 ingots smelted on 11-05 went with the
+  // deaths before any armor was made). null when the shield and all four iron pieces are on.
+  const nextGearCost = () => { if (!hasShield()) return 1; const a = ARMOR.find(([n, c, sl]) => !S.has(n) && !(worn(sl) && worn(sl).name === n)); return a ? a[1] : null }
   const hasShield = () => S.has('shield') || (worn('off-hand') && worn('off-hand').name === 'shield')
 
   const steps = [
@@ -647,7 +650,7 @@ module.exports = function plan(G, S, M, api, log) {
       const before = ironUnits()
       // 20 blocks, not 40: the walk back to the shaft stays in its own tunnels. A bottom 45 blocks off its entry sent the pathfinder
       // through the deep caves, and zombies killed the bot at y-8 (00:17)
-      const t = await M.tunnel(st.mineDir, 20, { targets: /^(deepslate_)?(iron|coal|copper|gold|diamond|redstone|lapis)_ore$/, torchEvery: 6, stop: () => S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 || (farMine() && daylightLeft() < 2600) })
+      const t = await M.tunnel(st.mineDir, 20, { targets: /^(deepslate_)?(iron|coal|copper|gold|diamond|redstone|lapis)_ore$/, torchEvery: 6, stop: () => S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 || (farMine() && daylightLeft() < 2600) || (nextGearCost() != null && ironUnits() >= nextGearCost()) })
       note(`mine: tunnel ${t.len} blocks, mined ${t.mined}, iron +${ironUnits() - before} (${t.reason})`)
       if (ironUnits() - before >= 3) st.mineDeaths = 0   // a good haul: the shaft is worth keeping
       // the four tunnels from this bottom are dug out: walking them again mines nothing (06:56, "tunnel 40 blocks, mined 0" in 11 s).
@@ -665,7 +668,7 @@ module.exports = function plan(G, S, M, api, log) {
       }
       // blocked tunnels (water, lava): just branch another way next time, from the same shaft bottom; no new surface breach
       if (t.len === 0 && /water|lava|hazard|clear-fail|blocked/.test(String(t.reason))) { st.mineBlocked = (st.mineBlocked || 0) + 1; G.save() } else st.mineBlocked = 0
-      if (S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 || ironUnits() >= 24) { const up = await M.goSurface(); note('mine: back up ' + up) }
+      if (S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 || ironUnits() >= 24 || (nextGearCost() != null && ironUnits() >= nextGearCost())) { const up = await M.goSurface(); note('mine: back up ' + up + (nextGearCost() != null && ironUnits() >= nextGearCost() ? ' (iron for the next armor piece: ' + ironUnits() + ')' : '')) }
       else if (farMine() && daylightLeft() < 2600) {
         const up = await M.goSurface(); const h = home()
         note('mine: dusk, heading home from the far mine (' + up + ')')
