@@ -104,18 +104,22 @@ module.exports = function mobfarm(G, S, M, api, log) {
         for (const it of box.containerItems()) { if (S.freeSlots() <= 2) break; try { await box.withdraw(it.type, null, it.count); moved += it.count } catch { break } }
       }
     } catch {} finally { try { box.close() } catch {} }
-    if (!moved) return 0
+    // loot already in the bag goes too: with the bag full (05:43, 0 free slots, the overflow chests full) nothing could be withdrawn,
+    // so it returned here and never got to the new overflow chest, and the farm chest stayed full
+    const LOOT = /rotten_flesh|bone|arrow|string|spider_eye|gunpowder|ender_pearl|glass_bottle|redstone|glowstone|sugar|potato|carrot|iron_ingot|gold_ingot|_helmet|_chestplate|_leggings|_boots|^bow$|_sword|_shovel|emerald|^stick$|poisonous_potato|baked_potato/
+    const loot = () => S.items().some(i => LOOT.test(i.name) && !/stone_sword|^stick$|^baked_potato$/.test(i.name))
+    if (!moved && !(st.mobChestFull && loot())) return 0
     let stored = 0
     const dump = async (q) => {
       const ob = S.block(v(...q)); if (!ob || !/chest|barrel/.test(ob.name)) return false
       await S.goto(new goals.GoalNear(q[0], q[1], q[2], 2), { dig: false, ms: 40000, escalate: false })
       let b2; S.closeWindows(); try { b2 = await bot.openContainer(ob) } catch { return false }
-      try { for (const it of S.items().filter(i => !/sword|_axe|pickaxe|shovel|hoe|crafting_table|^bread$|sweet_berries|_sapling$|^stick$|_log$|cobblestone|stone$|charcoal/.test(i.name))) { try { await b2.deposit(it.type, null, it.count); stored += it.count } catch { break } } } catch {} finally { try { b2.close() } catch {} }
+      try { for (const it of S.items().filter(i => (LOOT.test(i.name) || /_shovel$/.test(i.name)) && !/stone_sword|^stick$|^baked_potato$/.test(i.name))) { try { await b2.deposit(it.type, null, it.count); stored += it.count } catch { break } } } catch {} finally { try { b2.close() } catch {} }
       return true
     }
     for (const q of c.overflow || []) await dump(q)
     // still holding loot: a new overflow chest at the next listed spot (never anywhere else, never by the farm itself)
-    if (S.items().some(i => /rotten_flesh|bone|arrow|string|spider_eye|gunpowder|ender_pearl|glass_bottle|redstone|glowstone|sugar|stick|potato|carrot|iron_ingot|_helmet|_chestplate|_leggings|_boots|bow|_sword/.test(i.name) && !/stone_sword|^stick$/.test(i.name))) {
+    if (loot()) {
       if (!S.has('chest') && S.planks() + S.logs() * 4 >= 8) { if (S.planks() < 8) await S.craft((S.items().find(i => /_log$/.test(i.name)) || { name: 'birch_log' }).name.replace(/_log$/, '_planks'), 2).catch(() => false); await S.craft('chest', 1).catch(() => false) }
       if (S.has('chest')) for (const q of c.overflowSpots || []) {
         if ((c.overflow || []).some(o => o[0] === q[0] && o[1] === q[1] && o[2] === q[2])) continue
