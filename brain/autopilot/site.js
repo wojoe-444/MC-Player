@@ -225,7 +225,8 @@ module.exports = function site(G, S, M, api, log) {
   // anything of ours left in the farm: a pillar block in a stump cell, a crafting table set down while crafting (Walter's screenshot, 00:57)
   async function cleanup(cfg) {
     const strays = bot.findBlocks({ matching: ids(new RegExp('^(' + (cfg.pillar || 'cobblestone') + '|crafting_table)$')), point: v((cfg.box.x0 + cfg.box.x1) >> 1, cfg.box.y0, (cfg.box.z0 + cfg.box.z1) >> 1), maxDistance: 24, count: 50 })
-      .filter(p => inBox(p, { ...cfg.box, y1: cfg.box.y0 + 1 }) || (p.y === cfg.box.y0 + 1 && inBox(p, { x0: cfg.box.x0 - 1, x1: cfg.box.x1 + 1, y0: p.y, y1: p.y, z0: cfg.box.z0 - 1, z1: cfg.box.z1 + 1 }) && /fence/.test((S.block(p.offset(0, -1, 0)) || {}).name || '')))   // and on top of the fence: the pathfinder's scaffold left cobblestone on it
+      .filter(p => inBox(p, { ...cfg.box, y1: cfg.box.y0 + 1 }) || (cfg.gate && /crafting_table/.test((S.block(p) || {}).name || '') && Math.abs(p.x - cfg.gate[0]) <= 1 && p.y >= cfg.box.y0 && p.y <= cfg.box.y0 + 1 && p.z >= Math.min(cfg.gate[2], cfg.box.z0) && p.z <= Math.max(cfg.gate[2], cfg.box.z0)) ||   // the lane between the gate and the farm: a table set down at 142,69,418 shut the way in (06:07-06:18)
+      (p.y === cfg.box.y0 + 1 && inBox(p, { x0: cfg.box.x0 - 1, x1: cfg.box.x1 + 1, y0: p.y, y1: p.y, z0: cfg.box.z0 - 1, z1: cfg.box.z1 + 1 }) && /fence/.test((S.block(p.offset(0, -1, 0)) || {}).name || '')))   // and on top of the fence: the pathfinder's scaffold left cobblestone on it
     let n = 0
     for (const p of strays) {
       if (eyeDist(p) > 4.2) await S.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { dig: false, ms: 20000 })
