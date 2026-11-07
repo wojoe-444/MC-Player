@@ -572,6 +572,12 @@ module.exports = function plan(G, S, M, api, log) {
           G.save()
         }
       }
+      // a shaft cut short by the time budget (#114) is dug on down to y20 from where it stopped, before any tunnel (06:25: it tunnelled at
+      // y50 instead, under the new site at 213,-388)
+      if (st.mine && st.mine.partial && st.mine.bottom && bot.entity.position.y < 57 && Math.floor(bot.entity.position.y) > 22 && S.dist(v(...st.mine.bottom)) < 4) {
+        try { const r = await M.descend(20, { maxSteps: 120, dir0: st.mine.dir0 }); note('mine: carried the shaft on down to y' + Math.floor(bot.entity.position.y) + ' ' + JSON.stringify(r)) }
+        finally { const b = S.flo(bot.entity.position); if (b.y < st.mine.bottom[1]) st.mine.bottom = [b.x, b.y, b.z]; if (b.y <= 22) delete st.mine.partial; G.save() }
+      }
       // the shaft bottom is where the tunnels meet caves: light every spawnable cell around it before tunnelling (OzoGo444 died there to a
       // zombie, a skeleton and a spider in one minute, 06:59; light from light.js, the server's light data is scrambled)
       if (bot.entity.position.y < 56 && cnt('torch') >= 8) {
