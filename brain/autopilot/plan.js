@@ -496,6 +496,10 @@ module.exports = function plan(G, S, M, api, log) {
           const r = await S.goto(new goals.GoalNear(b.x, b.y, b.z, 2), { dig: false, ms: 150000 })
           note(`mine: walked down the shaft to y${Math.floor(bot.entity.position.y)} (${r.ok ? 'ok' : r.err || r.why})`)
           if (!r.ok && Math.floor(bot.entity.position.y) > 56) { st.mine.fails = (st.mine.fails || 0) + 1; if (st.mine.fails >= 3) { note('mine: the shaft is lost, a new one will be dug'); st.mine = null } G.save(); return false }
+          // stopped halfway down (the walk timed out at y39, 10:19): no tunnels from the middle of the shaft, they ran into the water around it;
+          // the next trip carries on down from here
+          if (!r.ok && S.dist(b) > 6) { st.mine.fails = (st.mine.fails || 0) + 1; if (st.mine.fails >= 4) { note('mine: the shaft is lost, a new one will be dug'); st.mine = null } G.save(); return false }
+          if (r.ok) st.mine.fails = 0
         } else {
           // the first shaft: next to home (not inside the house), away from places where the bot died
           const OFF = [[6, 6], [-10, 6], [10, -10], [-10, -10], [0, 16], [16, 0], [-16, 0], [0, -16], [-30, 10], [-24, 24], [-40, -4], [-20, 30], [30, 24], [-36, -30], [50, 0], [0, 50], [-50, 0], [0, -50], [45, 45], [-45, 45], [45, -45], [-45, -45], [64, 20], [-64, -20], [20, -64], [-20, 64]], /* farther spots (up to ~45 out) so an avoided deadly shaft does not cover them all; a ring at 50-67 for the water and caves near home (07:48: the zombie pocket and water ruled out every closer spot) */ near = (x, z) => (st.avoid || []).some(q => Math.hypot(q[0] - x, q[2] - z) < 12) || (st.avoidMines || []).some(q => Math.hypot(q[0] - x, q[2] - z) < (q[3] || 48))   // and no new shaft within reach of a deadly old one
