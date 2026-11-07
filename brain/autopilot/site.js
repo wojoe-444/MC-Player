@@ -166,6 +166,8 @@ module.exports = function site(G, S, M, api, log) {
           if (eyeDist(p) > 4) await S.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { dig: false, ms: 30000 })
           if (await S.placeAgainst(g, v(0, 1, 0), 'chest')) { cfg.chests.push([p.x, p.y, p.z]); fs.writeFileSync(api.statePath('site.json'), JSON.stringify(cfg, null, 1)); note(`${cfg.name}: chests full, added one at ${p}`); return moved + await deposit(cfg) }
         }
+        // (11:18: 198 logs in the bag, every spot beside the last chest taken by the fence or the row itself, and nothing said)
+        note(`${cfg.name}: chests full and no free spot for a new chest (newChestSpots in site.json)`)
       }
     }
     return moved
