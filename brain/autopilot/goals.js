@@ -204,6 +204,9 @@ module.exports = function makeGoals(S, M, api, log) {
       if (S.isNight() && st.home) {
         G.lastStep = 'home'
         const h = v(st.home[0], st.home[1], st.home[2])
+        // out of the mine by its own stairs first: straight for home from y38 the escalating walk went under the sea at y48 (11:23-11:39,
+        // 16 minutes, the same place it drowned at 06:55)
+        if (S.dist(h) > 4 && G.role !== 'assistant' && bot.entity.position.y < h.y - 6 && !S.skyVisible() && M.goSurface) { const up = await M.goSurface(); note('nothing to do at night: up from the mine first (' + up + ')') }
         if (S.dist(h) > 4) { note('nothing to do at night: going home'); await S.goto(new goals.GoalNear(h.x, h.y, h.z, 2), { dig: false, ms: 60000 }) }
         await S.wait(5000)
         return
