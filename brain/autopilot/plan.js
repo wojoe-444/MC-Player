@@ -496,7 +496,9 @@ module.exports = function plan(G, S, M, api, log) {
             const wets = [...cols.values()].filter(c => c.wet || c.top == null)
             let best = null
             for (const c of cols.values()) {
-              if (c.wet || c.top == null || Math.hypot(c.x - h.x, c.z - h.z) < 14 || near(c.x, c.z) || (st.wetSites || []).some(q => Math.hypot(q[0] - c.x, q[1] - c.z) < 20)) continue
+              // (8 blocks clear of every avoided radius: a site right on the edge put the bot inside it when it got there, and the shaft was
+              // refused every round, 01:39 and 01:47)
+              if (c.wet || c.top == null || Math.hypot(c.x - h.x, c.z - h.z) < 14 || near(c.x, c.z) || (st.avoidMines || []).some(q => Math.hypot(q[0] - c.x, q[2] - c.z) < (q[3] || 48) + 8) || (st.wetSites || []).some(q => Math.hypot(q[0] - c.x, q[1] - c.z) < 20)) continue
               // never in or by the farm, the grove or anything built (it picked 177,71,-316, right by Walter's starter wheat farm, 11:29)
               if ((st.farm || []).concat(st.grove || []).some(q => Math.abs(q[0] - c.x) <= 6 && Math.abs(q[2] - c.z) <= 6)) continue
               { const tb = S.block(v(c.x, c.top, c.z)); if (!tb || /farmland|planks|cobblestone|_slab|_stairs|fence|glass|bricks|wool|chest|torch/.test(tb.name) || (S.isEstablished && S.isEstablished(tb))) continue }
