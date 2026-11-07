@@ -1032,7 +1032,7 @@ module.exports = function plan(G, S, M, api, log) {
   // ---- the home bed is a fixed point (Walter 2026-11-04: if the base blows up, use commands to put a bed back and reset the spawn). When the
   // bed block at home is gone, a bed is given if none is carried, set down at the same spot and the respawn point is set there again. ----
   steps.splice(Math.max(0, steps.findIndex(s => s.id === 'eat') + 1), 0, { id: 'rebed', budget: 90000, cool: 30000, need: () => {
-    if (!st.home) return false; const hb = S.block(v(...st.home)); return !!hb && !/_bed$/.test(hb.name) && bot.health > 6 }, run: async () => {
+    if (!st.home || Array.isArray(st.moveHome)) return false; const hb = S.block(v(...st.home)); return !!hb && !/_bed$/.test(hb.name) && bot.health > 6 }, run: async () => {   // (not while moving house: the bed is on its way)
     const h = v(...st.home)
     if (!S.items().some(i => /_bed$/.test(i.name)) && Date.now() - (st.bedGivenAt || 0) > 120000) { st.bedGivenAt = Date.now(); api.say(`/give ${bot.username} white_bed 1`); await new Promise(r => setTimeout(r, 2500)) }
     if (!S.items().some(i => /_bed$/.test(i.name))) return false
@@ -1056,6 +1056,39 @@ module.exports = function plan(G, S, M, api, log) {
 
   // ---- cover from archers: pillager crossbows and skeleton arrows killed the bot twice by the house in one minute (02:18/02:19). Without a shield the answer
   // is walls: get inside home and stay out of their line of sight until they wander off, then carry on. ----
+  // ---- moving house: st.moveHome = [x, y, z] (set by the driver or a plan) is where the bed goes next. By full daylight the bot takes
+  // its own bed down (survival-legit: the bed item drops), carries it there, sets it down, and that cell is home from then on. The
+  // shelter, the lit grid, the chests and the stash follow home on their own. (2026-11-07: home was on a wet island and every mining
+  // trip was a 100-block walk through a skeleton forest; the move puts the bed by the dry upland shaft.) ----
+  steps.splice(Math.max(0, steps.findIndex(s => s.id === 'eat') + 1), 0, { id: 'move-home', budget: 300000, cool: 60000, need: () => {
+    if (!Array.isArray(st.moveHome) || !st.home || bot.isSleeping) return false
+    const t = (bot.time && bot.time.timeOfDay) || 0
+    return t >= 1500 && t < 9000 && bot.health > 12 }, run: async () => {
+    const to = v(...st.moveHome), old = v(...st.home)
+    if (!S.items().some(i => /_bed$/.test(i.name))) {
+      // up out of a mine first, then to the old bed
+      if (!S.skyVisible() && bot.entity.position.y < old.y - 6 && M.goSurface) await M.goSurface()
+      await S.goto(new goals.GoalNear(old.x, old.y, old.z, 2), { dig: false, ms: 150000 })
+      const ob = S.block(old)
+      if (ob && /_bed$/.test(ob.name)) { await S.digBlock(ob, { force: true }).catch(() => false); await S.wait(500); await S.pickup(4, 4000) }
+      if (!S.items().some(i => /_bed$/.test(i.name))) { note('move-home: could not take the bed at ' + old); return false }
+    }
+    await S.goto(new goals.GoalNear(to.x, to.y, to.z, 1), { dig: false, ms: 200000 })
+    if (S.dist(to) > 4) { note('move-home: carrying the bed, not at ' + to + ' yet (' + S.flo(bot.entity.position) + ')'); return false }
+    const fl = S.block(to.offset(0, -1, 0)), bedItem = S.items().find(i => /_bed$/.test(i.name))
+    if (S.flo(bot.entity.position).equals(to)) { const side = [[2, 0], [-2, 0], [0, 2], [0, -2]].map(([x, z]) => to.offset(x, 0, z)).find(q => { const a = S.block(q), g = S.block(q.offset(0, -1, 0)); return a && S.isAir(a) && g && S.solid(g) }); if (side) await S.goto(new goals.GoalBlock(side.x, side.y, side.z), { dig: false, ms: 8000, escalate: false }) }
+    const ok = !!(fl && S.solid(fl) && bedItem && await S.placeAgainst(fl, v(0, 1, 0), bedItem.name))
+    const cell = ok ? [to, ...[[1, 0], [-1, 0], [0, 1], [0, -1]].map(([x, z]) => to.offset(x, 0, z))].find(q => { const b = S.block(q); return b && /_bed$/.test(b.name) }) : null
+    if (!cell) { note('move-home: could not set the bed down at ' + to); return false }
+    st.oldHomes = (st.oldHomes || []).concat([st.home]).slice(-5)
+    st.home = [cell.x, cell.y, cell.z]; st.moveHome = null
+    // what belonged to the old house is recomputed around the new one
+    st.shelterDoor = null; st._shelterBox = null; st.shelterSkip = {}; st.lightAt = 0; st.restockAt = 0; st.tables = []
+    G.save()
+    api.say(`/spawnpoint ${bot.username} ${cell.x} ${cell.y} ${cell.z}`)
+    note('move-home: home moved to ' + cell + ' (old bed ' + old + ')')
+    return true } })
+
   steps.push({ id: 'take-cover', budget: 120000, need: () => { const h = home(); if (!h || S.dist(h) > 40) return false; const hasShield = worn('off-hand') && worn('off-hand').name === 'shield'; return !hasShield && S.hostilesNear(28).some(e => /^(pillager|skeleton|stray|vindicator|evoker|witch|phantom)$/.test(e.name) && S.canSee(e)) }, cool: 15000, run: async () => {
     const h = home()
     await S.goto(new goals.GoalNear(h.x, h.y, h.z, 1), { dig: false, ms: 30000 })
