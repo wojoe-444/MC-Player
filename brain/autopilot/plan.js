@@ -1196,6 +1196,9 @@ module.exports = function plan(G, S, M, api, log) {
     cells.push(q)
     for (const c of cells) for (const cc of [c, c.offset(0, 1, 0)]) { const bl = S.block(cc); if (bl && bl.boundingBox === 'block' && !S.isLiquid(bl) && !S.hazardNear(cc, 1).lava && !S.hazardNear(cc, 1).water) await S.digBlock(bl, { force: true }).catch(() => false) }
     rr = await S.goto(new goals.GoalBlock(q.x, q.y, q.z), { dig: false, ms: 8000, escalate: false })
+    // fallen below the stairs (the shaft bottom's floor gave way into a hole at y18, 13:15): up to the cell with the escalating go-to,
+    // which pillars, but only for this short vertical gap
+    if (!rr.ok && q.y >= S.flo(bot.entity.position).y + 2 && Math.hypot(q.x + 0.5 - bot.entity.position.x, q.z + 0.5 - bot.entity.position.z) < 3) rr = await S.goto(new goals.GoalBlock(q.x, q.y, q.z), { dig: false, ms: 25000 })
     return !!rr.ok
   }
   M.goSurface = async () => {
