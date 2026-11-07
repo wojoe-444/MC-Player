@@ -330,7 +330,8 @@ module.exports = function plan(G, S, M, api, log) {
               const p = surface(t.x + dx, t.z + dz); if (p && lm3.spawnable(p) && !lmw.spawnable(p) && !avoid(p)) darkNear = true }
             if (darkNear) continue
             const b = S.block(t); if (!b || !/torch/.test(b.name)) continue
-            if (await S.mine(b, { dig: false })) { removed++; gone.add(k(t)) }
+            // forced: torches count as built blocks, so the plain dig refused every one after the walk out to it (05:24-05:26, 90 s a torch)
+            if (await S.mine(b, { dig: false, force: true })) { removed++; gone.add(k(t)) }
           }
           if (removed) await S.pickup(6, 3000)
         }
