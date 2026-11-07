@@ -355,11 +355,11 @@ module.exports = function makeSkills({ bot, api, log }) {
   }
 
   // Dig a block as a player would: get a view, dig, collect the drop.
-  S.mine = async (b, { dig = true, pick = true } = {}) => {
+  S.mine = async (b, { dig = true, pick = true, force = false } = {}) => {
     if (!(await S.approach(b, { dig }))) return false
     const h = S.hazardNear(b.position, 1)
     if (h.lava) { S.ban('b' + key(b.position), 30 * 60000); return false }
-    const ok = await S.digBlock(b)
+    const ok = await S.digBlock(b, { force })
     if (!ok) { S.ban('b' + key(b.position), 2 * 60000); return false }
     if (pick) await S.pickup(6, 4000)
     return true
