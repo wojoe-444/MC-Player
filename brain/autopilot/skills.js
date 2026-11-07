@@ -306,7 +306,7 @@ module.exports = function makeSkills({ bot, api, log }) {
   }
 
   // Get within reach with a clear view of a block. If leaves/dirt are in the way, dig the thing the crosshair hits (a player would).
-  S.approach = async (b, { dig = true, tries = 3 } = {}) => {
+  S.approach = async (b, { dig = true, tries = 3, escalate = true } = {}) => {
     for (let i = 0; i < tries; i++) {
       S.check()
       if (reachOk(b) && S.canSee(b)) return true
@@ -317,9 +317,9 @@ module.exports = function makeSkills({ bot, api, log }) {
           continue
         }
       }
-      const r = await S.goto(new goals.GoalLookAtBlock(b.position, bot.world, { reach: 4.2 }), { dig, ms: 30000 })
+      const r = await S.goto(new goals.GoalLookAtBlock(b.position, bot.world, { reach: 4.2 }), { dig, ms: escalate ? 30000 : 12000, escalate })
       if (!r.ok && !reachOk(b)) {
-        const r2 = await S.goto(new goals.GoalNear(b.position.x, b.position.y, b.position.z, 3), { dig, ms: 25000 })
+        const r2 = await S.goto(new goals.GoalNear(b.position.x, b.position.y, b.position.z, 3), { dig, ms: escalate ? 25000 : 12000, escalate })
         if (!r2.ok) { S.ban('b' + key(b.position), 3 * 60000); return false }
       }
     }
@@ -355,8 +355,8 @@ module.exports = function makeSkills({ bot, api, log }) {
   }
 
   // Dig a block as a player would: get a view, dig, collect the drop.
-  S.mine = async (b, { dig = true, pick = true, force = false } = {}) => {
-    if (!(await S.approach(b, { dig }))) return false
+  S.mine = async (b, { dig = true, pick = true, force = false, escalate = true } = {}) => {
+    if (!(await S.approach(b, { dig, escalate }))) return false
     const h = S.hazardNear(b.position, 1)
     if (h.lava) { S.ban('b' + key(b.position), 30 * 60000); return false }
     const ok = await S.digBlock(b, { force })
