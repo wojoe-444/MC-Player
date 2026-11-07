@@ -167,6 +167,7 @@ module.exports = function makeGoals(S, M, api, log) {
 
   // ---------- decide & run ----------
   // (restock too: walking out to the chests by night got OzoGo444 shot by a skeleton, 23:34)
+  const DAWN_SKIP = new Set(['iron', 'light-mine', 'wood', 'stone', 'explore', 'whimsy'])
   const NIGHT_SKIP = new Set(['restock', 'wood-stock', 'scout', 'hunt-memory', 'food', 'grove', 'seeds', 'farm', 'tend', 'fish', 'string', 'berries', 'harvest', 'tidy', 'pursue'])
   // tool-kit, iron-smelt, furnace and cook walk to a table or furnace at home: from the mine that walk is up the shaft first. At 03:15
   // tool-kit went for the table 49 blocks straight above the tunnel, the escalating go-to pillared up through an aquifer and the bot drowned
@@ -179,11 +180,15 @@ module.exports = function makeGoals(S, M, api, log) {
     // trips away from home are day work: woken in the night, the bot went for wood 30 blocks out and died to the mobs there (16:19).
     // At night it stays with what can be done at home (crafting, smelting, storage, the shaft, lighting close by).
     const night = S.isNight() && !!st.home
+    // dawn too (time 22000-1800): the night's skeletons still stand in the forest shade. OzoGo444 went for wood 70 blocks out and to its
+    // far mine at sunrise and died to arrows three times (14:04, 15:21, 15:33); trips away wait until the sun is well up
+    const tod = (bot.time && bot.time.timeOfDay) || 6000, dawn = !!st.home && (tod >= 22000 || tod < 1800)
     // role (bot profile, falling back to brain/state/role.json, per bot): Walter 2026-11-04: Smeo444 is a personal assistant on a fixed routine (base upkeep and his
     // chat requests); OzoGo444 is the hillclimber with the full step list. Missing file = hillclimber.
     if (Date.now() - (G.roleAt || 0) > 10000) { G.roleAt = Date.now(); try { const pr = api.profile ? api.profile.get() : JSON.parse(require('fs').readFileSync(api.statePath('role.json'), 'utf8')); G.role = pr.role || 'hillclimber'; G.roleSteps = Array.isArray(pr.steps) ? new Set(pr.steps) : null } catch { G.role = 'hillclimber'; G.roleSteps = null } }
     const assistant = G.role === 'assistant'
     for (const s of steps) {
+      if ((night || dawn) && G.role !== 'assistant' && (NIGHT_SKIP.has(s.id) || DAWN_SKIP.has(s.id))) continue
       if (night && NIGHT_SKIP.has(s.id)) continue
       if (assistant && !(G.roleSteps || ASSISTANT_STEPS).has(s.id)) continue
       let need = false
