@@ -565,7 +565,7 @@ module.exports = function plan(G, S, M, api, log) {
           // was recorded, and the next trip started a fresh staircase); the next trip walks down it and carries on from there
           let r
           try { r = await M.descend(20, { maxSteps: 120, dir0 }) }
-          finally { const b = bot.entity.position.floored(); if (!st.mine && b.y <= 56 && entry.y >= h.y - 10 && b.y < entry.y - 4) { st.mine = { entry: [entry.x, entry.y, entry.z], bottom: [b.x, b.y, b.z], dir0, since: Date.now(), partial: true }; G.save() } }
+          finally { const b = bot.entity.position.floored(); if (!st.mine && b.y <= 56 && entry.y >= h.y - 10 && b.y < entry.y - 4) { st.mine = { entry: [entry.x, entry.y, entry.z], bottom: [b.x, b.y, b.z], dir0, since: Date.now(), partial: true, path: (M.descendPath || []).slice(-600) }; G.save() } }
           const bottom = bot.entity.position.floored()
           note('mine: dug the shaft from ' + entry + ' down to y' + bottom.y + ' ' + JSON.stringify(r))
           // stopped near the top (a cave right under the site, 'no floor' on every side): this site is no good, the scan must not pick it again
@@ -573,7 +573,7 @@ module.exports = function plan(G, S, M, api, log) {
           // never record a shaft that starts deep under ground or was not dug at all (the fallback after a full round of skipped spots
           // could still start one in a cave; descend's 'blocked' exit has no steps count, so depth is measured by y): go home instead
           if (entry.y < h.y - 10 || bottom.y >= entry.y) { st.mineSpot = (st.mineSpot || 0) + 1; G.save(); note(`mine: no shaft recorded (entry y${entry.y}, ${entry.y - bottom.y} blocks down), heading home`); await M.goSurface(); await S.goto(new goals.GoalNear(h.x, h.y, h.z, 3), { dig: false, ms: 120000 }); return false }
-          st.mine = { entry: [entry.x, entry.y, entry.z], bottom: [bottom.x, bottom.y, bottom.z], dir0, since: Date.now() }; st.mineSkips = 0
+          st.mine = { entry: [entry.x, entry.y, entry.z], bottom: [bottom.x, bottom.y, bottom.z], dir0, since: Date.now(), path: (M.descendPath || []).slice(-600) }; st.mineSkips = 0
           G.save()
         }
       }
@@ -1166,6 +1166,26 @@ module.exports = function plan(G, S, M, api, log) {
       // out in the tunnels at the bottom's level: back along them to the foot of the stairs first. One search from a tunnel end 40 blocks
       // out to the top found no path, the escalation dug its own way up into an aquifer and the good shaft was given up (15:58, y47)
       if (Math.abs(bot.entity.position.y - b.y) <= 3 && S.dist(b) > 6) await S.goto(new goals.GoalNear(b.x, b.y, b.z, 2), { dig: false, ms: 90000, escalate: false })
+      // the recorded stairs, walked backwards one cell at a time from the nearest one (short plain steps; a stair that will not take
+      // the bot gets its two cells cleared, the shaft's own stone, and one more try)
+      const path = (st.mine.path || []).map(q => v(...q))
+      if (path.length > 3) {
+        let i = path.reduce((bi, q, k) => (S.dist(q.offset(0.5, 0, 0.5)) < S.dist(path[bi].offset(0.5, 0, 0.5)) ? k : bi), 0)
+        if (S.dist(path[i].offset(0.5, 0, 0.5)) < 4) {
+          let fails = 0
+          for (; i >= 0 && fails < 4; i--) {
+            S.check()
+            const q = path[i]; if (S.dist(q.offset(0.5, 0, 0.5)) < 0.7) continue
+            let rr = await S.goto(new goals.GoalBlock(q.x, q.y, q.z), { dig: false, ms: 8000, escalate: false })
+            if (!rr.ok) {
+              for (const c of [q, q.offset(0, 1, 0)]) { const bl = S.block(c); if (bl && bl.boundingBox === 'block' && !S.isLiquid(bl)) await S.digBlock(bl, { force: true }).catch(() => false) }
+              rr = await S.goto(new goals.GoalBlock(q.x, q.y, q.z), { dig: false, ms: 8000, escalate: false })
+            }
+            if (!rr.ok) fails++
+          }
+          if (S.skyVisible() || S.dist(e) < 4) return 'via the stairs'
+        }
+      }
       let r = await S.goto(new goals.GoalNear(e.x, e.y, e.z, 2), { dig: false, ms: 120000 })
       if (!r.ok && !S.skyVisible()) r = await S.goto(new goals.GoalNear(e.x, e.y, e.z, 2), { dig: true, ms: 120000 })
       if (r.ok || S.skyVisible()) return 'via the shaft'

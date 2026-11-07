@@ -72,6 +72,10 @@ module.exports = function makeMining(S, api, log) {
 
   // Staircase down to targetY. Returns {ok, y, reason}.
   M.descend = async (targetY, { maxSteps = 150, dir0 = null } = {}) => {
+    // every stair cell walked onto, in order: the way back up is this list walked backwards (M.goSurface), one step at a time. A single
+    // path search from the bottom to the entry 60+ blocks up found 'no path' again and again, and the shaft was dropped each time (07:29)
+    { const f = S.flo(bot.entity.position); M.descendPath = [[f.x, f.y, f.z]] }
+    const rec = (c) => { M.descendPath.push([c.x, c.y, c.z]); try { const mn = M.st && M.st.mine; if (mn) mn.path = (mn.path || []).concat([[c.x, c.y, c.z]]).slice(-600) } catch {} }
     let dirIdx = dir0 != null ? dir0 : Math.floor(Math.random() * 4)
     let steps = 0, turns = 0
     while (Math.floor(bot.entity.position.y) > targetY && steps < maxSteps) {
@@ -104,7 +108,7 @@ module.exports = function makeMining(S, api, log) {
         // (the old escalating go-to stays the fallback: without it every shaft since #89 stopped at y62-70 with 'step did not land')
         if (!r.ok) r = await S.goto(new goals.GoalBlock(n.x, n.y, n.z), { dig: false, ms: 12000 })
         if (!r.ok) { why.push('step did not land'); await S.wait(200); continue }
-        moved = true; dirIdx = (dirIdx + t) % 4
+        moved = true; dirIdx = (dirIdx + t) % 4; rec(n)
         if (t) turns++
       }
       if (!moved) return { ok: false, y: Math.floor(bot.entity.position.y), reason: 'blocked', why: why.join('; ') }
