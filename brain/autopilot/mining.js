@@ -152,6 +152,11 @@ module.exports = function makeMining(S, api, log) {
       // one block forward, walked directly (the pathfinder timed out on the single step again and again and every tunnel ended 'stuck'
       // after 3-7 blocks, 12:19-14:00); the go-to only as the fallback
       let g = { ok: false }
+      // centred in its own cell first: pressed against the side wall (x 223.9 in a tunnel along x 223) the bot's box caught the corner of
+      // the next cell's wall on every step and each one fell back to the slow go-to (08:52, y21 under 213,-388)
+      { const q = bot.entity.position, off = dx ? Math.abs(q.z - (p.z + 0.5)) : Math.abs(q.x - (p.x + 0.5))
+        if (off > 0.15) { try { await bot.lookAt(v(p.x + 0.5, p.y + 1.6, p.z + 0.5), true); bot.setControlState('forward', true); const t1 = Date.now()
+          while (Date.now() - t1 < 900) { await S.wait(50); const w = bot.entity.position; if ((dx ? Math.abs(w.z - (p.z + 0.5)) : Math.abs(w.x - (p.x + 0.5))) < 0.12) break } } catch {} finally { bot.setControlState('forward', false) } } }
       try {
         await bot.lookAt(v(c0.x + 0.5, c0.y + 1.6, c0.z + 0.5), true); bot.setControlState('forward', true)
         // a hop when it has not moved after 0.7 s: standing in a cell with a floor torch the bot sat at onGround false, held in place
