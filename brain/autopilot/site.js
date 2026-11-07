@@ -38,6 +38,8 @@ module.exports = function site(G, S, M, api, log) {
     const g = v(...cfg.gate)
     const gb = S.block(g); if (gb && /fence_gate/.test(gb.name) && gb.getProperties && !gb.getProperties().open) { try { await S.goto(new goals.GoalNear(g.x, g.y, g.z, 2), { dig: false, ms: 40000 }); await bot.activateBlock(gb) } catch {} }
     await S.goto(new goals.GoalNear(g.x, g.y, g.z, 0), { dig: false, ms: 60000 })
+    // our own crafting table in the lane between the gate and the farm blocks the way in (142,69,418, 06:07-06:18): take it back first
+    for (let z = Math.min(g.z, cfg.box.z0) + 1; z <= Math.max(g.z, cfg.box.z0); z++) { const tb = S.block(v(g.x, g.y, z)); if (tb && tb.name === 'crafting_table') { try { await S.digBlock(tb, { force: true }); await S.pickup(3, 2000) } catch {} } }
     const inner = v(g.x, g.y, cfg.box.z0 + 1)
     await S.goto(new goals.GoalNear(inner.x, inner.y, inner.z, 1), { dig: false, ms: 30000 })
     return inside(cfg)
