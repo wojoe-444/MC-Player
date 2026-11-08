@@ -22,11 +22,11 @@ npm install
 npm run dist       # or double-click build-installer.bat
 ```
 
-This builds `dist/Bot Dashboard Setup <version>.exe` (build it on Windows: embedding the icon needs the Windows tooling). Running it installs per-user (no admin prompt), adds **Start menu** and desktop shortcuts named "Bot Dashboard" with the app icon, and launches the app. Pin it from the Start menu or the taskbar as usual. The installed app bundles the dashboard server, so it no longer needs this repo checkout; settings and reviews stay in `%APPDATA%\Bot Dashboard\`. To update, pull, rebuild and run the new installer over the old one. The icon is `build/icon.ico` (regenerate with `python3 build/make-icon.py`).
+This builds `dist/Bot Dashboard Setup <version>.exe` (build it on Windows: embedding the icon needs the Windows tooling). Running it installs per-user (no admin prompt), adds **Start menu** and desktop shortcuts named "Bot Dashboard" with the app icon, and launches the app. Pin it from the Start menu or the taskbar as usual. The installed app bundles the dashboard server, so it no longer needs this repo checkout; settings and reviews live in the app data folder under `%APPDATA%`. To update, pull, rebuild and run the new installer over the old one. The icon is `build/icon.ico` (regenerate with `python3 build/make-icon.py`).
 
 ## Settings
 
-`config.json` in the app's data folder (`%APPDATA%\Bot Dashboard\` when installed, `%APPDATA%\mc-player-app\` from source) (created on first change; defaults shown):
+`config.json` in the app's data folder (under `%APPDATA%`; the app menu has no shortcut yet, so look for the `Bot Dashboard` or `mc-player-app` folder there) (created on first change; defaults shown):
 
 ```json
 {
