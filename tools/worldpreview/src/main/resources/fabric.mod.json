@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "worldpreview",
+  "version": "${version}",
+  "name": "World Preview (MC-Player)",
+  "description": "Server-side tool: samples the real noise router and biome source for any seed on a coarse grid (no chunk generation) and writes raw height/biome grids for a renderer.",
+  "environment": "server",
+  "entrypoints": { "main": ["mcplayer.worldpreview.WorldPreview"] },
+  "depends": { "fabricloader": ">=0.16", "minecraft": "~1.21.6", "java": ">=21" }
+}
