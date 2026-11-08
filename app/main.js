@@ -6,7 +6,9 @@ const { startDashboard } = require('./lib/dashboard-process')
 const { TriggerManager } = require('./lib/triggers')
 const { createReviewTrigger, listReviews } = require('./lib/review')
 
-const REPO_ROOT = path.join(__dirname, '..')
+// Packaged: electron-builder copies dashboard/ into resources/. From source: the repo root is one level up.
+const REPO_ROOT = app.isPackaged ? process.resourcesPath : path.join(__dirname, '..')
+const ICON = path.join(__dirname, 'build', 'icon.ico')
 let config, dash, triggers, reviewsDir
 let mainWin = null, reviewsWin = null
 
@@ -28,7 +30,7 @@ function lockDown(win, allowOrigin) {
 function openMain() {
   if (mainWin) return mainWin.focus()
   mainWin = new BrowserWindow({
-    width: 1400, height: 900, title: 'Bot Dashboard', backgroundColor: '#0b0d10',
+    width: 1400, height: 900, title: 'Bot Dashboard', icon: ICON, backgroundColor: '#0b0d10',
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   })
   lockDown(mainWin, dash.url)
@@ -39,7 +41,7 @@ function openMain() {
 function openReviews() {
   if (reviewsWin) return reviewsWin.focus()
   reviewsWin = new BrowserWindow({
-    width: 760, height: 820, title: 'Claude reviews', backgroundColor: '#0b0d10',
+    width: 760, height: 820, title: 'Claude reviews', icon: ICON, backgroundColor: '#0b0d10',
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: path.join(__dirname, 'preload.js') },
   })
   lockDown(reviewsWin, 'file://')
@@ -62,6 +64,8 @@ function buildMenu() {
     { label: 'View', submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { role: 'togglefullscreen' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }] },
   ]))
 }
+
+app.setAppUserModelId('com.walter.botdashboard') // keeps the taskbar pin and the window grouped
 
 app.whenReady().then(async () => {
   const userData = app.getPath('userData')
