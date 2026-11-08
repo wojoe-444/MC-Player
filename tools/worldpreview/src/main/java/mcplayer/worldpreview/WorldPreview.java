@@ -6,7 +6,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.QuartPos;
@@ -68,14 +67,20 @@ public class WorldPreview implements ModInitializer {
             LOG.info("worldpreview ready: drop job files into {} ({} worker threads)", JOBS.toAbsolutePath(), threads);
         });
         ServerLifecycleEvents.SERVER_STOPPING.register(s -> { if (pool != null) pool.shutdownNow(); });
-        ServerTickEvents.END_SERVER_TICK.register(server -> {
-            if (busy || server.getTickCount() % 20 != 0 || pool == null) return;
-            Path next = nextJob();
-            if (next == null) return;
-            busy = true;
-            Thread t = new Thread(() -> { try { runFile(server, next); } finally { busy = false; } }, "worldpreview-job");
-            t.setDaemon(true);
-            t.start();
+        // Poll from our own thread: an empty dedicated server pauses ticking, so a tick hook would never fire.
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            Thread watcher = new Thread(() -> {
+                while (!server.isStopped()) {
+                    try { Thread.sleep(1000); } catch (InterruptedException e) { return; }
+                    if (busy || pool == null) continue;
+                    Path next = nextJob();
+                    if (next == null) continue;
+                    busy = true;
+                    try { runFile(server, next); } finally { busy = false; }
+                }
+            }, "worldpreview-watcher");
+            watcher.setDaemon(true);
+            watcher.start();
         });
     }
 
@@ -135,6 +140,7 @@ public class WorldPreview implements ModInitializer {
         List<String> names = java.util.Collections.synchronizedList(new ArrayList<>());
         AtomicInteger doneRows = new AtomicInteger();
         int minY = level.getMinY();
+        final int seaLevel = settings.seaLevel();
 
         List<Future<?>> fs = new ArrayList<>();
         for (int iz = 0; iz < nz; iz++) {
@@ -143,8 +149,10 @@ public class WorldPreview implements ModInitializer {
                 int z = z0 + row * step;
                 for (int ix = 0; ix < nx; ix++) {
                     int x = x0 + ix * step;
-                    int h = gen.getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, level, rs);
+                    // Column sampling has no aquifers: everything below sea level is water, so the surface is simply the
+                    // higher of the solid floor and the water line. One noise-column evaluation per sample instead of two.
                     int f = gen.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, level, rs);
+                    int h = Math.max(f, seaLevel + 1);
                     int by = Math.max(minY, h - 1);
                     Holder<Biome> b = bs.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(by), QuartPos.fromBlock(z), rs.sampler());
                     String key = b.unwrapKey().map(k -> k.location().toString()).orElse("unknown");

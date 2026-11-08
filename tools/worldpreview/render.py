@@ -202,7 +202,8 @@ def cmd_compare(a):
     pm, xm = p['meta'], x['meta']
     assert (pm['x0'], pm['z0'], pm['step'], pm['nx'], pm['nz']) == (xm['x0'], xm['z0'], xm['step'], xm['nx'], xm['nz']), 'grids differ'
     k = x['known'] & p['known']
-    ph, xh = p['surface'][k].astype(float), x['surface'][k].astype(float)
+    # Xaero records the solid top (sea floor under water), so compare it with the preview's floor grid
+    ph, xh = p['floor'][k].astype(float), x['surface'][k].astype(float)
     # trees/leaves make Xaero read up to ~10 higher than the bare terrain: report also the robust numbers
     d = ph - xh
     out = dict(samples=int(k.sum()), explored_pct=100.0 * float(x['known'].mean()),
@@ -220,7 +221,7 @@ def cmd_compare(a):
     # side-by-side: preview | xaero (same shading) | height difference
     ip, ix_ = render_relief(p, 'relief'), render_relief(x, 'relief')
     diff = np.zeros(p['surface'].shape + (3,), np.uint8) + np.array([24, 24, 28], np.uint8)
-    dd = np.clip((p['surface'] - x['surface']) / 20.0, -1, 1)
+    dd = np.clip((p['floor'] - x['surface']) / 20.0, -1, 1)
     r = np.where(dd > 0, 255, 255 * (1 + dd)); b = np.where(dd < 0, 255, 255 * (1 - dd)); gch = 255 * (1 - np.abs(dd))
     col = np.stack([r, gch, b], -1).astype(np.uint8)
     diff[k] = col[k]
@@ -237,7 +238,7 @@ def cmd_compare(a):
     fig, ax = plt.subplots(figsize=(6, 6))
     ax.hexbin(xh, ph, gridsize=90, bins='log', cmap='viridis')
     lim = [min(xh.min(), ph.min()), max(xh.max(), ph.max())]
-    ax.plot(lim, lim, 'r--', lw=1); ax.set_xlabel('Xaero surface height'); ax.set_ylabel('preview surface height')
+    ax.plot(lim, lim, 'r--', lw=1); ax.set_xlabel('Xaero surface height'); ax.set_ylabel('preview floor height')
     ax.set_title(f"r = {out['corr']:.3f}, median diff {out['median_diff']:+.1f}, within 8: {out['within_8']:.0f}%")
     fig.tight_layout(); fig.savefig(os.path.join(a.o, 'scatter.png'), dpi=110)
 
