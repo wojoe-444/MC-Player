@@ -353,7 +353,8 @@ module.exports = function plan(G, S, M, api, log) {
         }
       }
       if (st._lightCenter) st.lightMineLeft = dark.length - filled + (missing.length - placed); else
-      st.lightAt = Date.now() + (missing.length > placed || dark.length > filled ? 60000 : 5 * 60000)
+      // (a full pass rests 30 minutes: lighting took 25-30% of both bots' time on the Earth map, more than half as much as mining, 2026-11-09)
+      st.lightAt = Date.now() + (missing.length > placed || dark.length > filled ? 5 * 60000 : 30 * 60000)
       st.lightGrid = { grid: grid.length, missing: missing.length - placed, dark: dark.length - filled }
       note(`light-home: grid ${grid.length - missing.length + placed}/${grid.length} torches within ${R}, +${placed} grid, +${filled} fill-in, ${dark.length - filled} spawnable cells left, ${removed} redundant torches taken down`)
       return placed + filled + removed > 0 || !missing.length } },
@@ -482,7 +483,8 @@ module.exports = function plan(G, S, M, api, log) {
       if (cnt('wheat') >= 3) await S.craft('bread', Math.floor(cnt('wheat') / 3))
       note(`harvest: ${n} wheat cut and replanted, bread ${cnt('bread')}`); return n > 0 } },
 
-    { id: 'iron', budget: 600000, need:() => !(farMine() && (daylightLeft() < 4500 || ((bot.time && bot.time.timeOfDay) || 0) < 2000) && bot.entity.position.y > 56) && !(S.isNight() && bot.entity.position.y > 56) && tier('pickaxe') >= 2 && spareTools() && cnt('torch') >= 12 && S.foodPoints() + S.rawFood() * 2 >= 6 && ironUnits() < 32 && S.freeSlots() > 6 && !!home(), cool: 60000, run: async () => {
+    { id: 'iron', budget: 600000, need:() => !(farMine() && (daylightLeft() < 4500 || ((bot.time && bot.time.timeOfDay) || 0) < 2000) && bot.entity.position.y > 56) && !(S.isNight() && bot.entity.position.y > 56) && tier('pickaxe') >= 2 && spareTools() && cnt('torch') >= 12 && S.foodPoints() + S.rawFood() * 2 >= 6 && ironUnits() < 32 && S.freeSlots() > 6 && !!home(), cool: 15000, run: async () => {   // (15 s, not 60: in the minute between tunnels the idle fallback went lighting ground at home)
+     
       // ONE established mine (Walter: a player builds one staircase and routes to it, instead of breaching the surface again and again).
       // st.mine = { entry: surface cell where the staircase starts, bottom: where it ends, path: cells walked on the way down }.
       // Going down = walk to the entry and down the existing stairs; only the very first trip (or a lost shaft) digs a new one.
