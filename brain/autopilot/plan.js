@@ -263,7 +263,7 @@ module.exports = function plan(G, S, M, api, log) {
     // block light 0 (1.18+), so on flat land a 10-block grid leaves at least light 4 between torches; hills and walls are covered by fill-in
     // torches where the computed light (light.js; the server's light data is scrambled) still shows spawnable cells. Torches off the grid that
     // the grid makes redundant are taken down by day (the island had 417, mostly bunched). ----
-    { id: 'light-home', budget: 180000, need: () => !!home() && cnt('torch') >= 4 && nearHome(72) && Date.now() > (st.lightAt || 0), cool: 60000, run: async () => {
+    { id: 'light-home', budget: 180000, need: () => !!home() && cnt('torch') >= 16 && nearHome(72) && Date.now() > (st.lightAt || 0), cool: 60000, run: async () => {
       // 32 by day (64 and then 40 still took 230 s on this machine with the server alongside and the watchdog reset the bot mid-step,
       // 01:02 and 05:59), 24 near dusk
       // (st._lightCenter: the light-mine step runs this same pass around the far mine's entry)
@@ -287,7 +287,7 @@ module.exports = function plan(G, S, M, api, log) {
       const missing = grid.filter(p => !torchNear(p, 2)).sort((a, b) => S.dist(a) - S.dist(b))
       let placed = 0
       for (const p of missing) {
-        if (placed >= 16 || cnt('torch') < 2 || (R > 24 && daylightLeft() < 1500)) break
+        if (placed >= 16 || cnt('torch') < 14 || (R > 24 && daylightLeft() < 1500)) break   // (12 stay for the mine: lighting at dawn used them all and the iron step, which needs 12, never ran, 2026-11-09)
         const r = await S.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { dig: false, ms: 20000, escalate: false }); if (!r.ok) continue
         const g = S.block(p.offset(0, -1, 0)), b = S.block(p)
         if (g && b && S.isAir(b) && await S.placeAgainst(g, v(0, 1, 0), 'torch')) placed++
@@ -312,7 +312,7 @@ module.exports = function plan(G, S, M, api, log) {
       const dark = surfaceCells.filter(p => lm.spawnable(p) && !avoid(p))
       let filled = 0; const lit = []
       if (placed === missing.length) for (const p of dark.sort((a, b) => S.dist(a) - S.dist(b))) {
-        if (filled >= 8 || cnt('torch') < 2) break
+        if (filled >= 8 || cnt('torch') < 14) break
         if (lit.some(q => q.distanceTo(p) < 8)) continue
         const r = await S.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { dig: false, ms: 20000, escalate: false }); if (!r.ok) continue
         const g = S.block(p.offset(0, -1, 0))
