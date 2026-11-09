@@ -554,7 +554,9 @@ class Reach {
         await this.ticks(1, run)
         // near the top of the jump, not the moment the feet clear the cell: the server checks the new block against where it last heard the
         // player was, a tick behind, and refused the block again and again at +1.0 (Smeo444 climbing its shaft, 22:52)
-        if (bot.entity.position.y >= f.y + 1.18) {
+        if (bot.entity.position.y >= f.y + 1.1) {
+          // one more tick first, so the server has the position packet that puts the feet above the cell before the place packet arrives
+          await this.ticks(1, run)
           try { if (!bot.heldItem || bot.heldItem.name !== it.name) await bot.equip(it, 'hand'); await bot.placeBlock(ref, new Vec3(0, 1, 0)); placed = true } catch (e) { this.log('pillar place: ' + e.message); break }
         }
       }
