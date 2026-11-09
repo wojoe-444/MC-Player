@@ -60,7 +60,8 @@ module.exports = function plan(G, S, M, api, log) {
 
   // ---------- steps ----------
   const torchFuel = () => cnt(/^(coal|charcoal)$/)
-  const logName = () => { const t = {}; for (const i of S.items()) if (/_log$/.test(i.name)) t[i.name] = (t[i.name] || 0) + i.count; return Object.entries(t).sort((a, b) => b[1] - a[1]).map(x => x[0])[0] || null }
+  const logName = () => { const t = {}; for (const i of S.items()) if (/_(log|wood|stem|hyphae)$/.test(i.name)) t[i.name]   // (wood blocks too: the Earth map's trees are oak_wood, acacia_wood..., and torches failed x5 with 19 of them in the bag, 2026-11-09)
+    = (t[i.name] || 0) + i.count; return Object.entries(t).sort((a, b) => b[1] - a[1]).map(x => x[0])[0] || null }
   // never go underground with a single pickaxe and no way to make another: that stranded the bot at y-22 with no tool and no wood (2026-11-03)
   const spareTools = () => S.count(/^(stone|iron|diamond)_pickaxe$/) >= 2 || (cnt(cobbleRe) >= 3 && (S.count('stick') >= 2 || S.logs() >= 1 || S.items().some(i => /_planks$/.test(i.name) && i.count >= 2)))
   // a trip away from home only starts with enough daylight to come back (died at dusk 80 blocks out with 2 hp, 23:24)
