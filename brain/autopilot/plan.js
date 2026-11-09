@@ -1303,8 +1303,12 @@ module.exports = function plan(G, S, M, api, log) {
   M.stairStep = async (q) => {
     // a stair whose floor is gone (a cave opened under 220,41,-400; nothing can stand there, 13:26): a block under it first
     { const fl = S.block(q.offset(0, -1, 0)); if (fl && fl.boundingBox !== 'block' && !S.isLiquid(fl) && M.fill) { try { await M.fill(q.offset(0, -1, 0)) } catch {} } }
-    let rr = await S.goto(new goals.GoalBlock(q.x, q.y, q.z), { dig: false, ms: 8000, escalate: false })
+    // a long jump in the record (a new level dug from the tunnel's far end: cells 59->60 of Smeo444's stairs are 20 blocks apart along
+    // its own tunnel, 20:19) is a walk, not a step: more time for it, and no line-clearing (the tunnel is the way)
+    const far = Math.hypot(q.x + 0.5 - bot.entity.position.x, q.z + 0.5 - bot.entity.position.z)
+    let rr = await S.goto(new goals.GoalBlock(q.x, q.y, q.z), { dig: false, ms: Math.max(8000, Math.min(60000, far * 1500)), escalate: false })
     if (rr.ok) return true
+    if (far > 4) { rr = await S.goto(new goals.GoalNear(q.x, q.y, q.z, 1), { dig: false, ms: 30000, escalate: false }); return !!rr.ok }
     const f = S.flo(bot.entity.position), cells = []
     let x = f.x, z = f.z
     while (x !== q.x || z !== q.z) { if (x !== q.x) x += Math.sign(q.x - x); else z += Math.sign(q.z - z); const y = Math.max(q.y, Math.min(f.y, q.y + 1)); cells.push(v(x, y, z)) }
