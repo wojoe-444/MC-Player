@@ -768,6 +768,24 @@ module.exports = function makeSkills({ bot, api, log }) {
   }
   S.dist = (p) => bot.entity.position.distanceTo(p)
 
+  // the held item drifts the same way as the bag (Walter 2026-11-09 watched OzoGo444 chop a tree with a sword and its fist and then jump in
+  // place: the nav pillar's 'Server refused to place dirt' - the bot thought it held dirt). A light resync every 12 s while nothing is being
+  // clicked, dug or opened keeps the bot's view of its bag and hand close to the server's; equip asks for one first when the last is old.
+  if (!bot._resyncTimer) {
+    bot._lastClickAt = 0
+    if (!bot._clickStamped) { const oc = bot.clickWindow.bind(bot); bot.clickWindow = (...a) => { bot._lastClickAt = Date.now(); return oc(...a) }; bot._clickStamped = true }
+    const light = () => { try { bot._client.write('window_click', { windowId: 0, stateId: -1, slot: -999, mouseButton: 0, mode: 0, changedSlots: [], cursorItem: null }); bot._lastResyncAt = Date.now() } catch {} }
+    S.resyncLight = light
+    bot._resyncTimer = setInterval(() => { try { if (!bot.entity || bot.currentWindow || bot.targetDigBlock || Date.now() - (bot._lastClickAt || 0) < 3000) return; light() } catch {} }, 12000)
+    if (!bot._equipWrapped) {
+      const oe = bot.equip.bind(bot)
+      bot.equip = async (item, dest) => {
+        if (Date.now() - (bot._lastResyncAt || 0) > 4000 && !bot.currentWindow) { light(); await new Promise(r => setTimeout(r, 350)); if (item && item.type != null) { const fresh = bot.inventory.items().find(i => i.type === item.type); if (fresh) item = fresh } }
+        return oe(item, dest)
+      }
+      bot._equipWrapped = true
+    }
+  }
   return S
 }
 
