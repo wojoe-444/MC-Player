@@ -587,8 +587,20 @@ module.exports = function makeSkills({ bot, api, log }) {
   // An interrupted craft can leave the crafting-table window open; every later craft or chest then fails ("Non-container window used as a container").
   S.closeWindows = () => { try { if (bot.currentWindow) bot.closeWindow(bot.currentWindow) } catch {} }
   const craftInner = S.craft
+  // the client's view of the bag drifts from the server's on Walter's 1.21.6 worlds (2026-11-09, Earth map: logs the server had put in the
+  // 2x2 grid were invisible to the bot, every craft timed out on 'updateSlot:0', and both bots made no planks in 20 minutes). A click
+  // with a stale state id makes the server resend the whole inventory; whatever sits in the 2x2 grid then goes back into the bag.
+  S.resyncInventory = async () => {
+    try {
+      bot._client.write('window_click', { windowId: 0, stateId: -1, slot: -999, mouseButton: 0, mode: 0, changedSlots: [], cursorItem: null })
+      await new Promise(r => setTimeout(r, 500))
+      for (const sl of [1, 2, 3, 4]) { if (bot.inventory.slots[sl]) { try { await bot.clickWindow(sl, 0, 1) } catch {} await new Promise(r => setTimeout(r, 150)) } }
+      if (bot.inventory.selectedItem) { const free = bot.inventory.firstEmptyInventorySlot(); if (free != null) { try { await bot.clickWindow(free, 0, 0) } catch {} } }
+    } catch {}
+  }
   S.craft = async (name, count = 1, o = {}) => {
     if (!(o.depth > 0)) S.closeWindows()
+    if (!(o.depth > 0)) await S.resyncInventory()
     if (S.count(name) >= count) return true
     let placed = null
     if (!o.noTable && !(o.depth > 0) && name !== 'crafting_table' && !S.tableNear(4.5) && S.has('crafting_table')) { try { placed = await S.placeWork('crafting_table') } catch {} }
