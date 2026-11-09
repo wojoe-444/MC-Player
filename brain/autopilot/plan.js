@@ -663,7 +663,9 @@ module.exports = function plan(G, S, M, api, log) {
       if (ironUnits() - before >= 3) st.mineDeaths = 0   // a good haul: the shaft is worth keeping
       // the four tunnels from this bottom are dug out: walking them again mines nothing (06:56, "tunnel 40 blocks, mined 0" in 11 s).
       // Two empty walks in a row: a new level 8 blocks further down the same shaft, which becomes the shaft bottom
-      if (t.mined === 0 && t.len >= 16) st.mineEmpty = (st.mineEmpty || 0) + 1; else if (t.mined > 0) st.mineEmpty = 0
+      // by iron, not by any ore: at y20 on the Earth map the tunnels kept finding copper and coal (55 raw copper, 2 raw iron) and never
+      // counted as empty, so the bot stayed on that level for days with no iron at all (2026-11-09)
+      if ((ironUnits() - before) === 0 && t.len >= 16) st.mineEmpty = (st.mineEmpty || 0) + 1; else if (ironUnits() - before > 0) st.mineEmpty = 0
       // not below y4: the deepslate caves under that killed the bot at y-8 (two skeleton arrows, 23:26), and iron is best around y16
       if ((st.mineEmpty || 0) >= 2 && st.mine && st.mine.bottom && st.mine.bottom[1] - 8 >= 4) {
         const target = st.mine.bottom[1] - 8
