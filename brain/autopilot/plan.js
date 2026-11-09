@@ -529,7 +529,11 @@ module.exports = function plan(G, S, M, api, log) {
               }
               log('PLAN', `mine: stairs down to cell ${i - 1}/${path.length}, ${fails} fails, at ${S.flo(bot.entity.position)}`)
               // stuck on the stairs: no cave route to the bottom instead (12:30 and 13:10 it went off toward the sea at y48 that way)
-              if (fails >= 4) { st.mine.fails = (st.mine.fails || 0) + 1; G.save(); const up = await M.goSurface(); note('mine: the stairs are blocked at y' + Math.floor(bot.entity.position.y) + ', back up (' + up + ')'); return false }
+              if (fails >= 4) { st.mine.fails = (st.mine.fails || 0) + 1; G.save(); const up = await M.goSurface(); note('mine: the stairs are blocked at y' + Math.floor(bot.entity.position.y) + ', back up (' + up + ')')
+                // three blocked walks in a row: this record is no good, a fresh shaft is dug (Smeo444 went down and up the same broken stairs
+                // every three minutes from 20:20, never counting it as lost)
+                if (st.mine.fails >= 3) { const e = st.mine.entry; st.mine = null; st.mineSite = null; if (e) st.wetSites = (st.wetSites || []).concat([[e[0], e[2]]]).slice(-40); G.save(); note('mine: the shaft is lost, a new one will be dug') }
+                return false }
             } }
           const r = await S.goto(new goals.GoalNear(b.x, b.y, b.z, 2), { dig: false, ms: 150000 })
           note(`mine: walked down the shaft to y${Math.floor(bot.entity.position.y)} (${r.ok ? 'ok' : r.err || r.why})`)
