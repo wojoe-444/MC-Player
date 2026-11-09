@@ -514,6 +514,10 @@ module.exports = function plan(G, S, M, api, log) {
           // down by the recorded stairs, cell by cell (the go-to to the bottom took a cave route instead and stopped at y48 31 blocks off
           // the stairs, 12:30); the go-to below finishes or stands in when there is no record
           { const path = (st.mine.path || []).map(q => v(...q))
+            // to the first stair itself when the go-to the entry ended short (17:19-17:22 three trips stopped at y66 'no path' without
+            // touching the stairs, and the shaft was dropped)
+            if (path.length > 3 && S.dist(path[0].offset(0.5, 0, 0.5)) >= 5) { const q0 = path[0]; await S.goto(new goals.GoalNear(q0.x, q0.y, q0.z, 1), { dig: false, ms: 60000 }) }
+            if (path.length > 3) log('PLAN', `mine: stairs down from ${S.flo(bot.entity.position)}, first stair ${path[0]} ${S.dist(path[0].offset(0.5, 0, 0.5)).toFixed(1)} away`)
             if (path.length > 3 && S.dist(path[0].offset(0.5, 0, 0.5)) < 5) {
               let fails = 0, i = 1
               for (; i < path.length && fails < 4; i++) {
