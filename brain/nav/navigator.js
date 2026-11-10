@@ -13,6 +13,7 @@ const { DoorTender } = require('./doors')
 const { Penalties, StuckMonitor } = require('./stuck')
 const { HazardGuard, MotionMonitor } = require('./hazards')
 const { DescentAssist } = require('./climb')
+const { LadderWork } = require('./ladders')
 const B = require('./blocks')
 const { dimOf } = require('./waypoints')
 const { Reach, PROTECTED, SCAFFOLD } = require('./reach')
@@ -41,6 +42,8 @@ class Navigator extends EventEmitter {
     this.digDepth = 0             // enterDigMode() nesting: the dig-capable Movements stay on until the last go-to that asked for them is done
     this._dig = null
     this.reach = new Reach({ nav: this, bot, goals, log, persist, config: this.cfg.reach, saved })
+    // hand-driven ladder climbing and completion (brain/nav/ladders.js); the plain walk is what it uses to get to the foot of the ladder
+    this.ladders = new LadderWork({ bot, goals, log, goto: (g) => this.gotoOnce(g, { label: 'to the ladder', ms: 20000, noLadders: true }), isAborted: () => !!(this.current && this.current.isAborted && this.current.isAborted()) })
     this._onTick = () => this.tick()
     this._onGoalUpdated = () => { if (this.current) this.rescanDoors() }
   }
@@ -204,8 +207,30 @@ class Navigator extends EventEmitter {
     return this.reach.goto(goal, opts)
   }
 
-  // One plain pathfinder attempt with all of nav's helpers (no digging, no placing).
+  // One plain pathfinder attempt with all of nav's helpers (no digging, no placing), then - only when it ended in a ladder loop, or in "no path" for
+  // a goal up a ladder that does not reach - the ladder is climbed or finished by hand (ladders.js: it places ladders, nothing else unless a backing
+  // block is needed). opts.noLadders switches that off (ladders.js itself walks with it).
   async gotoOnce(goal, opts = {}) {
+    const res = await this._gotoPlain(goal, opts)
+    if (res.ok || opts.noLadders || this.cfg.ladders === false || opts.dynamic) return res
+    if (res.err !== 'ladder-loop' && res.err !== 'no path') return res
+    const p = this.bot.entity.position
+    if (![goal.x, goal.y, goal.z].every(Number.isFinite) || (res.err === 'no path' && goal.y < p.y + 1.5)) return res   // a plain "no path" to somewhere below or level: not a ladder matter
+    const col = this.ladderGoal(goal)
+    if (!col) return res
+    this.log(`ladders: ${res.err} on the way to ${Math.floor(goal.x)},${Math.floor(goal.y)},${Math.floor(goal.z)}; working the ladder at ${col.x},${col.z} (y${col.lowest}..${col.highest}) by hand`)
+    const r = await this.ladders.completeUp(col, Math.floor(goal.y), { x: Math.floor(goal.x), y: Math.floor(goal.y), z: Math.floor(goal.z) })
+    if (r.ok) return { label: res.label, ok: true, secs: res.secs, via: 'ladder-work' }
+    return { ...res, ladderWhy: r.why }
+  }
+
+  // the ladder column that a goal above the bot hangs on (within 3 blocks of the goal, lowest rung below it), or null
+  ladderGoal(goal) {
+    if (![goal.x, goal.y, goal.z].every(Number.isFinite) || goal.y < this.bot.entity.position.y + 1.5) return null
+    try { return this.ladders.findColumn({ x: Math.floor(goal.x), y: Math.floor(goal.y), z: Math.floor(goal.z) }) } catch { return null }
+  }
+
+  async _gotoPlain(goal, opts = {}) {
     if (!this.attached) this.attach()
     const label = opts.label || 'there'
     if (this.current) this.finish(this.current, { ok: false, err: 'replaced' })
@@ -243,11 +268,15 @@ class Navigator extends EventEmitter {
       c.onPath = (r) => {
         if (r.status === 'noPath' || r.status === 'timeout') {
           if (!r.path.length) return this.finish(c, { ok: false, err: r.status === 'timeout' ? 'path search timed out' : 'no path' })
+          // a goal up a ladder that does not reach it: do not ride the partial path up to the end of the rungs (and into whatever is there), hand over now
+          if (this.cfg.ladders !== false && !opts.noLadders && !c.dynamic && this.ladderGoal(goal)) return this.finish(c, { ok: false, err: 'no path' })
           c.awaitingReplan = true                                              // follow the part we do have, then try again from there
         } else if (r.status === 'success') c.awaitingReplan = false
       }
       c.onGoal = (g) => { if (c.settingGoal || this.stuck.maneuvering || g === goal) return; if (g === null && this.guard.escaping) return; this.finish(c, { ok: false, err: 'goal changed' }) }
       c.onStuck = () => this.finish(c, { ok: false, err: 'stuck' })
+      c.onLoop = () => this.finish(c, { ok: false, err: 'ladder-loop' })
+      this.stuck.on('ladder-loop', c.onLoop)
       bot.on('goal_reached', c.onReached)
       bot.on('path_update', c.onPath)
       bot.on('goal_updated', c.onGoal)
@@ -274,6 +303,7 @@ class Navigator extends EventEmitter {
     bot.removeListener('path_update', c.onPath)
     bot.removeListener('goal_updated', c.onGoal)
     this.stuck.removeListener('stuck-fail', c.onStuck)
+    if (c.onLoop) this.stuck.removeListener('ladder-loop', c.onLoop)
     if (this.current === c) this.current = null
     if (!res.ok || bot.pathfinder.goal === c.goal) { if (!this.guard.escaping && !this.stuck.maneuvering) bot.pathfinder.setGoal(null) }
     const out = { label: c.label, ok: !!res.ok, secs: +(((this.t - c.startTick) * TICK_MS) / 1000).toFixed(1) }

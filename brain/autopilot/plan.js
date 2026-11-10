@@ -72,6 +72,48 @@ module.exports = function plan(G, S, M, api, log) {
   // the one laddered shaft per area, shared by both bots (brain/autopilot/ladder.js, Walter 2026-11-10)
   delete require.cache[require.resolve('./ladder')]
   const LD = require('./ladder')(bot, S, goals, v, log); M.LD = LD
+  S.isShaftCell = (p) => { try { return LD.isShaftCell(p) } catch { return false } }
+  // cells that stay open whatever else wants to fill them (nav's breach refill): shaft columns, storage rooms and the corridor to each
+  bot._keepOpen = (p) => {
+    try {
+      if (LD.isShaftCell(p)) return true
+      for (const r of LD.rooms()) {
+        const b = r.box; if (!b) continue
+        if (p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1 && p.z >= b.z0 && p.z <= b.z1) return true
+        const sh = LD.shafts().find(q => q.id === r.shaft); if (!sh) continue
+        const e = sh.entry
+        if (p.y < r.y || p.y > r.y + 1) continue
+        const inX = p.x >= Math.min(e[0], b.x0) && p.x <= Math.max(e[0], b.x1), inZ = p.z >= Math.min(e[2], b.z0) && p.z <= Math.max(e[2], b.z1)
+        if (inX && inZ && (p.x === e[0] || p.z === e[2])) return true
+      }
+    } catch {}
+    return false
+  }
+  // Up from underground by the laddered shaft, never by digging: a go-to from the mine to a target well above (stash heading home, Smeo444
+  // 04:29) made nav escalate and tunnel up through gravel into lava, and the bot died. When the goal is more than 6 blocks up, there is no
+  // sky, and a recorded shaft within 48 blocks spans the bot's level, the bot walks to the shaft at its own level and climbs it first.
+  if (!S._gotoNoShaft) {
+    const innerGoto = S.goto
+    let riding = false
+    S.goto = async (goal, o = {}) => {
+      try {
+        const gy = goal ? (goal.y != null ? goal.y : (goal.pos && goal.pos.y)) : null, me = bot.entity.position
+        if (!riding && gy != null && gy - me.y > 6 && !S.skyVisible()) {
+          const sh = LD.nearestShaft(me, 48)
+          if (sh && sh.bottom && sh.bottom[1] <= me.y + 1 && sh.entry[1] > me.y + 4 && sh.entry[1] >= gy - 12) {
+            riding = true
+            try {
+              const at = v(sh.entry[0], Math.floor(me.y), sh.entry[2])
+              if (Math.hypot(me.x - at.x - 0.5, me.z - at.z - 0.5) > 1) await innerGoto(new goals.GoalBlock(at.x, at.y, at.z), { dig: false, ms: 60000, escalate: false })
+              if (Math.hypot(bot.entity.position.x - at.x - 0.5, bot.entity.position.z - at.z - 0.5) < 1.5) { const up = await LD.up(sh); log('PLAN', 'up the laddered shaft before a go-to ' + Math.round(gy - me.y) + ' blocks up: ' + up) }
+            } finally { riding = false }
+          }
+        }
+      } catch (e) { log('PLAN', 'shaft-first go-to: ' + e.message) }
+      return innerGoto(goal, o)
+    }
+    S._gotoNoShaft = innerGoto
+  }
   const ladderShaft = () => st.mine && st.mine.ladder ? { id: st.mine.shaft, entry: st.mine.entry, bottom: st.mine.bottom, wall: st.mine.wall || [1, 0] } : null
   const farMine = () => { try { const h = home(); return !!(st.mine && st.mine.entry && h && Math.hypot(st.mine.entry[0] - h.x, st.mine.entry[2] - h.z) > 48) } catch { return false } }
   const daylightLeft = () => { const t = bot.time && bot.time.timeOfDay; return typeof t === 'number' && t < 11500 ? 11500 - t : 0 }
@@ -840,10 +882,17 @@ module.exports = function plan(G, S, M, api, log) {
   const homeBox = () => { if (Date.now() - hbAt < 5000) return hbCache; hbAt = Date.now(); const h = home(); hbCache = h ? { x0: h.x - 6, x1: h.x + 6, y0: h.y - 2, y1: h.y + 6, z0: h.z - 8, z1: h.z + 6 } : null; return hbCache }
   const inBox = (p, b) => b && p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1 && p.z >= b.z0 && p.z <= b.z1
   const nearList = (p, list, r) => (list || []).some(q => Math.abs(q[0] - p.x) <= r && Math.abs(q[1] - p.y) <= r && Math.abs(q[2] - p.z) <= r)
+  // the placed-block log (brain/placed.js): Walter's (any player's who is not a bot) blocks are always built; a bot's own blocks are built
+  // unless they are plain filler (pillar and bridge scaffolding, cave seals: the bots take those down again as they go)
+  const PL = (() => { try { return require('../placed').attach(bot, (m) => log('PLACED', m)) } catch (e) { log('PLAN', 'placed log not loaded: ' + e.message); return null } })()
+  S.placedLog = PL
+  const BOTS = /^(OzoGo444|Smeo444)$/
+  const FILL = /^(cobblestone|cobbled_deepslate|dirt|coarse_dirt|stone|netherrack|gravel|sand|andesite|diorite|granite|tuff|deepslate)$/
   S.isEstablished = (block) => {
     if (!block || !block.position) return false
     const p = block.position
     if (BUILT.test(block.name)) return true
+    try { const r = PL && PL.at(p, block.name); if (r && (!BOTS.test(r.by) || !FILL.test(r.name))) return true } catch {}
     // a job site's own harvest (zone.json allow: Smeo444's birch logs and leaves) is work, even inside the box around the home bed
     try { const z = S.zone(); if (z && (z.allow || []).some(a => p.x >= a.x0 && p.x <= a.x1 && p.y >= a.y0 && p.y <= a.y1 && p.z >= a.z0 && p.z <= a.z1 && new RegExp(a.blocks).test(block.name))) return false } catch {}
     if (inBox(p, homeBox()) && block.boundingBox === 'block') return true      // the house shell, whatever it is made of
@@ -1191,15 +1240,19 @@ module.exports = function plan(G, S, M, api, log) {
   // ---- scaffolding is incidental, not established (Walter's screenshots: cobble pillars, holes and stray blocks around the house) ----
   // every block the bot places (its own placing, the pathfinder's scaffolding, nav pillars) is remembered; plain scaffold blocks that are
   // still there after 10 minutes, on the surface and outside the home/farm, are taken down again, top first.
-  if (!bot._placeLogPatched) {
-    bot._placeLogPatched = true
-    const orig = bot.placeBlock.bind(bot)
-    bot.placeBlock = async function (ref, face, ...rest) {
-      const held = bot.heldItem && bot.heldItem.name
-      const r = await orig(ref, face, ...rest)
-      try { const p = ref.position.plus(face); const sx = bot._ap && bot._ap.G && bot._ap.G.state; if (sx && held) { sx.placed = (sx.placed || []).concat([[p.x, p.y, p.z, held, Date.now()]]).slice(-600) } } catch {}
-      return r
+  // filled from mineflayer's 'blockPlaced' event: a wrapper on bot.placeBlock missed every caller of _placeBlockWithOptions (the forced-look
+  // placing, bug hunt 2026-11-10 #2). Recorded as the item name (wall_torch -> torch) as the readers expect.
+  {
+    if (bot._stPlacedListener) bot.removeListener('blockPlaced', bot._stPlacedListener)
+    bot._stPlacedListener = (oldB, newB) => {
+      try {
+        if (!newB || !newB.position) return
+        const p = newB.position, sx = bot._ap && bot._ap.G && bot._ap.G.state; if (!sx) return
+        const name = newB.name.replace(/^wall_torch$/, 'torch').replace(/^(\w+)_wall_(sign|banner)$/, '$1_$2')
+        sx.placed = (sx.placed || []).concat([[p.x, p.y, p.z, name, Date.now()]]).slice(-600)
+      } catch {}
     }
+    bot.on('blockPlaced', bot._stPlacedListener)
   }
   const SCAFFOLD = /^(cobblestone|cobbled_deepslate|dirt|andesite|diorite|granite|tuff|netherrack|stone)$/
   let _tidy = { at: 0, list: [] }

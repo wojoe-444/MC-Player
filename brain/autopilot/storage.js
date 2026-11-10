@@ -100,10 +100,16 @@ module.exports = function storage(G, S, M, api, log) {
   const inRoom = (P) => { const q = bot.entity.position.floored(), b = P.box; return q.x >= b.x0 - 1 && q.x <= b.x1 + 1 && q.z >= b.z0 - 1 && q.z <= b.z1 + 1 && Math.abs(q.y - P.y) <= 1 }
   async function goRoom(sh, P) {
     if (inRoom(P)) return true
-    const cell = v(sh.entry[0], P.y, sh.entry[2])
-    if (bot.entity.position.y < P.y - 1 && S.dist(cell) < 40) await S.goto(new goals.GoalBlock(cell.x, cell.y, cell.z), { dig: false, ms: 60000, escalate: false })
-    else await LD().down({ ...sh, bottom: [cell.x, cell.y, cell.z] })
-    for (const c of P.corridor) await walk(c, 8000)
+    const cell = v(sh.entry[0], P.y, sh.entry[2]), me = bot.entity.position
+    // into the shaft column: at the bot's own level when it is down in the mine next to the shaft, else at the top (nav's escalation from far
+    // off: a walk-only path failed from 40 blocks out, Smeo444 04:28)
+    if (!LD().inColumn(sh)) {
+      if (me.y < sh.entry[1] - 2 && S.dist(v(cell.x, me.y, cell.z)) < 12) await S.goto(new goals.GoalBlock(cell.x, Math.floor(me.y), cell.z), { dig: false, ms: 20000, escalate: false }).catch(() => {})
+      else await S.goto(new goals.GoalBlock(sh.entry[0], sh.entry[1], sh.entry[2]), { dig: false, ms: 90000, escalate: S.dist(v(...sh.entry)) > 6 }).catch(() => {})
+    }
+    // then the ladder by hand to the room's level, and off into the corridor
+    await LD().rideTo(sh, P.y)
+    for (const c of P.corridor) { await clear(c); await clear(c.offset(0, 1, 0)); await walk(c, 8000) }
     await walk(P.at(3, 0), 8000)
     return inRoom(P)
   }

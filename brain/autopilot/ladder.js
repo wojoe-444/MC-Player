@@ -34,10 +34,73 @@ module.exports = function ladder(bot, S, goals, v, log) {
     return ladders()
   }
   // place a ladder in cell c, hung on the wall at c+wall (that wall block must be solid)
+  // The ladder's plate sits against the wall; the server refuses it while the player's box overlaps the plate, i.e. while the bot stands in
+  // that column pressed toward the wall (04:36: 'refused to place ladder at (-6018, 50, -2355)', the bot in that very cell, off centre). So a bot
+  // in the column first steps to the side away from the wall, and if the wall it has is open, any other solid side of the cell will do.
+  async function awayFromWall(c, wall) {
+    const e = bot.entity.position
+    if (Math.floor(e.x) !== c.x || Math.floor(e.z) !== c.z || e.y > c.y + 1 || e.y + 1.8 < c.y) return
+    const tgt = v(c.x + 0.5 - wall[0] * 0.28, e.y, c.z + 0.5 - wall[1] * 0.28)
+    try {
+      for (let i = 0; i < 12 && Math.hypot(tgt.x - bot.entity.position.x, tgt.z - bot.entity.position.z) > 0.06; i++) {
+        await bot.lookAt(tgt.offset(0, 1.6, 0), true); bot.setControlState('sneak', true); bot.setControlState('forward', true); await sleep(50)
+      }
+    } catch {} finally { bot.setControlState('forward', false); bot.setControlState('sneak', false) }
+  }
   async function hang(c, wall) {
     const cur = S.block(c); if (cur && cur.name === 'ladder') return true
-    const w = S.block(c.offset(wall[0], 0, wall[1])); if (!w || w.boundingBox !== 'block') return false
-    return await S.placeAgainst(w, v(-wall[0], 0, -wall[1]), 'ladder').catch(() => false)
+    const sides = [wall, ...[[1, 0], [0, 1], [-1, 0], [0, -1]].filter(([x, z]) => x !== wall[0] || z !== wall[1])]
+    for (const w0 of sides) {
+      const w = S.block(c.offset(w0[0], 0, w0[1])); if (!w || w.boundingBox !== 'block' || !solid(w.position)) continue
+      await awayFromWall(c, w0)
+      if (await S.placeAgainst(w, v(-w0[0], 0, -w0[1]), 'ladder').catch(() => false)) return true
+    }
+    return false
+  }
+
+  // the shaft column (entry down to the bottom): no torches or other blocks go in it
+  L.isShaftCell = (p) => L.shafts().some(sh => sh.bottom && p.x === sh.entry[0] && p.z === sh.entry[2] && p.y < sh.entry[1] && p.y >= sh.bottom[1])
+  // Repair the ladder within reach: every shaft cell from the bottom up to the feet + 3 gets its ladder back. A torch (or anything see-through)
+  // in the cell goes first, a missing wall block is filled with the bot's own stone. OzoGo444's shaft had no ladder at y50-51 (a torch in the
+  // bottom cell, 'ladder would not hang at y50'), so neither bot could climb out from the bottom (04:29, 04:34) and one dug up into lava.
+  L.repair = async (sh) => {
+    if (!sh || !sh.bottom) return 0
+    const wall = sh.wall || [1, 0], me = bot.entity.position, top = Math.min(sh.entry[1] - 1, Math.floor(me.y) + 3)
+    let n = 0
+    for (let y = sh.bottom[1]; y <= top; y++) {
+      const c = v(sh.entry[0], y, sh.entry[2]), cur = S.block(c)
+      if (!cur || cur.name === 'ladder') continue
+      if (S.dist(c.offset(0.5, 0.5, 0.5)) > 4.5) continue
+      if (cur.boundingBox === 'empty' && !/^(air|cave_air)$/.test(cur.name) && !S.isLiquid(cur)) { try { await bot.dig(cur, true) } catch {} await sleep(250) }
+      const wb = c.offset(wall[0], 0, wall[1])
+      if (!solid(wb)) { const f = S.items().find(i => /^(cobblestone|cobbled_deepslate|dirt|stone)$/.test(i.name)); const g = S.block(wb.offset(0, -1, 0)); if (f && g && g.boundingBox === 'block') await S.placeAgainst(g, v(0, 1, 0), f.name).catch(() => false) }
+      if (ladders() < 1) await L.ensureLadders(4)
+      if (await hang(c, wall)) n++
+    }
+    if (n) log('LADDER', 'repaired ' + n + ' ladder(s) in ' + sh.id)
+    return n
+  }
+
+  // Ride the ladder by hand to level y, the bot already in the shaft column: up = face the wall and hold jump+forward; down = let go and slide
+  // (about 3 blocks a second), sneaking the moment the feet reach y so it holds there. The pathfinder has no ladder moves, so a go-to from
+  // inside the shaft to a level in it failed both ways (storage room: Smeo444 04:29 from below, OzoGo444 04:43 from above).
+  L.inColumn = (sh) => { const e = bot.entity.position; return Math.hypot(e.x - sh.entry[0] - 0.5, e.z - sh.entry[2] - 0.5) < 0.9 }
+  L.rideTo = async (sh, y, ms = 40000) => {
+    if (!L.inColumn(sh)) return false
+    const w = sh.wall || [1, 0], t0 = Date.now(), at = () => bot.entity.position.y
+    try {
+      if (at() < y - 0.2) {
+        await L.repair(sh).catch(() => 0)
+        await bot.lookAt(v(sh.entry[0] + 0.5 + w[0], at() + 1.6, sh.entry[2] + 0.5 + w[1]), true)
+        bot.setControlState('jump', true); bot.setControlState('forward', true)
+        while (Date.now() - t0 < ms && at() < y + 0.05) await sleep(50)
+      } else if (at() > y + 0.2) {
+        bot.clearControlStates()
+        while (Date.now() - t0 < ms && at() > y + 0.1) await sleep(50)
+      }
+      bot.clearControlStates(); bot.setControlState('sneak', true); await sleep(300)
+    } catch {} finally { bot.clearControlStates() }
+    return Math.abs(at() - y) < 0.8
   }
 
   // dig a new laddered shaft down from entry (the bot's feet cell at the top) to targetY. Returns the shaft record (also saved).
@@ -85,14 +148,40 @@ module.exports = function ladder(bot, S, goals, v, log) {
     const r = await S.goto(new goals.GoalBlock(b.x, b.y, b.z), { dig: false, ms: 90000, escalate: false })
     return r.ok || S.dist(b.offset(0.5, 0, 0.5)) < 2
   }
+  // Up and out (bug hunt 2026-11-10 #6): the entry cell has no floor (the first ladder hangs one below it), so a go-to aimed at it counted as
+  // reached on the top rung and the bot slid back down when the keys were let go: ladder bobbing. Now the bot climbs by hand past the top and
+  // steps off onto a floored cell beside the entry; success only when it stands on ground at entry level or above.
+  const passable = (c) => { const b = S.block(c); return !!b && b.boundingBox === 'empty' && !S.isLiquid(b) }
+  L.exits = (sh) => {
+    const e = v(...sh.entry), w = sh.wall || [1, 0]
+    // the wall side first: holding forward against the wall at the top walks the bot straight onto it
+    return [w, [-w[1], w[0]], [w[1], -w[0]], [-w[0], -w[1]]].map(([dx, dz]) => e.offset(dx, 0, dz)).filter(c => passable(c) && passable(c.offset(0, 1, 0)) && solid(c.offset(0, -1, 0)))
+  }
+  const outAt = (sh) => bot.entity.onGround && bot.entity.position.y >= sh.entry[1] - 0.01 && !L.inColumn(sh)
   L.up = async (sh) => {
     const e = v(...sh.entry), b = v(...sh.bottom)
+    if (outAt(sh)) return true
     if (S.dist(b) > 3 && Math.abs(bot.entity.position.y - b.y) <= 3) await S.goto(new goals.GoalNear(b.x, b.y, b.z, 1), { dig: false, ms: 90000, escalate: false })
-    const r = await S.goto(new goals.GoalBlock(e.x, e.y, e.z), { dig: false, ms: 90000, escalate: false })
-    if (r.ok || S.dist(e.offset(0.5, 0, 0.5)) < 2) return true
-    // by hand: on the ladder, look at the wall and hold jump
-    try { await bot.lookAt(v(e.x + 0.5 + sh.wall[0], bot.entity.position.y + 1.6, e.z + 0.5 + sh.wall[1]), true); bot.setControlState('jump', true); bot.setControlState('forward', true); const t0 = Date.now(); while (Date.now() - t0 < 40000 && bot.entity.position.y < e.y - 0.1) await sleep(100) } catch {} finally { bot.clearControlStates() }
-    return S.dist(e.offset(0.5, 0, 0.5)) < 3
+    await L.repair(sh).catch(() => 0)
+    if (!L.inColumn(sh)) await S.goto(new goals.GoalBlock(e.x, Math.floor(bot.entity.position.y), e.z), { dig: false, ms: 20000, escalate: false }).catch(() => {})
+    const exits = L.exits(sh)
+    if (L.inColumn(sh)) {
+      await L.rideTo(sh, e.y + 0.4, 45000)
+      // step off: face an exit and walk onto it, jumping (the last rung tops out a little under the floor level)
+      for (const x of exits) {
+        if (outAt(sh)) break
+        const t0 = Date.now()
+        try {
+          while (Date.now() - t0 < 2500 && !(outAt(sh) && Math.floor(bot.entity.position.x) === x.x && Math.floor(bot.entity.position.z) === x.z)) {
+            await bot.lookAt(x.offset(0.5, 1.6, 0.5), true); bot.setControlState('forward', true); bot.setControlState('jump', true); await sleep(50)
+          }
+        } catch {} finally { bot.clearControlStates() }
+      }
+    }
+    if (!outAt(sh) && exits.length) await S.goto(new goals.GoalBlock(exits[0].x, exits[0].y, exits[0].z), { dig: false, ms: 20000, escalate: false }).catch(() => {})
+    const ok = outAt(sh)
+    if (!ok) log('LADDER', 'up ' + sh.id + ': not out at the top (at ' + bot.entity.position.floored() + ', exits ' + exits.length + ')')
+    return ok
   }
   return L
 }

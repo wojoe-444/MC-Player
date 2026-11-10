@@ -271,7 +271,7 @@ function legacyMovements(bot) {
 //   r.close()
 async function rig(simOpts = {}, build = () => {}, navOpts = {}) {
   const { Navigator } = require('../brain/nav/navigator')
-  const sim = makeSim(simOpts)
+  const sim = (simOpts.make || makeSim)(simOpts)
   build(sim)
   legacyMovements(sim.bot)
   await sim.settle(10)

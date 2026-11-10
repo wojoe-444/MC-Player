@@ -69,6 +69,9 @@ class Breaches {
       if (props.half === 'upper') return                                                    // doors: the lower half carries the item
       if (!this.wanted(oldB)) return
       const p = oldB.position
+      // the shaft column, a storage room and its corridor stay open: nav refilled the room's corridor with cobblestone after a go-to had dug
+      // through it, and both bots were shut out of the room (04:47, -6018,55..56,-2356)
+      try { if (this.r.bot._keepOpen && this.r.bot._keepOpen(p)) return } catch {}
       this.list.push({ x: p.x, y: p.y, z: p.z, name: oldB.name, props, from: { x: me.x, y: me.y, z: me.z }, tries: 0 })
       this.r.log(`breach: broke ${oldB.name} at ${p.x},${p.y},${p.z}`)
     } catch { /* never let bookkeeping break a dig */ }
@@ -120,6 +123,7 @@ class Breaches {
       const away = this.r.bot.entity.position.distanceTo(new Vec3(rec.x + 0.5, rec.y + 0.5, rec.z + 0.5))
       if (away > 48) { keep.push(rec); continue }
       let ok = false
+      try { if (this.r.bot._keepOpen && this.r.bot._keepOpen(rec)) continue } catch {}
       try { ok = await this.sealOne(rec, run) } catch (e) { this.r.log('breach seal failed: ' + e.message) }
       if (!ok && ++rec.tries < 3) keep.push(rec)
     }
@@ -534,6 +538,9 @@ class Reach {
 
   // Jump and place a block under the feet; repeat. Needs two free cells above the head.
   async pillar(run) {
+    // placeBlock's own lookAt is not forced: it turns the head ~0.15 rad a tick, so straight down at the top of a jump it could take many ticks
+    // and the place went out on the way down, into the feet cell (the refusals at tick 3, +1.2, vy -0.078). Forced look: same tick.
+    const place = (b, r, f) => typeof b._placeBlockWithOptions === 'function' ? b._placeBlockWithOptions(r, f, { forceLook: true, swingArm: 'right' }) : b.placeBlock(r, f)
     const bot = this.bot
     if (!(await this.ensureBlocks(1, run))) return false
     const f = this.feet()
@@ -571,7 +578,7 @@ class Reach {
           if (bot.entity.position.y < f.y + 1.1 || bot.entity.velocity.y < -0.1) continue
           // every attempt is logged in full until the jump-and-place failures are understood (Walter 2026-11-10)
           const at = { tick: i, dy: +(bot.entity.position.y - f.y).toFixed(3), vy: +bot.entity.velocity.y.toFixed(3), ground: bot.entity.onGround, held: bot.heldItem ? bot.heldItem.name : null, slot: bot.quickBarSlot, ref: ref.name + '@' + ref.position, dest: this.blk(f.x, f.y, f.z) ? this.blk(f.x, f.y, f.z).name : '?' }
-          try { if (!bot.heldItem || bot.heldItem.name !== it.name) await bot.equip(it, 'hand'); await bot.placeBlock(ref, new Vec3(0, 1, 0)); placed = true; this.log('pillar ok ' + JSON.stringify(at)) } catch (e) {
+          try { if (!bot.heldItem || bot.heldItem.name !== it.name) await bot.equip(it, 'hand'); await place(bot, ref, new Vec3(0, 1, 0)); placed = true; this.log('pillar ok ' + JSON.stringify(at)) } catch (e) {
             // what the server says the bag and hand are, right after the refusal
             let srv = null
             try { bot._client.write('window_click', { windowId: 0, stateId: -1, slot: -999, mouseButton: 0, mode: 0, changedSlots: [], cursorItem: null }); await new Promise(r => setTimeout(r, 300)); srv = { held: bot.heldItem ? bot.heldItem.name : null, slot: bot.quickBarSlot, have: bot.inventory.items().filter(x => x.name === it.name).reduce((n, x) => n + x.count, 0), dy: +(bot.entity.position.y - f.y).toFixed(3), destNow: this.blk(f.x, f.y, f.z) ? this.blk(f.x, f.y, f.z).name : '?' } } catch {}

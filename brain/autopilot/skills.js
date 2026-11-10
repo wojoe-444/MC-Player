@@ -434,6 +434,7 @@ module.exports = function makeSkills({ bot, api, log }) {
   S.torchCrowded = (p) => { try { return bot.findBlocks({ matching: (b) => b && /^(torch|wall_torch)$/.test(b.name), point: p, maxDistance: 4, count: 12 }).some(t => !t.equals(p) && Math.abs(t.x - p.x) <= 2 && Math.abs(t.y - p.y) <= 2 && Math.abs(t.z - p.z) <= 2) } catch { return false } }
   S.placeAgainst = async (ref, face, itemName) => {
     if (/^torch$/.test(itemName || '') && ref && ref.position && face && S.torchCrowded(ref.position.plus(face))) return false
+    if (/^torch$/.test(itemName || '') && ref && ref.position && face && S.isShaftCell && S.isShaftCell(ref.position.plus(face))) return false
     const it = bot.inventory.items().find(i => i.name === itemName)
     if (!it) return false
     if (bot._meleeClose && Date.now() - (bot._meleeCloseAt || 0) < 500) return false   // a mob in reach: no placing while combat holds the sword
@@ -445,7 +446,8 @@ module.exports = function makeSkills({ bot, api, log }) {
     if (!bot.heldItem || bot.heldItem.name !== itemName) { log('PLACE_FAIL', `${itemName}: not in hand (holding ${bot.heldItem ? bot.heldItem.name : 'nothing'})`); return false }
     try { await bot.lookAt(v(ref.position.x + 0.5 + face.x * 0.5, ref.position.y + 0.5 + face.y * 0.5, ref.position.z + 0.5 + face.z * 0.5), true) } catch {}
     if (!bot.heldItem || bot.heldItem.name !== itemName) return false
-    try { await bot.placeBlock(ref, face); return true } catch (e) { log('PLACE_FAIL', `${itemName}: ${e.message}`); return false }
+    // forced look (placeBlock's default turns the head over several ticks)
+    try { if (typeof bot._placeBlockWithOptions === 'function') await bot._placeBlockWithOptions(ref, face, { forceLook: true, swingArm: 'right' }); else await bot.placeBlock(ref, face); return true } catch (e) { log('PLACE_FAIL', `${itemName}: ${e.message}`); return false }
   }
   // Find an open floor cell next to the bot and place `itemName` there. Returns the placed block or null.
   S.placeNear = async (itemName) => {
