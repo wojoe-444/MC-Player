@@ -81,7 +81,10 @@ module.exports = function plan(G, S, M, api, log) {
     const wm = /^([a-z]+)_/.exec(w.name); return (ARMOR_TIER[m[1]] || 0) > (ARMOR_TIER[wm && wm[1]] || 0) }
   // armor first: the iron for the next piece of protection, banked as soon as it is in the bag (78 ingots smelted on 11-05 went with the
   // deaths before any armor was made). null when the shield and all four iron pieces are on.
-  const nextGearCost = () => { if (!hasShield()) return 1; const a = ARMOR.find(([n, c, sl]) => !S.has(n) && !(worn(sl) && worn(sl).name === n)); return a ? a[1] : null }
+  // Walter 2026-11-10: NO ARMOR (except free mob-farm drops). It warped the incentives: the bot mined iron for armor as its 'phase 2'
+  // instead of building industry. Only the shield (1 iron, not armor) is still banked for.
+  const NO_ARMOR = true
+  const nextGearCost = () => { if (!hasShield()) return 1; if (NO_ARMOR) return null; const a = ARMOR.find(([n, c, sl]) => !S.has(n) && !(worn(sl) && worn(sl).name === n)); return a ? a[1] : null }
   const hasShield = () => S.has('shield') || (worn('off-hand') && worn('off-hand').name === 'shield')
 
   const steps = [
@@ -205,7 +208,7 @@ module.exports = function plan(G, S, M, api, log) {
       run: async () => { const got = await S.smelt('raw_iron', cnt('raw_iron')); note('smelted iron ' + got); G.dayCount('ingots', got); return got > 0 } },
     // Walter 2026-11-06: no iron tools, they waste iron (they went with every death). Stone tools are the default; iron goes into armor
     // (and the shield). The one iron pickaxe is made in the tunnel when an ore that needs it (diamond, gold, redstone, emerald) is in sight.
-    { id: 'iron-gear', need: () => ARMOR.some(([n, c, s]) => !S.has(n) && !(worn(s) && worn(s).name === n) && cnt('iron_ingot') >= c), run: async () => {
+    { id: 'iron-gear', need: () => !NO_ARMOR && ARMOR.some(([n, c, s]) => !S.has(n) && !(worn(s) && worn(s).name === n) && cnt('iron_ingot') >= c), run: async () => {
       for (const [n, c, s] of ARMOR) {
         if (S.has(n) || (worn(s) && worn(s).name === n) || cnt('iron_ingot') < c) continue
         const ok = await S.craft(n, 1); const it = S.items().find(i => i.name === n); if (it) { try { await bot.equip(it, s) } catch {} }
@@ -213,8 +216,8 @@ module.exports = function plan(G, S, M, api, log) {
       }
       return false } },
     // only an upgrade over what is worn (Smeo kept 'wearing' spare golden leggings over chainmail ones and the loop detector parked the step)
-    { id: 'wear', need: () => S.items().some(i => armorUp(i)) || (S.has('shield') && !(worn('off-hand') && worn('off-hand').name === 'shield')), cool: 30000, run: async () => {
-      for (const it of S.items()) { const m = /_(helmet|chestplate|leggings|boots)$/.exec(it.name); if (m && armorUp(it)) { try { await bot.equip(it, { helmet: 'head', chestplate: 'torso', leggings: 'legs', boots: 'feet' }[m[1]]) } catch {} } }
+    { id: 'wear', need: () => (!NO_ARMOR && S.items().some(i => armorUp(i))) || (S.has('shield') && !(worn('off-hand') && worn('off-hand').name === 'shield')), cool: 30000, run: async () => {
+      for (const it of S.items()) { const m = /_(helmet|chestplate|leggings|boots)$/.exec(it.name); if (m && !NO_ARMOR && armorUp(it)) { try { await bot.equip(it, { helmet: 'head', chestplate: 'torso', leggings: 'legs', boots: 'feet' }[m[1]]) } catch {} } }
       const sh = S.items().find(i => i.name === 'shield'); if (sh) { try { await bot.equip(sh, 'off-hand') } catch {} }
       return true } },
 
