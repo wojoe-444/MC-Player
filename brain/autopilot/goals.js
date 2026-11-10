@@ -8,6 +8,8 @@ module.exports = function makeGoals(S, M, api, log) {
   const file = api.statePath('autopilot-state.json')
   const load = () => { try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch { return {} } }
   const G = { state: load(), fails: {}, cool: {}, lastStep: null, log: [] }
+  // survival steps are never held back and never start a commitment
+  G.commit = require('./commit').createCommit({ urgent: new Set(['eat', 'recover', 'take-cover', 'night-home', 'rebed', 'shelter', 'wear', 'shield']) })
   const st = G.state
   st.said = st.said || {}
   st.heading = st.heading == null ? Math.floor(Math.random() * 8) : st.heading
@@ -197,6 +199,8 @@ module.exports = function makeGoals(S, M, api, log) {
       if (Date.now() - nt > 500) log('SLOW', `need() of ${s.id} took ${Date.now() - nt} ms`)
       if (!need) continue
       if ((G.cool[s.id] || 0) > t) continue
+      // committed to a step that the picker keeps leaving for this one (A,B,A,B): let it finish before this one comes back
+      if (G.commit.skips(s.id, (id) => { const b = steps.find(x => x.id === id); return b && (G.cool[id] || 0) <= t && !((night || dawn) && G.role !== 'assistant' && (NIGHT_SKIP.has(id) || DAWN_SKIP.has(id))) && b.need() })) continue
       return s
     }
     return null
@@ -233,6 +237,7 @@ module.exports = function makeGoals(S, M, api, log) {
       return
     }
     G.lastStep = s.id
+    { const cm = G.commit.note(s.id); if (cm) note(`commitment: ${cm.over} and ${s.id} keep re-arming each other; staying with ${s.id} until it is done (at most ${Math.round((cm.until - cm.since) / 60000)} min)`) }
     S.progress(s.id)
     note(`step ${s.id}`)
     let r

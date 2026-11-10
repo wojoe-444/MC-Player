@@ -20,7 +20,7 @@ const os = require('os')
 const path = require('path')
 const { execFileSync, spawnSync } = require('child_process')
 
-const RELOADABLE = new Set(['hallway.js', 'skills.js', 'mining.js', 'goals.js', 'plan.js', 'memory.js', 'think.js', 'watchdog.js'].map(f => 'brain/autopilot/' + f))
+const RELOADABLE = new Set(['hallway.js', 'skills.js', 'mining.js', 'goals.js', 'plan.js', 'memory.js', 'think.js', 'watchdog.js', 'commit.js'].map(f => 'brain/autopilot/' + f))
 const WEIGHT = { high: 3, med: 1, low: 0 }
 
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000 }).toString().trim()
