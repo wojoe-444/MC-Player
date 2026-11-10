@@ -576,6 +576,17 @@ module.exports = function think(G, S, M, api, log) {
     const r = await F.run(); const s = F.status()
     return { ok: !!r || s.done, note: s.done ? 'mob farm built' : `phase ${s.phase}${s.why ? ' (' + s.why + ')' : ''}${Object.keys(s.needs).length ? '; missing ' + JSON.stringify(s.needs) : ''}` }
   })
+  def('light_up', '{action: run|scan|status, radius?, max?} light the dark spots where hostile mobs can spawn around the mob farm, so they stop taking its mob cap (Walter 2026-11-10: this ONE scan through blocks is allowed, only to choose where to walk). run = scan, drop sealed pockets, pick the fewest torch spots (spacing 2+ air apart, never light into the platform), rush in, torch it in view of the floor, and fall back to the rest spot when mobs gather or health drops (despawn clears them; the combat reflex fights only when it has to). Needs 4+ torches, hp 14+. scan = counts only, no walking. Run it when the farm has not logged kills for a while, after the farm is built, and again after exploring new caves near it.', async (a) => {
+    const act = clean(a.action).toLowerCase() || 'status'
+    const F = G.lightUp; if (!F) return fail('light-up not loaded')
+    if (act === 'status') return { ok: true, note: clean(JSON.stringify(F.status())).slice(0, 500) }
+    const o = {}; if (num(a.radius)) o.r = clamp(num(a.radius), 16, 64); if (num(a.max)) o.maxTorches = clamp(num(a.max), 1, 30)
+    if (act === 'scan') { const r = await F.scan(o); return { ok: true, note: clean(JSON.stringify(r)).slice(0, 500) } }
+    if (act !== 'run') return fail('action is run, scan or status')
+    const r = await F.run(o)
+    if (!r.ok) return fail(clean(r.why) || 'nothing lit', r.needs ? 'bring: ' + Object.entries(r.needs).map(([k, n]) => n + ' ' + k).join(', ') : undefined)
+    return { ok: true, note: clean(`placed ${r.placed}, failed ${r.failed}, retreats ${r.retreats}; dark spots ${r.dark0} -> ${r.left ? r.left.dark : '?'}${r.left ? ' (' + r.left.sealed + ' sealed)' : ''}${r.why ? '; ' + r.why : ''}`) }
+  })
   def('revise_strategy', '{text, why} replace your persistent STRATEGY (max ~2400 chars) with improved standing policies. Use when PATTERNS show a repeated failure: name the missing capability, design a durable process (infrastructure included), add a CHECK.', async (a) => { const ok = reflect.revise(a.text, a.why); return ok ? { ok: true, note: 'strategy updated' } : fail('text too short') })
   def('say', '{text} one short chat line to Walter (rare; no questions about the game).', async (a) => { const t = clean(a.text).slice(0, 160); if (!t || Date.now() - (T.lastSay || 0) < 90000) return { ok: true, note: 'skipped' }; T.lastSay = Date.now(); S.say(t); return { ok: true } })
   def('wait', '{ms} stand still (max 5000). Only to let something finish; never as a plan.', async (a) => { await S.wait(clamp(num(a.ms) || 1000, 100, 5000)); return { ok: true } })

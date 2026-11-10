@@ -59,7 +59,7 @@ and a registry room `type: 'mobfarm'`.
 
 **Waiting.** Mobs spawn only farther than 24 blocks from the player and despawn when the player is over 32 away, so the bot should rest 25 to 30 blocks from the
 platform: the corridor by the shaft at the kill level (`rest` in `mobfarm.json`) is 22 to 30 blocks from every pad. At the kill spot itself about half the pads are
-inside 24. The farm competes for the mob cap with every other dark space near the bot, so lit caves help.
+inside 24. The farm competes for the mob cap with every other dark space near the bot, so lit caves help: see `brain/lightup/README.md` (think-brain skill `light_up`, fallback step `mob-farm-light`).
 
 ## Checked in vanilla 1.21.6 (trial server)
 
