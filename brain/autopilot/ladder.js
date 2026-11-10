@@ -221,9 +221,13 @@ module.exports = function ladder(bot, S, goals, v, log) {
   L.exits = (sh) => {
     const e = v(...sh.entry), w = sh.wall || [1, 0]
     // the wall side first: holding forward against the wall at the top walks the bot straight onto it
-    return [w, [-w[1], w[0]], [w[1], -w[0]], [-w[0], -w[1]]].map(([dx, dz]) => e.offset(dx, 0, dz)).filter(c => passable(c) && passable(c.offset(0, 1, 0)) && solid(c.offset(0, -1, 0)))
+    // at the entry's level or up to two above it: the ground beside the shaft can be higher than the entry cell (OzoGo444's shaft top at y65 has grass
+    // at y65 beside it, so the way out is the cell at y66, and "exits 0" looped the climb 3 times a second)
+    const out = []
+    for (let dy = 0; dy <= 2; dy++) for (const [dx, dz] of [w, [-w[1], w[0]], [w[1], -w[0]], [-w[0], -w[1]]]) { const c = e.offset(dx, dy, dz); if (passable(c) && passable(c.offset(0, 1, 0)) && solid(c.offset(0, -1, 0))) out.push(c) }
+    return out
   }
-  const outAt = (sh) => bot.entity.onGround && bot.entity.position.y >= sh.entry[1] - 0.01 && !L.inColumn(sh)
+  const outAt = (sh) => bot.entity.onGround && bot.entity.position.y >= sh.entry[1] - 0.01 && !L.inColumn(sh) && !/ladder/.test((S.block(bot.entity.position.floored()) || {}).name || '')
   L.up = async (sh) => {
     const e = v(...sh.entry), b = v(...sh.bottom)
     if (outAt(sh)) return true
@@ -232,7 +236,7 @@ module.exports = function ladder(bot, S, goals, v, log) {
     if (!L.inColumn(sh)) await L.enterColumn(sh)
     const exits = L.exits(sh)
     if (L.inColumn(sh)) {
-      await L.rideTo(sh, e.y + 0.4, 45000)
+      await L.rideTo(sh, Math.max(e.y, exits.length ? exits[0].y : e.y) + 0.4, 45000)
       // step off: face an exit and walk onto it, jumping (the last rung tops out a little under the floor level)
       for (const x of exits) {
         if (outAt(sh)) break
