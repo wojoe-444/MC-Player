@@ -342,6 +342,13 @@ function armorFlag(state, now) {
   return { kind: 'armor_equipped', sev: 'high', t0: now - 60000, t1: now,
     msg: `wearing armor, which is banned (${bad.map(a => `${a.name} on ${ARMOR_SLOTS[a.slot] || 'slot ' + a.slot}`).join(', ')}); only diamond with Mending or a mob-farm drop is allowed`, data: { worn: bad } }
 }
+// armor in the bag, not worn: crafted or picked up against the no-armor rule (the 05:16 review found four iron pieces carried). med, and not for Mending diamond or listed farm drops.
+function armorCarriedFlag(state, now) {
+  const bad = ((state && state.carried) || []).filter(a => ARMOR.test(a.name) && !(/^(diamond|netherite)_/.test(a.name) && a.mending) && !(state.farmDrops || []).includes(a.name))
+  if (!bad.length) return null
+  return { kind: 'armor_carried', sev: 'med', t0: now - 60000, t1: now,
+    msg: `carrying armor in the bag (${bad.map(a => `${a.name} x${a.count || 1}`).join(', ')}); armor is banned, so it should not be crafted or kept (stash it, or only keep Mending diamond / mob-farm drops)`, data: { carried: bad } }
+}
 function tierFlag(events, now, cfg) {
   const t0 = now - 300000
   const over = evSince(events, t0, 'dig').filter(d => d.overTier)
@@ -367,7 +374,7 @@ function analyze(samples, events, now, over, state) {
   const cfg = merge(DEFAULTS, over)
   const flags = [
     ...jumpFlags(samples, events, now, cfg), pillarFlag(samples, events, now, cfg), ladderBobFlag(samples, events, now, cfg), oscillationFlag(samples, now, cfg), stuckFlag(samples, now, cfg), idleFlag(samples, events, now, cfg),
-    wrongToolFlag(events, now, cfg), stairsFlag(events, now, cfg), placementFlag(events, now, cfg), torchFlag(events, now, cfg), lavaFlag(samples, now, cfg), armorFlag(state, now), tierFlag(events, now, cfg), chatFlag(events, now, cfg),
+    wrongToolFlag(events, now, cfg), stairsFlag(events, now, cfg), placementFlag(events, now, cfg), torchFlag(events, now, cfg), lavaFlag(samples, now, cfg), armorFlag(state, now), armorCarriedFlag(state, now), tierFlag(events, now, cfg), chatFlag(events, now, cfg),
     ...toolFlags(events, now), ...failFlags(events, now, cfg),
   ].filter(Boolean)
   return flags
@@ -410,4 +417,4 @@ function excerpt(samples, t0, t1, maxPoints = 60) {
 }
 excerpt.columns = ['sec', 'x', 'y', 'z', 'onGround', 'held', 'task', 'digging']
 
-module.exports = { zigzag, torchTooClose, evSince, covers, isBlockItem, NON_BLOCK, DEFAULTS, FILLER, analyze, counters, excerpt, toolCheck, tierOf, neededTier, armorFlag, since, extent, hExtent, pathLength, merge }
+module.exports = { zigzag, torchTooClose, evSince, covers, isBlockItem, NON_BLOCK, DEFAULTS, FILLER, analyze, counters, excerpt, toolCheck, tierOf, neededTier, armorFlag, armorCarriedFlag, since, extent, hExtent, pathLength, merge }

@@ -38,6 +38,8 @@ HOW TO WRITE FINDINGS
 - ONE FINDING PER ROOT CAUSE, not per flag. If six flags have one cause, write one finding that names the cause, lists the flags it explains in the evidence, and is rated once. Prefer the cause a driver can fix ("the hotbar keeps the stone sword selected during digging") over the symptom ("jumping 200 times").
 - Exception: a broken rule (armor, tool tier, chat, lava, slash command) is always its own finding with kind rule_violation, even when a tool-choice or other cause also explains it; do not bury a rule violation inside a bigger finding.
 - Do not just restate a detector flag. Add what the flag cannot know: the cause, the cross-evidence (logs, bag, other bot), the first sign of it, and the rule it breaks. If a flag needs no addition, leave it out; the flag file already shows it.
+- A cause shared by both bots (the same ladder column or tile, the same routine) is ONE finding, written under the bot where it is worse, with the other bot named in its evidence; the other bot lists it again only if it has a separate effect there.
+- No guesses as findings: if all you can write is "either X or Y is off", the evidence does not support a finding, so leave it out (or fold the one concrete fact into another finding).
 - Rank like a spectator. At most 2 findings per bot may be high; if more qualify, merge them or keep only the two a spectator would call out first. Everything else is med or low. Cap a bot at 5 findings in total.
 - Quote real numbers and times from the evidence, with the unit and the window. Never invent coordinates, depths, rates or causes; if the cause is a guess, say "likely" and give the one thing that would confirm it.
 - Key: lowercase, "<bot>-<cause>" such as "ozo-sword-held-while-digging", not "<bot>-detector-<kind>". When one finding replaces several earlier ones (including earlier "<bot>-detector-..." keys), list the old keys in "resolved". Only resolve a key when its flag is gone from activeDetectorFlags AND the counters agree; a flag still active means the problem is still open.
@@ -145,6 +147,7 @@ const BUILTIN_DETECTORS = [
   { kind: 'torch_spacing', what: 'a torch placed adjacent to, or less than torch-air-air-torch (3 blocks) from, another on a line at the same height' },
   { kind: 'lava_in_hand', what: 'walking with a lava bucket selected' },
   { kind: 'armor_equipped', what: 'any armor worn (banned, Walter 2026-11-10) unless diamond/netherite with Mending or a listed mob-farm drop; raised within a second of the slot changing' },
+  { kind: 'armor_carried', what: 'armor in the bag, not worn (crafted or picked up against the no-armor rule); not Mending diamond or listed farm drops' },
   { kind: 'tool_tier', what: '3+ digs in 5 min with a higher tool tier than the block needs while a lower suitable one is in the bag (stone is the default; iron only for diamond/gold/redstone/emerald; diamond only for obsidian)' },
   { kind: 'chat_spam', what: 'the same chat line 3x in a minute (high), or 3 lines in quick succession (<1 s apart) / 10+ lines a minute (med)' },
 ]

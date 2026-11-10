@@ -31,6 +31,7 @@ placements (and whether the sky was open above), pathfinder failures, aborted di
 | `repeated_failure` | 5+ noPath/timeout/aborted dig/failed task in 5 min |
 | `lava_in_hand` | walking with a lava bucket selected |
 | `armor_equipped` | **high, immediate.** Any armor in a head/chest/legs/feet slot (armor is banned, Walter 2026-11-10), except diamond/netherite with Mending, or names listed under `armorFarmDrops` in `brain/state/telemetry/rules.json` (for mob-farm drops once a farm exists). Raised ~0.3 s after the slot changes, not at the next 15 s pass |
+| `armor_carried` | armor pieces in the bag (not worn), same exceptions; med. The 05:16Z review found four iron pieces carried that `armor_equipped` could not see |
 | `tool_tier` | 3+ digs in 5 min with a higher tier than the block needs while a lower suitable tool is in the bag (stone is the default; iron only for diamond/gold/redstone/emerald; diamond only for obsidian) |
 | `chat_spam` | the same line 3x in a minute (high); 3 lines less than 1 s apart or 10+ lines a minute (med). Relies on the server echoing the bot's own chat |
 

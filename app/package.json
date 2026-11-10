@@ -47,6 +47,14 @@
         "to": "reviewer/node_modules"
       },
       {
+        "from": "../brain/telemetry",
+        "to": "brain/telemetry",
+        "filter": [
+          "sandbox.js",
+          "detectors.js"
+        ]
+      },
+      {
         "from": "../dashboard",
         "to": "dashboard",
         "filter": [

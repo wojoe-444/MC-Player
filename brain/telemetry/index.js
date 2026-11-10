@@ -101,7 +101,7 @@ module.exports = function register(api) {
   const onDigAbort = (block) => addEvent({ k: 'fail', t: now(), what: 'digAbort', note: block ? block.name : '' })
   const onPathUpdate = (r) => {
     if (!r) return
-    if (r.status === 'noPath' || r.status === 'timeout') addEvent({ k: 'fail', t: now(), what: r.status, note: curTask || '' })
+    if (r.status === 'noPath' || r.status === 'timeout') addEvent({ k: 'fail', t: now(), what: r.status, note: (curTask || '') + (bot._ap && bot._ap.G && bot._ap.G.lastStep ? ':' + bot._ap.G.lastStep : '') })
   }
   // signs of work that are not digging or placing: picking items up, opening a chest/furnace/crafting table (coalesced, one per 5 s)
   let lastWork = 0
@@ -128,7 +128,9 @@ module.exports = function register(api) {
         worn.push({ slot, name: it.name, mending })
       }
     } catch {}
-    return { worn, farmDrops: farmDrops() }
+    const carried = []
+    try { for (const i of bot.inventory.items()) if (ARMOR_RE.test(i.name) && !worn.some(w => w.name === i.name && w.slot === i.slot)) { let mending = false; try { mending = (i.enchants || []).some(e => e.name === 'mending') } catch {} carried.push({ name: i.name, count: i.count, mending }) } } catch {}
+    return { worn, carried, farmDrops: farmDrops() }
   }
   // what the bot carries, name -> count (top 30), so the reviewer can judge progress between two reviews
   function bagCounts() {

@@ -391,3 +391,18 @@ test('chat_spam: a repeated line is high, a burst under one second apart or 10+ 
   assert.strictEqual(f(say([5, 5.4, 5.8, 30], i => 'line ' + i)).sev, 'med')
   assert.strictEqual(f(say([2, 8, 14, 20, 26, 32, 38, 44, 50, 56], i => 'line ' + i)).sev, 'med')
 })
+
+test('armor_carried: iron armor in the bag is med; Mending diamond and listed farm drops are not; fail events name the autopilot step', () => {
+  const ss = ring(10, () => ({}))
+  const f = (carried, farmDrops) => D.analyze(ss, [], now(ss), undefined, { worn: [], carried, farmDrops }).find(x => x.kind === 'armor_carried')
+  const hit = f([{ name: 'iron_helmet', count: 1 }, { name: 'iron_boots', count: 1 }])
+  assert.ok(hit && hit.sev === 'med'); assert.match(hit.msg, /iron_helmet x1, iron_boots x1/)
+  assert.ok(!f([{ name: 'diamond_chestplate', count: 1, mending: true }]))
+  assert.ok(!f([{ name: 'leather_boots', count: 1 }], ['leather_boots']))
+  assert.ok(!f([]))
+  const { bot, h, advance } = rig()
+  bot._ap = { G: { lastStep: 'wood-stock' } }
+  h.start(); bot.emit('path_update', { status: 'timeout' }); advance(1000); h._tick.sample()
+  assert.strictEqual(h._tick.events().find(e => e.k === 'fail').note, ':wood-stock')   // no scheduler task in the mock, so just the step
+  h.stop()
+})
