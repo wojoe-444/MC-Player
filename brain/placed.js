@@ -23,6 +23,7 @@ function naturalChange(oldName, newName) {
 }
 const k = (p) => `${p.x},${p.y},${p.z}`
 
+const safeRename = (tmp, dst) => { try { fs.renameSync(tmp, dst) } catch (e) { if (!/EPERM|EBUSY|EACCES/.test(String(e.code || e.message))) throw e; try { fs.writeFileSync(dst, fs.readFileSync(tmp)); fs.unlinkSync(tmp) } catch (e2) { throw e2 } } }
 function attach(bot, log = () => {}) {
   if (bot._placed && bot._placed.v === 1) return bot._placed
   if (bot._placed && bot._placed.dispose) try { bot._placed.dispose() } catch {}
@@ -46,7 +47,7 @@ function attach(bot, log = () => {}) {
       all.worlds[world] = w
       fs.mkdirSync(path.dirname(FILE), { recursive: true })
       const tmp = FILE + '.' + me() + '.tmp'
-      fs.writeFileSync(tmp, JSON.stringify(all)); fs.renameSync(tmp, FILE)
+      fs.writeFileSync(tmp, JSON.stringify(all)); safeRename(tmp, FILE)
       map = new Map(Object.entries(w)); adds.clear(); dels.clear(); dirty = false
     } catch (e) { log('placed log save: ' + e.message) }
   }
