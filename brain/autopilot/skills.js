@@ -445,7 +445,8 @@ module.exports = function makeSkills({ bot, api, log }) {
     if (!bot.heldItem || bot.heldItem.name !== itemName) { log('PLACE_FAIL', `${itemName}: not in hand (holding ${bot.heldItem ? bot.heldItem.name : 'nothing'})`); return false }
     try { await bot.lookAt(v(ref.position.x + 0.5 + face.x * 0.5, ref.position.y + 0.5 + face.y * 0.5, ref.position.z + 0.5 + face.z * 0.5), true) } catch {}
     if (!bot.heldItem || bot.heldItem.name !== itemName) return false
-    try { await bot.placeBlock(ref, face); return true } catch (e) { log('PLACE_FAIL', `${itemName}: ${e.message}`); return false }
+    // forced look (placeBlock's default turns the head over several ticks)
+    try { if (typeof bot._placeBlockWithOptions === 'function') await bot._placeBlockWithOptions(ref, face, { forceLook: true, swingArm: 'right' }); else await bot.placeBlock(ref, face); return true } catch (e) { log('PLACE_FAIL', `${itemName}: ${e.message}`); return false }
   }
   // Find an open floor cell next to the bot and place `itemName` there. Returns the placed block or null.
   S.placeNear = async (itemName) => {
