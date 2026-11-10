@@ -1,0 +1,9 @@
+{
+  "name": "runlog",
+  "version": 1,
+  "kind": "observer",
+  "summary": "Tags the bot's runs with the git commit it runs and logs every autopilot step change with the Y level, counting A,B,A,B step loops, so a change shows as before and after on the same bot (docs/HILLCLIMB-INSIGHTS.md item 4).",
+  "requires": [],
+  "provides": [],
+  "claims": []
+}
