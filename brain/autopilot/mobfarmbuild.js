@@ -551,7 +551,9 @@ module.exports = function mobfarmbuild(G, S, M, api, log) {
 
   // one builder at a time: both bots share the shaft and the registry, and two farms would be dug into the same rock. The claim is a small file in
   // bot-shared; it lapses after 6 hours.
-  const CLAIM = require('path').join(__dirname, '..', '..', '..', 'bot-shared', 'mobfarm-claim.json')
+  // (BOT_MOBFARM_CLAIM redirects the file: the unit tests ran the build with a stub bot called 'T' and left a claim in the real bot-shared folder,
+  // which kept both live bots off the build for 6 hours, 2026-11-10 10:50)
+  const CLAIM = process.env.BOT_MOBFARM_CLAIM || require('path').join(__dirname, '..', '..', '..', 'bot-shared', 'mobfarm-claim.json')
   const otherBotBuilding = () => { try { const c = JSON.parse(require('fs').readFileSync(CLAIM, 'utf8')); return c.by !== bot.username && Date.now() - c.at < 6 * 3600000 && !(B().phase === 'done') } catch { return false } }
   const claim = () => { try { require('fs').writeFileSync(CLAIM, JSON.stringify({ by: bot.username, at: Date.now() })) } catch { /* ignore */ } }
   return {
