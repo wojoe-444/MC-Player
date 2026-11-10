@@ -49,7 +49,9 @@ Portal with a safe shell on the far side. Add the Nether support kit (piglin bar
 
 ## Phase 4: Enchanting and potions
 
-Bookshelves from sugarcane and pen leather, enchanting from the XP plan, villager books (Mending first), and potions (healing, regeneration, strength, fire resistance) as the defence layer until diamond armor with Mending exists. Cure villagers for cheaper trades. Then the tool and armor switch: about 33 diamonds, one Mending book per item, an anvil (31 iron). Mending repairs from kill XP, so the bot holds the mended tool at the mob farm.
+Bookshelves from sugarcane and pen leather, enchanting from the XP plan, villager books (Mending first), and brewing (below) as the defence layer until diamond armor with Mending exists. Cure villagers for cheaper trades. Then the tool and armor switch: about 33 diamonds, one Mending book per item, an anvil (31 iron). Mending repairs from kill XP, so the bot holds the mended tool at the mob farm.
+
+**Brewing (early Phase 4, right after the Nether kit from 3.5).** Needs blaze rods (stand and fuel) and Nether wart (base for every potion), so it cannot start before Phase 3.5. Build a brewing stand beside the enchanting area, with a water source, glass bottles from sand, and a Nether wart patch on soul sand as a steady supply. Priority order: **fire resistance** first (magma cream), so the bots have it before deeper Nether work and the endgame; then **healing** (glistering melon), **regeneration** (ghast tear) and **strength** (blaze powder). Keep a small potion stack in the reset-gear chest and in the travel kit. Potions are used on the bot's own judgement.
 
 ## Phase 5: Endgame
 
