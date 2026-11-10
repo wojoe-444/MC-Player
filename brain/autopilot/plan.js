@@ -136,7 +136,7 @@ module.exports = function plan(G, S, M, api, log) {
       // house, and the walk for them ended on the shelter roof, stuck, three times (06:58-07:06)
       const chests = bot.findBlocks({ matching: ids(/^chest$/), maxDistance: 16, count: 10, point: h }).filter(p => Math.abs(p.y - h.y) <= 1).slice(0, 6)
       if (!chests.length) return false
-      const want = [[cobbleRe, 48], [/_log$/, 16], [/_planks$/, 8], [/^stick$/, 8], [/^torch$/, 64], [/^(coal|charcoal)$/, 32], [/^(bread|dried_kelp|cooked_[a-z_]+|baked_potato|apple|sweet_berries|carrot)$/, 32], [/_pickaxe$|_sword$|_axe$|^shield$|_(helmet|chestplate|leggings|boots)$/, 9], [/^crafting_table$/, 1], [/^furnace$/, 1], [/_sapling$/, 8], [/^(raw_iron|iron_ingot)$/, 64], [/^dirt$/, 16], [/^(string|fishing_rod)$/, 8]]
+      const want = [[cobbleRe, 48], [/_log$/, 16], [/_planks$/, 8], [/^stick$/, 8], [/^torch$/, 64], [/^(coal|charcoal)$/, 32], [/^(bread|dried_kelp|cooked_[a-z_]+|baked_potato|apple|sweet_berries|carrot)$/, 32], [/_pickaxe$|_sword$|_axe$|^shield$/, 9], [/^crafting_table$/, 1], [/^furnace$/, 1], [/_sapling$/, 8], [/^(raw_iron|iron_ingot)$/, 64], [/^dirt$/, 16], [/^(string|fishing_rod)$/, 8]]
       let took = 0
       for (const cp of chests) {
         // plain walking only: the escalating go-to climbed onto the shelter roof over the home chests and stood there, stuck (06:58, 07:03)
