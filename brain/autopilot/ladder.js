@@ -163,7 +163,12 @@ module.exports = function ladder(bot, S, goals, v, log) {
     if (outAt(sh)) return true
     if (S.dist(b) > 3 && Math.abs(bot.entity.position.y - b.y) <= 3) await S.goto(new goals.GoalNear(b.x, b.y, b.z, 1), { dig: false, ms: 90000, escalate: false })
     await L.repair(sh).catch(() => 0)
-    if (!L.inColumn(sh)) await S.goto(new goals.GoalBlock(e.x, Math.floor(bot.entity.position.y), e.z), { dig: false, ms: 20000, escalate: false }).catch(() => {})
+    if (!L.inColumn(sh)) {
+      const col = v(e.x, Math.floor(bot.entity.position.y), e.z)
+      await S.goto(new goals.GoalBlock(col.x, col.y, col.z), { dig: false, ms: 20000, escalate: false }).catch(() => {})
+      // the shaft cell walled in at this level (OzoGo444 04:57, one block off diagonally at the bottom): dig the short way in
+      if (!L.inColumn(sh) && S.dist(col.offset(0.5, 0, 0.5)) < 4) await S.goto(new goals.GoalBlock(col.x, col.y, col.z), { dig: true, ms: 20000, escalate: false }).catch(() => {})
+    }
     const exits = L.exits(sh)
     if (L.inColumn(sh)) {
       await L.rideTo(sh, e.y + 0.4, 45000)
