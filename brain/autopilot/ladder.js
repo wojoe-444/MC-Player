@@ -119,7 +119,20 @@ module.exports = function ladder(bot, S, goals, v, log) {
         await L.repair(sh).catch(() => 0)
         await bot.lookAt(v(sh.entry[0] + 0.5 + w[0], at() + 1.6, sh.entry[2] + 0.5 + w[1]), true)
         bot.setControlState('jump', true); bot.setControlState('forward', true)
-        while (Date.now() - t0 < ms && at() < y + 0.05) await sleep(50)
+        let lastLog = Date.now(), y0 = at()
+        while (Date.now() - t0 < ms && at() < y + 0.05) {
+          await sleep(50)
+          // a climb that does not rise: say what the body sees (feet block, collision, keys) every 5 s, and press the keys again
+          if (Date.now() - lastLog > 5000) {
+            lastLog = Date.now()
+            if (at() - y0 < 0.5) {
+              const fb = S.block(bot.entity.position.floored()), cs = bot.controlState || {}
+              log('LADDER', 'climb not rising at y' + at().toFixed(2) + ': feet ' + (fb && fb.name) + ', collidedH ' + !!bot.entity.isCollidedHorizontally + ', ground ' + bot.entity.onGround + ', keys ' + Object.keys(cs).filter(k => cs[k]).join('+') + ', yaw ' + bot.entity.yaw.toFixed(2))
+              try { await bot.lookAt(v(sh.entry[0] + 0.5 + w[0], at() + 1.6, sh.entry[2] + 0.5 + w[1]), true); bot.setControlState('sneak', false); bot.setControlState('jump', true); bot.setControlState('forward', true) } catch {}
+            }
+            y0 = at()
+          }
+        }
       } else if (at() > y + 0.2) {
         bot.clearControlStates()
         while (Date.now() - t0 < ms && at() > y + 0.1) await sleep(50)
