@@ -137,9 +137,19 @@ function configure(bot, mv, opts = {}) {
     }
     return true
   }
+  // No climbing out of the top of a ladder into thin air: the library lets a path rise from a climbable cell into the empty cell above it and carry on from
+  // there, but in the physics nothing holds the bot in that cell (the rung ends below it, and the 0.4 block of momentum does not reach a ledge). That
+  // phantom move is what sent the bot up a ladder that stopped one short of the ledge, off its end, down, and up again ("ladder bobbing").
+  const climbAt = (x, y, z) => { const b = bot.blockAt(new Vec3(Math.floor(x), Math.floor(y), Math.floor(z))); return !!b && (climbableIds.has(b.type) || !!b.climbable) }
+  const noAirRise = (node, n) => {
+    if (n.x !== node.x || n.z !== node.z || n.y !== node.y + 1) return true
+    if (!climbAt(node.x, node.y, node.z) || climbAt(n.x, n.y, n.z)) return true
+    const b = bot.blockAt(new Vec3(Math.floor(n.x), Math.floor(n.y), Math.floor(n.z)))
+    return !b || b.liquid || (b.name || '').includes('water') || trapdoorIds.has(b.type)   // swimming up out of water, or up through a hatch above the ladder, is not this
+  }
   patch(mv, 'getNeighbors', (orig) => function (node) {
     const all = orig.call(mv, node)
-    return doorCells.size ? all.filter(n => doorOk(node, n)) : all
+    return all.filter(n => noAirRise(node, n) && (!doorCells.size || doorOk(node, n)))
   })
 
   // Hatch contexts for the two vertical moves.

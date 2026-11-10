@@ -40,7 +40,7 @@ class StuckMonitor extends require('events') {
     this.bot = bot
     this.pen = penalties
     this.log = log
-    this.cfg = { windowTicks: 50, minMove: 0.45, ditherTicks: 160, ditherRadius: 2.2, calmTicks: 400, ...config }
+    this.cfg = { windowTicks: 50, minMove: 0.45, ditherTicks: 160, ditherRadius: 2.2, calmTicks: 400, loopTicks: 700, loopLeg: 2.5, loopLegs: 3, ...config }
     this.t = 0
     this.hist = []                 // recent positions, one per tick while following a path
     this.level = 0                 // current escalation level (0 = fine)
@@ -49,6 +49,7 @@ class StuckMonitor extends require('events') {
     this.stats = { episodes: 0, maxLevel: 0, failed: 0 }
     this.dynamic = false           // set by the navigator when the current goal is a dynamic one (follow)
     this.livePath = []
+    this.yTrack = []               // y/x/z per tick while a path is followed (the ladder-loop detector)
     this._onTick = () => this.tick()
     this._onPath = (r) => { this.livePath = (r && r.path) || [] }
     this._onReset = () => { this.livePath = [] }
@@ -67,7 +68,7 @@ class StuckMonitor extends require('events') {
     this.bot.removeListener('path_stop', this._onReset)
     this.action = null
   }
-  reset() { this.hist.length = 0; this.level = 0; this.action = null }
+  reset() { this.hist.length = 0; this.level = 0; this.action = null; this.yTrack.length = 0 }
   get goal() { return this.bot.pathfinder && this.bot.pathfinder.goal }
   get maneuvering() { return !!this.action }
 
@@ -78,7 +79,10 @@ class StuckMonitor extends require('events') {
     if (!p) return
     if (this.action) return this.runAction()                    // a maneuver in progress owns the controls
     const moving = bot.pathfinder && bot.pathfinder.isMoving() && this.goal
-    if (!moving || bot.isSleeping) { this.hist.length = 0; return }
+    if (!moving || bot.isSleeping) { this.hist.length = 0; if (!this.goal) this.yTrack.length = 0; return }     // (the pathfinder idles for a tick at the bottom of a bob: the track survives that)
+    this.yTrack.push([p.x, p.y, p.z])
+    if (this.yTrack.length > this.cfg.loopTicks) this.yTrack.shift()
+    if (this.t % 10 === 0 && this.ladderLoop()) return
     this.hist.push(p.clone())
     if (this.hist.length > this.cfg.ditherTicks) this.hist.shift()
     if (!bot.controlState.forward) { this.hist.length = 0; return }   // waiting for something (a door, a block update): not stuck
@@ -89,6 +93,31 @@ class StuckMonitor extends require('events') {
     if (moved < this.cfg.minMove) return this.stuck('no progress')
     if (this.level && this.t - this.lastTrouble > this.cfg.calmTicks) this.level = 0
     if (this.hist.length >= this.cfg.ditherTicks && this.dithering()) return this.stuck('dithering')
+  }
+
+  // Ladder bobbing: the path climbs a ladder that does not lead where it thinks (a rung missing near the top, an exit that is not there), the bot
+  // rides up, falls off the end, slides back down, and starts again. Positions stay inside one column while y swings up, down, up ...
+  // `loopLegs` monotone legs of at least `loopLeg` blocks within `loopTicks` ticks is that cycle, and it is not progress.
+  ladderLoop() {
+    const t = this.yTrack
+    if (t.length < 120) return false
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
+    for (const q of t) { minX = Math.min(minX, q[0]); maxX = Math.max(maxX, q[0]); minZ = Math.min(minZ, q[2]); maxZ = Math.max(maxZ, q[2]) }
+    if (Math.hypot(maxX - minX, maxZ - minZ) > 1.6) return false
+    let legs = 0, dir = 0, anchor = t[0][1]
+    for (const q of t) {
+      const y = q[1], leg = this.cfg.loopLeg
+      if (dir === 0) { if (Math.abs(y - anchor) >= leg) { dir = Math.sign(y - anchor); legs = 1; anchor = y } }
+      else if (dir > 0) { if (y > anchor) anchor = y; else if (anchor - y >= leg) { dir = -1; legs++; anchor = y } }
+      else { if (y < anchor) anchor = y; else if (y - anchor >= leg) { dir = 1; legs++; anchor = y } }
+    }
+    if (legs < this.cfg.loopLegs) return false
+    const p = this.bot.entity.position
+    this.log(`ladder loop: ${legs} up/down legs in one column at ${Math.round(p.x)},${Math.round(p.z)} (y ${Math.round(Math.min(...t.map(q => q[1])))}..${Math.round(Math.max(...t.map(q => q[1])))})`)
+    this.stats.ladderLoops = (this.stats.ladderLoops || 0) + 1
+    this.yTrack.length = 0; this.hist.length = 0
+    this.emit('ladder-loop', { pos: p.clone() })
+    return true
   }
 
   dithering() {

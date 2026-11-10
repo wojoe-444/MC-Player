@@ -16,7 +16,7 @@ const FORBIDDEN = [
   [/\.chat\(/, 'talks outside api.say'],
   [/\bsetInterval\s*\(/, 'unstoppable interval (INTERFACE section 5, rule 6)'],
   [/process\.(exit|on)\(/, 'process-level handlers'],
-  [/\.dig\(|\.placeBlock\(|\.stopDigging\(|canDig\s*=\s*true/, 'digs or places blocks (Walter rule 2)', ['reach.js', 'navigator.js']],
+  [/\.dig\(|\.placeBlock\(|\.stopDigging\(|canDig\s*=\s*true/, 'digs or places blocks (Walter rule 2)', ['reach.js', 'navigator.js', 'ladders.js']],
   [/createServer|\.listen\(/, 'opens a port']
 ]
 
@@ -36,6 +36,8 @@ test('digging and placing live only in reach.js (the escalating go-to) and navig
   assert.strictEqual((nav.match(/canDig\s*=\s*true/g) || []).length, 1, 'navigator.js: canDig = true only in enterDigMode')
   assert.ok(/enterDigMode\(\)/.test(nav) && /leaveDigMode\(/.test(nav))
   assert.ok(!/\.dig\(|\.placeBlock\(/.test(nav), 'navigator.js itself never digs or places')
+  // ladders.js (finishing an incomplete ladder) places ladders and a backing block for them; it never digs
+  assert.ok(!/\.dig\(|\.stopDigging\(/.test(src('ladders.js')), 'ladders.js never digs')
   assert.ok(/bot\.dig\(/.test(reach) && /bot\.placeBlock\(/.test(reach))
   // the things that must stay unbreakable
   for (const n of ['chest', 'furnace', 'ladder', 'bed', 'barrel', 'crafting_table', 'bedrock', 'obsidian']) assert.ok(require('../brain/nav/reach').PROTECTED.test(n), n)
