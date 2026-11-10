@@ -449,6 +449,8 @@ module.exports = function makeSkills({ bot, api, log }) {
   S.placeAgainst = async (ref, face, itemName) => {
     if (/^torch$/.test(itemName || '') && ref && ref.position && face && S.torchCrowded(ref.position.plus(face))) return false
     if (/^torch$/.test(itemName || '') && ref && ref.position && face && S.isShaftCell && S.isShaftCell(ref.position.plus(face))) return false
+    // never a torch on the mob farm's spawning platform: one torch lights the whole 17-wide room and nothing spawns there (see S.noTorchAt)
+    if (/^torch$/.test(itemName || '') && ref && ref.position && face && S.noTorchAt && S.noTorchAt(ref.position.plus(face))) return false
     const it = bot.inventory.items().find(i => i.name === itemName)
     if (!it) return false
     if (bot._meleeClose && Date.now() - (bot._meleeCloseAt || 0) < 500) return false   // a mob in reach: no placing while combat holds the sword
