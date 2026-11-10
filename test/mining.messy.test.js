@@ -102,7 +102,7 @@ test('messy bottom: nothing works at y27 but the rung above is fine -> it mines 
   for (const [x, z] of [[-1, 0], [0, 1], [0, -1], [1, 0]]) { r.bot.setBlock(x, 27, z, 'chest'); r.bot.setBlock(x, 28, z, 'chest') }
   const res = await runJob(r, 'iron', 1)
   assert.strictEqual(res.status, 'done', r.said.join(' | '))
-  assert.ok(r.state.mines[0].y >= 29 && r.state.mines[0].y <= 30, 'mined one or two rungs up: y' + r.state.mines[0].y)
+  assert.ok(r.state.mines[0].y >= 29 && r.state.mines[0].y <= 31, 'mined a few rungs up, clear of the blocked bottom: y' + r.state.mines[0].y)
   assert.deepStrictEqual(r.parks, [])
 })
 

@@ -35,7 +35,7 @@ function rrig({ pickaxe = 'iron_pickaxe', chestStock = {}, waypoints = {}, healt
   })
   brain.scheduler.stop()                                                         // no timer: the tests call tick() themselves
   const tick = async () => { await wait(30); brain.scheduler.routines.get('mining').nextCheck = 0; brain.scheduler.tick() }
-  const idle = async (ms = 80000) => { const t0 = Date.now(); await wait(30); while (Date.now() - t0 < ms) { const s = brain.scheduler.status(); if (!s.running && !s.queue.length) return; await wait(20) } throw new Error('did not finish: ' + JSON.stringify(brain.scheduler.status())) }
+  const idle = async (ms = 80000) => { const t0 = Date.now(); await wait(30); while (Date.now() - t0 < ms) { const s = brain.scheduler.status(); if (!s.running && s.queue.every(t => t.status === 'paused')) return;       /* a job that parks itself is retried later (paused in the queue), so that counts as settled */ await wait(20) } throw new Error('did not finish: ' + JSON.stringify(brain.scheduler.status())) }
   const mining = () => brain.status().modules.mining
   const stateFile = () => JSON.parse(fs.readFileSync(path.join(dir, 'state', 'mining-state.json'), 'utf8'))
   return { brain, bot, dir, said, tick, idle, mining, stateFile, route: (t) => brain.route('OGWO', t, { handleCommand: () => false }), stop: () => brain.stop() }

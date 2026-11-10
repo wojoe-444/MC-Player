@@ -11,20 +11,22 @@ const { rig, addMob, until, wait } = require('./safety.combat.helpers')
 const roof = (bot) => { for (let x = -6; x <= 6; x++) for (let z = -6; z <= 6; z++) bot.setBlock(x, 80, z, 'stone') }
 
 // ---------- early retreat: below 10; 12 when unprepared underground ----------
-test('underground and unprepared (no armor, no torches, little cobble): disengages at 11.5 health; fully prepared it keeps fighting', async () => {
+test('underground and unprepared (no torches, little cobble; armor is not required): disengages at 11.5 health; fully prepared it keeps fighting', async () => {
   const bare = rig({ items: ['stone_sword'] }); roof(bare.bot); bare.rt.scan(); bare.bot.health = 11.5; addMob(bare.bot, 7, 'zombie', 3, 0)
   bare.rt.scan(); await wait(250)
   assert.ok(bare.bot.goalLog.some(g => g.kind === 'away' || g.kind === 'follow'), 'retreat goal')
   assert.ok(!bare.bot.actions.some(a => a[0] === 'attack'))
-  assert.deepStrictEqual(bare.rt.preparedness().why.sort(), ['armor', 'filler', 'food', 'torches'])
+  assert.deepStrictEqual(bare.rt.preparedness().why.sort(), ['filler', 'food', 'torches'])
   delete bare.bot.entities[7]; await until(() => { bare.rt.scan(); return !bare.sched.running }, 4000)
 
-  const ready = rig({ items: ['stone_sword', 'iron_helmet', 'iron_chestplate'] }); roof(ready.bot)
+  const ready = rig({ items: ['stone_sword'] }); roof(ready.bot)
   ready.bot.give('torch', 20); ready.bot.give('cobblestone', 64); ready.bot.give('bread', 10)
   ready.rt.scan(); ready.bot.health = 11.5; addMob(ready.bot, 7, 'zombie', 3, 0)
   ready.rt.scan(); await wait(300)
   assert.strictEqual(ready.rt.preparedness().unprepared, false)
-  assert.ok(ready.bot.actions.some(a => a[0] === 'attack'), 'prepared bot keeps fighting at 11.5')
+  // a cave hostile in sight makes it wall in first (emergency entomb, filler equipped) instead of swinging at once; what matters is that it does not flee
+  assert.strictEqual(ready.rt.status().action, 'fight', 'prepared bot keeps fighting at 11.5')
+  assert.ok(!ready.bot.goalLog.some(g => g.kind === 'away' || g.kind === 'follow'), 'no retreat goal')
   delete ready.bot.entities[7]; await until(() => { ready.rt.scan(); return !ready.sched.running }, 4000)
 })
 test('on the surface unprepared does not matter (no 12 health reflex)', async () => {

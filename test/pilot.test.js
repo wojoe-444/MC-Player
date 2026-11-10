@@ -162,17 +162,16 @@ function dirRig(o = {}) {
   return { d, api, bot, said, dispatched, notes, files, setSched: (s) => { sched = { ...sched, ...s } }, advance: (ms) => { t += ms }, rows: () => readLines(files.log).map(JSON.parse) }
 }
 
-test('director: wear-armor puts on better armor from the bag, once, in live mode only', async () => {
+test('director: wear-armor is off while armor is banned (Walter 2026-11-10): nothing is put on in live or shadow mode', async () => {
   const r = dirRig({ mode: 'live' })
   r.bot.give('iron_chestplate', 1); r.bot.give('iron_boots', 1)
   await r.d.tick()
-  assert.strictEqual(r.bot.actions.filter(a => a[0] === 'equip').length, 2)
-  assert.strictEqual(r.rows()[0].action, 'ran'); assert.strictEqual(r.rows()[0].id, 'wear-armor')
+  assert.strictEqual(r.bot.actions.filter(a => a[0] === 'equip').length, 0)
+  assert.ok(!r.rows().some(x => x.id === 'wear-armor' && x.action === 'ran'))
   const s = dirRig({ mode: 'shadow' })
   s.bot.give('iron_helmet', 1)
   await s.d.tick()
   assert.strictEqual(s.bot.actions.filter(a => a[0] === 'equip').length, 0)
-  assert.strictEqual(s.rows()[0].action, 'shadow')
 })
 
 test('director: deposit-smeltables fires when the bag is crowded with smeltables and the bot is idle', async () => {
@@ -375,7 +374,8 @@ test('chain: latency rows show the quick lane time; events are noted for Claude 
 })
 
 test('real loader: pilot before router in brain/index.js wires the tier, the feed and the router event end to end (stubbed network)', async () => {
-  const realFetch = global.fetch
+  const realFetch = global.fetch, realKey = process.env.OPENROUTER_API_KEY
+  process.env.OPENROUTER_API_KEY = 'test-key-not-real'                          // the real loader reads the key from env or a gitignored file, which a clean checkout lacks
   const calls = []
   global.fetch = async (url, init) => {
     calls.push(String(url))
@@ -401,7 +401,7 @@ test('real loader: pilot before router in brain/index.js wires the tier, the fee
     assert.ok(calls.some(u => /chat\/completions/.test(u)) && !calls.some(u => /decisions/.test(u)), 'DeepSeek only: Elephant-1 is off in router/config.json')
     const feed = readLines(path.join(dir, 'state', 'relay-feed.log'))
     assert.match(feed[0], /\|\| QUICK "Mining as a fallback/)
-  } finally { brain.stop(); global.fetch = realFetch }
+  } finally { brain.stop(); global.fetch = realFetch; if (realKey === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = realKey }
 })
 
 test('chain: a silent router hand-off (ev.silent) is logged as NOTHING SAID YET, not as a generic acknowledgement', async () => {
