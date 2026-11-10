@@ -57,6 +57,8 @@ Bookshelves from sugarcane and pen leather, enchanting from the XP plan, village
 
 Endgame pack: pearls, blaze powder, stronghold hunt over the travel network, dragon kit (bow, arrows, blocks, water bucket). The Ender Dragon.
 
+**Shulker box farm (late-game goal, important).** Walter's call: shulker boxes are hugely convenient (portable storage that keeps its contents when carried for the travel kit, sorter overflow and the reset-gear chest), so this is a priority once the bots are ready for it, not an optional extra. It needs End access and an End city with ships, so it comes after the Ender Dragon and the outer-islands trip. Shulkers drop shells only when killed, so the farm is a long-term project: find a city, keep a few shulkers alive (a shulker hit by another's bullet can spawn a new one), and build a safe, lit, mob-proof farm room. Design it on the same terms as the other farms (underground-first, bot-made kills for XP). Add a design doc before building.
+
 ## Design: long-distance travel (camps as nodes)
 
 Walter's idea: cross long distances in day-long legs, each ending at a nice-looking camp that is logged and left standing, so later crossings and returns are safer.
