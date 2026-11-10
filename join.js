@@ -11,6 +11,11 @@ const bot = mineflayer.createBot({
   auth: 'microsoft', version: '1.21.6', profilesFolder: './auth-cache',
   disableChatSigning: true // signed-chat acknowledgements break after incoming chat and the server kicks with chat_validation_failed
 })
+// NO ARMOR (Walter 2026-11-10, Act 2) until diamond gear with Mending: the rule sits on bot.equip itself, so no module, timer or planner tool can
+// put armor on (join.js's own 8 s wearArmor timer did, after #188 closed the brain modules). Lifted by ALLOW_ARMOR=1 or gear.allowArmor = true.
+const armorAllowed = () => process.env.ALLOW_ARMOR === '1' || !!require('./brain/safety/gear').allowArmor
+{ const eq = bot.equip; bot.equip = async function (item, dest) { if (/^(head|torso|legs|feet)$/.test(String(dest)) && !armorAllowed()) throw new Error('no armor (Act 2 rule)'); return eq.apply(this, arguments) } }
+bot._armorAllowed = armorAllowed
 // Keep the recipe book the server sends at login (before the crafting module loads; mineflayer drops it). Used for fast bulk crafting (brain/crafting).
 bot._recipeBook = new Map()
 // damage types arrive once, in the configuration phase: kept so each damage_event can be named (Walter: which hits come from berry bushes?)
@@ -897,7 +902,7 @@ const ARMOR_SLOT = { helmet: 'head', chestplate: 'torso', leggings: 'legs', boot
 const ARMOR_RANK = ['leather', 'golden', 'chainmail', 'iron', 'diamond', 'netherite']
 let wearingArmor = false
 async function wearArmor() {
-  if (wearingArmor || !bot.entity || bot.isSleeping || typeof bot.getEquipmentDestSlot !== 'function') return
+  if (wearingArmor || !bot.entity || bot.isSleeping || typeof bot.getEquipmentDestSlot !== 'function' || !armorAllowed()) return
   wearingArmor = true
   try {
     for (const it of bot.inventory.items()) {
