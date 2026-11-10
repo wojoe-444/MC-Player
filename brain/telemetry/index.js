@@ -130,6 +130,13 @@ module.exports = function register(api) {
     } catch {}
     return { worn, farmDrops: farmDrops() }
   }
+  // what the bot carries, name -> count (top 30), so the reviewer can judge progress between two reviews
+  function bagCounts() {
+    try {
+      const m = {}; for (const i of bot.inventory.items()) m[i.name] = (m[i.name] || 0) + i.count
+      return Object.fromEntries(Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 30))
+    } catch { return {} }
+  }
   let armorSoon = null
   const onSlot = (slot, _old, nw) => {      // an armor slot changed: do not wait for the next 15 s pass
     try { if (slot >= 5 && slot <= 8 && nw && ARMOR_RE.test(nw.name || '')) { clearTimeout(armorSoon); armorSoon = setTimeout(() => { try { analyze() } catch {} }, 300) } } catch {}
@@ -247,7 +254,7 @@ module.exports = function register(api) {
     const p = pos()
     return {
       updatedAt: new Date(t).toISOString(), bot: bot.username, startedAt: new Date(started).toISOString(), samples: samples.length,
-      now: p ? { pos: [Math.round(p.x), Math.round(p.y), Math.round(p.z)], task: curTask, held: bot.heldItem ? bot.heldItem.name : null, hp: bot.health, food: bot.food, sleeping: !!bot.isSleeping } : null,
+      now: p ? { pos: [Math.round(p.x), Math.round(p.y), Math.round(p.z)], task: curTask, held: bot.heldItem ? bot.heldItem.name : null, hp: bot.health, food: bot.food, sleeping: !!bot.isSleeping, bag: bagCounts(), worn: gearState().worn.map(a => a.name) } : null,
       last1min: D.counters(samples, events, t, 60000), last10min: D.counters(samples, events, t, 600000),
       customDetectors: [...custom].map(([n, c]) => ({ name: n, muted: c.muted })),
       flags: [...active.values()].map(a => ({ id: a.id, kind: a.flag.kind, sev: a.flag.sev, msg: a.flag.msg, data: a.flag.data, origin: a.flag.origin, since: new Date(a.first).toISOString(), lastSeen: new Date(a.last).toISOString(), seenTimes: a.count })),

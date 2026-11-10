@@ -1,0 +1,106 @@
+{
+ "ok": true,
+ "data": {
+  "bots": [
+   {
+    "bot": "OzoGo444",
+    "status": "issues",
+    "summary": "Back on the shaft bottom (-6017,50,-2354) on autopilot, idle 33 of the last 60 s. Wood-stock added 14 logs (17 total) and wheat was replanted, but the stash and storage goals still stall on the same tile and the y55 storage room is not reached, so Phase 2 storage has not moved.",
+    "findings": [
+     {
+      "key": "ozo-iron-pickaxe-on-stone",
+      "kind": "rule_violation",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Iron pickaxe dug cobblestone and stone, breaking the tool-tier rule",
+      "evidence": "The tool_tier flag shows 3 digs in the 5 min before 04:43:46 with iron_pickaxe (2 on cobblestone, 1 on stone), first seen 04:25:42. The 04:43:23 review bag still held iron_pickaxe 1, it is absent from the 04:48 bag, and the pickaxe was held for only 2 s in the last 10 min.",
+      "suggestion": "Find the dig-tool pick that chooses iron_pickaxe for stone and cobblestone and make it use a stone pickaxe (craft one, since the bag has none); iron is only for diamond, gold, redstone and emerald."
+     },
+     {
+      "key": "ozo-timeouts-same-goal",
+      "kind": "repeated_failure",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Shaft-bottom stall loop: storage and stash goals time out at the same tile",
+      "evidence": "Stall alarm A201 fired on the same tile (-6018,50,-2355) twice, on wood-stock at 04:40 and on stash at 04:44:21 (idle 45 s each, kicked both times). At 04:47:55 the storage goal logged 'could not get into the storage room' at y55 from that spot, and o-40 counts 23 timeouts in 5 min (27 in 10 min).",
+      "suggestion": "Inspect the path from the shaft bottom (y50) to the y55 storage room, which is likely not pathable (confirm from the path-search timeout for that target); make stash and wood-stock drop or re-route after two timeouts on one tile instead of kicking and retrying the same goal."
+     },
+     {
+      "key": "ozo-detector-cannot_harvest",
+      "kind": "wrong_tool",
+      "severity": "med",
+      "confidence": "high",
+      "title": "Stone sword stays in hand for digging and pillaring: 82% of last 10 min",
+      "evidence": "stone_sword was held 492.6 of the last 600 s; 15 of 33 digs used the wrong tool and 3 dropped nothing, and the earlier pillar_failing finding already showed pillar jumps starting with the sword in hand (229 jumps, 27 placed in 10 min). The bag holds a wooden_pickaxe but no stone pickaxe, axe or shovel, so logs and dirt are dug with the sword; the wrong_tool text says an axe was in the bag, but neither the 04:43 nor the 04:48 bag has one.",
+      "suggestion": "Check which routine re-selects stone_sword after each dig and make digging and pillaring equip the needed tool or block first, crafting a stone pickaxe, axe and shovel; also check the bag read behind the 'axe in bag' text. Smeo's bag shows the same pattern, so this is likely shared routine code."
+     },
+     {
+      "key": "ozo-iron-leggings-in-bag",
+      "kind": "other",
+      "severity": "med",
+      "confidence": "high",
+      "title": "Iron leggings carried in the bag against the no-armor rule",
+      "evidence": "iron_leggings 1 is in the bag at the 04:43:23 review and in the 04:48:13 telemetry; worn is empty, so nothing is equipped, but carried iron armor is a smell under the no-armor rule.",
+      "suggestion": "Find where the iron leggings came from (an old craft or a pickup) and have the stash routine put them in a chest rather than keep them in the bag."
+     },
+     {
+      "key": "ozo-planner-model-errors",
+      "kind": "code_fault",
+      "severity": "med",
+      "confidence": "med",
+      "title": "Planner tail is all model errors and no-plan; zero think-first steps run",
+      "evidence": "The plannerSummary tail shows 380 model-error and 369 no-plan events with 0 steps. The bot runs the routine fallback instead (the 04:44:57 'survival processes loaded' list and the GOAL step lines).",
+      "suggestion": "Open the planner log's model-error lines to read the error text, then inspect the model call in brain/autopilot/think.js, since that is where the planner fails."
+     }
+    ],
+    "resolved": [
+     "ozo-detector-pillar_failing",
+     "ozo-detector-jumping",
+     "ozo-detector-stuck"
+    ],
+    "proposedDetectors": []
+   },
+   {
+    "bot": "Smeo444",
+    "status": "issues",
+    "summary": "Back at home (-6013,66,-2340) on autopilot after failing to reach trees at y 67-71. It has made stone_axe, stone_pickaxe and stone_sword since the 04:43 review (Phase 1 tools on track), but oak_log only went 11 to 12 and the sword is still the working tool.",
+    "findings": [
+     {
+      "key": "smeo-wrong-tool-logs",
+      "kind": "wrong_tool",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Stone sword held for nearly all work; stone axe and pickaxe sit unused",
+      "evidence": "stone_sword was held 639.5 of 663 s of autopilot time in the last 10 min; 20 of 47 digs used the wrong tool (oak_log with stone_sword) and 2 dropped nothing. The pillar attempt at 04:45:57 (21 jumps looking down, 1 block placed) and 39 on-the-spot jumps in one minute at 04:46:58 both happened with the sword in hand, while the one pillar that worked (04:47:37) had dirt in hand and the bag holds stone_axe and stone_pickaxe unused.",
+      "suggestion": "Find the routine that re-selects stone_sword after each dig or pillar step and have dig and pillar equip the needed tool or block first (stone_axe for logs, stone_pickaxe for stone, a placeable block for pillars); Ozo shows the same cause."
+     },
+     {
+      "key": "smeo-detector-repeated_failure",
+      "kind": "repeated_failure",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Wood-stock keeps retrying the same tree target; 13 timeouts in 5 min",
+      "evidence": "A stall alarm fired at (-5972,67,-2343) on wood-stock at 04:46:30 (idle 46 s); the nav escalated toward (-5977,71,-2340), went through nav stuck levels 1 to 3 near (-5976,66-67,-2339), and the autopilot aborted after 82 s at 04:48:01. s-37 counts 13 timeouts in 5 min and 19 in 10 min, and oak_log went 11 to 12 since the 04:43 review.",
+      "suggestion": "Make wood-stock drop or re-pick a tree after two timeouts on the same target instead of escalating toward it again, and inspect the nav escalation (brain/nav/reach.js) for repeated target retries."
+     },
+     {
+      "key": "smeo-xaero-module-missing",
+      "kind": "code_fault",
+      "severity": "med",
+      "confidence": "high",
+      "title": "nav xaero.js fails to load: require path points to a missing folder",
+      "evidence": "At 04:48:01 the log says nav xaero.js is unavailable: Cannot find module 'C:\\Users\\walte\\Downloads\\Minecraft-Smeo\\xaero', and the nav reload right after did not fix it. Anything nav gets from xaero.js is off for Smeo until this path is correct.",
+      "suggestion": "Fix the xaero.js require path in the nav loader and the bots/smeo config so it resolves from the code folder (the live bots run from MC-Player-live), then confirm the 'unavailable' line stops after the next reload."
+     }
+    ],
+    "resolved": [
+     "smeo-detector-pillar_failing",
+     "smeo-detector-stuck"
+    ],
+    "proposedDetectors": []
+   }
+  ]
+ },
+ "costUsd": 0.02635272,
+ "durationMs": 180684
+}

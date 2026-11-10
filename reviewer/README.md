@@ -39,7 +39,7 @@ Tests: `node --test test/telemetry.test.js`.
 
 ## 2. The reviewer (`reviewer/`)
 
-`node run.js` collects, per bot, the telemetry summary, new flag windows, a planner-failure summary (`think-log.jsonl`), and tails of `idle.log`, `lessons.md`, `join.log`, `hurt.json`, and sends both bots to **one** Haiku call
+`node run.js` collects, per bot, the telemetry summary, new flag windows, a planner-failure summary (`think-log.jsonl`), and tails of `idle.log`, `lessons.md`, `join.log`, `hurt.json` (sent as `hurtLifetimeTotals`: history, never evidence of now), and sends both bots to **one** Haiku call
 with the system prompt in `lib/prompt.js` (what a spectator notices, what is normal, how to judge, answer schema). The answer is structured JSON; findings keep a stable `key`, so a problem is tracked across runs (first seen, runs seen, resolved when it stops).
 High-severity detector flags the model did not cover are added anyway, and if Claude is unreachable the detector findings are still published. It skips the model call when nothing changed since the last pass or a bot is offline.
 
@@ -66,3 +66,6 @@ every N minutes, only while that user is logged in, limited rights (no admin, no
 Remove it with `node run.js --uninstall-task` or the **Remove task** button. Nothing else is installed or changed.
 
 Setup once: `cd reviewer && npm install`.
+
+## Prompt tuning (2026-11-10)
+The first live run (OzoGo444 and Smeo444, 04:43Z) mostly restated detector flags under `<bot>-detector-<kind>` keys, rated six things high, read lifetime hurt totals as live evidence and an old window as the present, and said nothing about armor or progress. `lib/prompt.js` now orders attention (rules, loops and stalls, progress, mess, code faults in logs), lists the rules in force and the roadmap phases, asks for one finding per root cause with at most 2 high and 5 total, and says what not to trust. The model also gets `previousReview` (last summary and bag) and the bag and worn armor in `telemetrySummary.now`, so it can judge progress. `examples/replay-before.json` and `replay-after.json` are the old and new prompt run on the same reconstructed 04:48Z input.

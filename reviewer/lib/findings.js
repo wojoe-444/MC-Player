@@ -51,6 +51,7 @@ function merge(prev, bot, answer, { now, run, evidence, age = true }) {
     bot: bot.name, id: bot.id, updatedAt: at, status: open.size ? 'issues' : 'ok', summary: answer.summary || '',
     open: [...open.values()].sort((a, b) => (RANK[b.severity] - RANK[a.severity]) || (b.lastSeen > a.lastSeen ? 1 : -1)),
     recentlyResolved: resolved.slice(0, 15),
+    bag: evidence && evidence.telemetrySummary && evidence.telemetrySummary.now ? evidence.telemetrySummary.now.bag : undefined,
     lastRun: run,
   }
 }
