@@ -30,7 +30,9 @@ function register(api) {
   const save = () => stateStore.save(file, state, api.now, log)
 
   // crafting goes through the autopilot's recursive crafter when it is loaded (planks, sticks, fences, gate, torches)
-  const craft = async (item, n) => { const S = bot._ap && bot._ap.S; if (S && S.craft) return S.craft(item, n); return false }
+  // (under THIS task's context: S.craft checks the autopilot's own, which this task has preempted, so a bare S.craft aborted at once and returned false)
+  let taskCtx = null
+  const craft = async (item, n) => { const S = bot._ap && bot._ap.S; if (S && S.craft) return taskCtx && S.withCtx ? S.withCtx(taskCtx, () => S.craft(item, n)) : S.craft(item, n); return false }
   const foodPoints = () => { const S = bot._ap && bot._ap.S; return S && S.foodPoints ? S.foodPoints() : null }
 
   const engine = createEngine({
@@ -43,7 +45,7 @@ function register(api) {
   const task = (name, fn, said) => scheduler.submit({
     name, key: name, replace: true, priority: PRIORITY.CHAT, onUserStop: 'cancel',
     abort: () => engine.abort(),
-    run: async (ctx) => { const r = await fn(ctx); say(said(r)); return r }
+    run: async (ctx) => { taskCtx = ctx; try { const r = await fn(ctx); say(said(r)); return r } finally { taskCtx = null } }
   })
   const sayBuild = (r) => !r.ok ? `Pen: ${r.why}`.slice(0, 200) : (r.done ? `Pen ${r.pen} is standing and lit (${r.total} pieces).` : `Pen ${r.pen}: ${r.placed} placed, ${r.left} still to do${r.blocked ? ', ' + r.blocked + ' blocked' : ''}.`)
   const sayTend = (r) => {
@@ -61,12 +63,12 @@ function register(api) {
   scheduler.routine({
     name: 'husbandry', priority: PRIORITY.FARM, idleOnly: true, defaultEnabled: true, intervalMs: 60000,
     due: () => engine.dueTend(),
-    make: () => ({ name: 'husbandry', abort: () => engine.abort(), run: (ctx) => { log('idle pen run'); return engine.runTend(ctx) } })
+    make: () => ({ name: 'husbandry', abort: () => engine.abort(), run: async (ctx) => { log('idle pen run'); taskCtx = ctx; try { return await engine.runTend(ctx) } finally { taskCtx = null } } })
   })
   scheduler.routine({
     name: 'lichen', priority: PRIORITY.FARM, idleOnly: true, defaultEnabled: true, intervalMs: 60000,
     due: () => engine.dueLichen(),
-    make: () => ({ name: 'lichen', abort: () => engine.abort(), run: (ctx) => { log('idle lichen run'); return engine.runLichen(ctx) } })
+    make: () => ({ name: 'lichen', abort: () => engine.abort(), run: async (ctx) => { log('idle lichen run'); taskCtx = ctx; try { return await engine.runLichen(ctx) } finally { taskCtx = null } } })
   })
 
   // ---------- chat ----------

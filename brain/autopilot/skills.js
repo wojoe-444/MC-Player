@@ -34,6 +34,10 @@ module.exports = function makeSkills({ bot, api, log }) {
   // ---------- abort plumbing ----------
   // time box: G.step sets S.stepDeadline; any skill that calls S.check() past it throws StepTimeout, so no single step can hold the bot for long
   S.check = () => { if (S.ctx) S.ctx.checkpoint(); if (S.stepDeadline && Date.now() > S.stepDeadline) { S.stepDeadline = 0; try { S.stopMoving() } catch {} const e = new Error('step time budget used up'); e.name = 'StepTimeout'; throw e } }
+  // S.ctx is the task context of the autopilot's run loop. A skill called from ANOTHER scheduler task (the husbandry pens crafting fences) used to check the autopilot's
+  // context, which that task had preempted: checkpoint() threw AbortError on the first S.check(), craft swallowed it and returned false, so the craft never ran.
+  // S.withCtx(ctx, fn) runs fn under the caller's own context (null = no task context: plain timers, no checkpoints) and puts the previous one back after.
+  S.withCtx = async (ctx, fn) => { const prev = S.ctx; S.ctx = ctx || null; try { return await fn() } finally { S.ctx = prev } }
   S.aborted = () => !!(S.ctx && S.ctx.aborted)
   S.wait = async (ms) => { if (S.ctx) await S.ctx.sleep(ms); else await sleepRaw(ms) }
   S.isAbort = (e) => !!e && (e.name === 'AbortError' || (S.ctx && S.ctx.aborted))
