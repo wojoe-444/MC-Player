@@ -553,9 +553,13 @@ class Reach {
       // from the ground only: a jump started while still dropping onto the last block put the place attempt on the way down, where the
       // server (a tick behind) already has the feet back in the cell (logged 03:43: tick 3, +1.12 up but falling at -0.155, refused; the
       // server had the bot at +0.42)
+      // a refusal is retried with a fresh jump (up to 3 jumps): the same jump state (tick 3, +1.2 up, vy -0.078) was placed 21 times and
+      // refused 3 times in the logs (2026-11-10), so it is server timing, not the jump; one refusal used to end the whole climb
+      let placed = false, refusals = 0
+      for (let jump = 0; jump < 3 && !placed && !this.stopped(run); jump++) {
+      if (jump) { bot.setControlState('jump', false); await this.ticks(4, run); if (this.feet().y !== f.y) break }
       for (let w = 0; w < 20 && !bot.entity.onGround && !this.stopped(run); w++) await this.ticks(1, run)
       bot.setControlState('jump', true)
-      let placed = false
       for (let i = 0; i < 40 && !placed && !this.stopped(run); i++) {
         await this.ticks(1, run)
         // near the top of the jump, not the moment the feet clear the cell: the server checks the new block against where it last heard the
@@ -571,9 +575,12 @@ class Reach {
             // what the server says the bag and hand are, right after the refusal
             let srv = null
             try { bot._client.write('window_click', { windowId: 0, stateId: -1, slot: -999, mouseButton: 0, mode: 0, changedSlots: [], cursorItem: null }); await new Promise(r => setTimeout(r, 300)); srv = { held: bot.heldItem ? bot.heldItem.name : null, slot: bot.quickBarSlot, have: bot.inventory.items().filter(x => x.name === it.name).reduce((n, x) => n + x.count, 0), dy: +(bot.entity.position.y - f.y).toFixed(3), destNow: this.blk(f.x, f.y, f.z) ? this.blk(f.x, f.y, f.z).name : '?' } } catch {}
-            this.log('pillar FAIL ' + JSON.stringify(at) + ' -> ' + e.message.slice(0, 90) + ' | server ' + JSON.stringify(srv)); break }
+            refusals++
+            this.log('pillar FAIL ' + JSON.stringify({ ...at, jump }) + ' -> ' + e.message.slice(0, 90) + ' | server ' + JSON.stringify(srv)); break }
         }
       }
+      }
+      if (placed && refusals) this.log('pillar ok after ' + refusals + ' refusal(s)')
       bot.setControlState('jump', false)
       await this.ticks(6, run)
       if (placed) this.stats.placed++
