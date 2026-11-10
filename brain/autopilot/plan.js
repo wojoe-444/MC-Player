@@ -73,6 +73,8 @@ module.exports = function plan(G, S, M, api, log) {
   delete require.cache[require.resolve('./ladder')]
   const LD = require('./ladder')(bot, S, goals, v, log); M.LD = LD
   S.isShaftCell = (p) => { try { return LD.isShaftCell(p) } catch { return false } }
+  // the mob farm's spawning platform (registered room type 'mobfarm'; the platform is its top layers): no torch there, in either bot's runtime
+  S.noTorchAt = (p) => { try { return LD.rooms().some(r => r.type === 'mobfarm' && r.box && r.platformY != null && p.x >= r.box.x0 - 1 && p.x <= r.box.x1 + 1 && p.z >= r.box.z0 - 1 && p.z <= r.box.z1 + 1 && p.y >= r.platformY - 2 && p.y <= r.platformY + 3) } catch { return false } }
   // cells that stay open whatever else wants to fill them (nav's breach refill): shaft columns, storage rooms and the corridor to each
   bot._keepOpen = (p) => {
     try {
