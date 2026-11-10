@@ -170,6 +170,24 @@ module.exports = function ladder(bot, S, goals, v, log) {
     return Math.abs(at() - y) < 0.8
   }
 
+  // Blocks that ended up IN the shaft column (a pillar or seal placed there: dirt at y40-41 of OzoGo444's shaft, 08:47) are dug out again from above,
+  // topmost first, and the rungs hung back. Returns how many were removed.
+  L.clearPlug = async (sh) => {
+    if (!sh || !sh.bottom) return 0
+    let n = 0
+    for (let pass = 0; pass < 8; pass++) {
+      let plug = null
+      for (let y = sh.entry[1] - 1; y >= sh.bottom[1]; y--) { const b = S.block(v(sh.entry[0], y, sh.entry[2])); if (b && b.boundingBox === 'block' && b.name !== 'ladder' && !/chest|barrel|furnace|table|bed/.test(b.name)) { plug = y; break } }
+      if (plug == null) return n
+      if (!L.inColumn(sh)) { if (!(await L.enterTop(sh)) && !(await L.enterColumn(sh))) return n }
+      if (!(await L.rideTo(sh, plug + 1, 40000))) return n
+      const b = S.block(v(sh.entry[0], plug, sh.entry[2]))
+      if (b && b.boundingBox === 'block' && await S.digBlock(b, { force: true }).catch(() => false)) { n++; log('LADDER', 'cleared a ' + b.name + ' plug at y' + plug + ' in ' + sh.id) } else return n
+      await L.repair(sh).catch(() => 0)
+    }
+    return n
+  }
+
   // dig a new laddered shaft down from entry (the bot's feet cell at the top) to targetY. Returns the shaft record (also saved).
   L.dig = async (entry, targetY, { wall = null, by = bot.username, into = null } = {}) => {
     // the ladder wall: a solid side all the way is checked as we go; start with the first solid side of the entry's column

@@ -95,6 +95,7 @@ module.exports = function pursue(G, S, M, api, log, helpers) {
         const sh = st.mine && st.mine.ladder && M.LD ? M.LD.shafts().find(q => q.id === st.mine.shaft) : null
         if (sh && sh.bottom) {
           const bottom = v(...sh.bottom)
+          await M.LD.clearPlug(sh).catch(() => 0)
           if (Math.floor(bot.entity.position.y) > sh.bottom[1] + 1) await M.LD.down(sh).catch(() => false)
           if (S.dist(bottom.offset(0.5, 0, 0.5)) < 4) { const d = await M.LD.dig(bottom, src.y, { into: sh }); note(`pursue: the shaft goes down to y${sh.bottom ? sh.bottom[1] : '?'} for ${next.name} (${d && d.end || 'done'})`) }
           else { note(`pursue ${goal.name}: could not reach the shaft bottom, no stairs`); G.cool.pursue = Date.now() + 10 * 60000; return false }
