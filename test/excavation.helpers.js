@@ -93,7 +93,7 @@ function extend(bot) {
     if (jumping) return
     jumping = true
     while (bot.controlStates.jump) {
-      if (bot.entity.onGround) { bot.entity.onGround = false; bot.entity.position.y += 1.25; await new Promise(r => setTimeout(r, 25)); land() }
+      if (bot.entity.onGround) { bot.entity.onGround = false; bot.entity.position.y += 1.25; await new Promise(r => setTimeout(r, 120)); land()   /* hangs at the top like a real jump (above +1.0 for ~6 ticks) */ }
       else await new Promise(r => setTimeout(r, 10))
     }
     jumping = false

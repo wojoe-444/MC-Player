@@ -139,13 +139,13 @@ function extend(bot) {
       if (climbTimer.unref) climbTimer.unref()
     } else {
       clearTimeout(hopTimer)
-      bot.entity.position.y += 1.1
+      bot.entity.position.y += 1.25                       // a hop hangs above +1.0 for about 6 ticks (160 ms here), long enough for the motor's place at the top of the jump
       hopTimer = setTimeout(() => {
         const p = bot.entity.position, cc = feetCell()
         let y = Math.floor(p.y + 0.01)
         while (y > -60 && /^(air|cave_air|torch|ladder)$/.test(nameAt(cc.x, y - 1, cc.z))) y--
         p.y = y
-      }, 60)
+      }, 160)
       if (hopTimer.unref) hopTimer.unref()
     }
   }

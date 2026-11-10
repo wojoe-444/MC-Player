@@ -7,6 +7,7 @@
 //   4. below the lowest ladder: first rise to it with stairs up, else pillar up (dig the cell above the head, jump, put a cobblestone under the feet).
 // Walter allowed placing blocks for this. The only things ever placed here are cobblestone steps while pillaring.
 const { Vec3 } = require('vec3')
+const motor = require('../motor')
 
 module.exports = function createExit({ bot, sight, goals, mover, torches, shaft, say, state, save, SC, log, E }) {
   const { Pause, floorVec } = E
@@ -89,14 +90,12 @@ module.exports = function createExit({ bot, sight, goals, mover, torches, shaft,
       if (E.hazardAt(feet.offset(0, 1, 0))) { log('exit: liquid in view above while pillaring'); return false }
       const floor = sight.block(feet.offset(0, -1, 0))
       if (!floor || !sight.isSolid(floor)) return false
-      bot.setControlState('jump', true)
-      const t0 = Date.now()
-      while (bot.entity.position.y < feet.y + 0.99 && Date.now() - t0 < 1200) await sleepMs(ctx, 40)
-      const r = await torches.placeSupport(ctx, floor, new Vec3(0, 1, 0))
+      // the one jump-and-place implementation (brain/motor): forced look, top-of-jump timing, retries, Held proof (this copy used to jump first and equip later)
+      const eq = await motor.equip(bot, 'cobblestone')
+      if (!eq.ok) { log(`exit: could not put a step down (${eq.reason})`); return false }
+      const r = await motor.jumpPlaceUnder(bot, { ref: floor, feetY: feet.y, held: eq.value, reequip: () => motor.equip(bot, 'cobblestone'), tick: () => sleepMs(ctx, 40), checkpoint: () => ctx.checkpoint(), log })
       releaseKeys()
-      if (!r.ok) { log(`exit: could not put a step down (${r.why})`); return false }
-      const t1 = Date.now()
-      while (cellOf().y < feet.y + 1 && Date.now() - t1 < 1500) await sleepMs(ctx, 40)
+      if (!r.ok) { log(`exit: could not put a step down (${r.reason})`); return false }
       if (cellOf().y < feet.y + 1) return false
     }
     return cellOf().y >= toY
