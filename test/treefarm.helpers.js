@@ -58,7 +58,7 @@ function extendTrees(bot) {
   const baseBlockAt = bot.blockAt
   bot.blockAt = (p) => {
     const b = baseBlockAt(p)
-    if (/sapling|short_grass/.test(b.name)) b.boundingBox = 'empty'
+    if (/sapling|short_grass|torch/.test(b.name)) b.boundingBox = 'empty'
     if (/_leaves$/.test(b.name)) { const k = `${p.x},${p.y},${p.z}`; const persistent = leafCells.get(k) === true; b.getProperties = () => ({ persistent, distance: distances().get(k) ?? 7 }) }
     return b
   }
@@ -203,7 +203,7 @@ function rig({ pos = [0, 64, 0], config = {}, storage = true, inv = { iron_axe: 
     gotoNear: (o) => util.gotoNear({ bot, goals: bot.goals, tryGoto: bot.tryGoto, stop, ...o }),
     canSee: (t) => los.canSee(bot, t),
     ensureLineOfSight: (o) => los.ensureLineOfSight({ bot, goals: bot.goals, tryGoto: bot.tryGoto, stop, ...o }),
-    depositSmeltables, requestChest, config: cfg, state, save, sitesFn: () => sites, now: now || Date.now
+    depositSmeltables, requestChest, config: cfg, state, save, sitesFn: () => [...sites, ...state.sites], now: now || Date.now, log: process.env.TF_LOG ? (m) => console.log('  [log]', m) : undefined
   })
   return { bot, engine, state, save, said, dir, file, cfg, nav, sh, sites, deposits, stop: () => bot.stopPhysics() }
 }

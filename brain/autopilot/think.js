@@ -182,6 +182,7 @@ module.exports = function think(G, S, M, api, log) {
       danger_zones: mem.dangerZones()
     }
     if (ld) o.last_death = { at: [ld.x, ld.y, ld.z], min_ago: Math.round((Date.now() - ld.t) / 60000), cause: ld.cause, items_may_still_be_there: Date.now() - ld.t < 5 * 60000 }
+    try { const t = treeApi(); if (t && t.farm.has()) { const f = t.farm.farms()[0], st = t.farm.status(f); o.tree_farm = { at: st.at, planted: st.saplings, grown: st.trees, empty_spots: st.empty, torches: st.torches + '/' + st.torchSpots, saplings_on_me: st.bag.saplings, needs: st.needs, natural_trees_may_be_felled: naturalTrees().natural } } else if (t) o.tree_farm = 'none yet: tree_farm build (a lit birch farm near home; natural trees are kept once it grows)' } catch {}
     try { const trees = S.seen(LOG_RE, { radius: 32, max: 3 }); if (trees.length) o.around.trees = trees.map(b => ({ at: fmtPos(b.position), d: +p.distanceTo(b.position).toFixed(1) })) } catch {}
     try { const an = S.animals(undefined, 24).slice(0, 4); if (an.length) o.around.animals = an.map(e => ({ mob: e.name, d: +e.position.distanceTo(p).toFixed(1) })) } catch {}
     return o
@@ -473,9 +474,62 @@ module.exports = function think(G, S, M, api, log) {
   })
   def('light', '{} place a torch here if it is dark.', async () => ({ ok: await M.torch(), note: 'torch' }))
 
-  def('chop_trees', '{n?} chop visible trees for logs: the tree farm grove at -1017,150,2349 (allowed, it replants) or natural trees outside the property. Other property blocks are refused per block.', async (a) => {
+  def('chop_trees', '{n?} chop visible trees for logs: the tree farm grove at -1017,150,2349 (allowed, it replants) or natural trees outside the property. Other property blocks are refused per block. NATURAL TREES ARE KEPT once you have a lit tree farm with grown trees (use tree_farm harvest instead); before that, felling stops at a bootstrap supply of logs.', async (a) => {
+    const pol = naturalTrees()
+    if (!pol.natural) return fail('natural trees are kept: ' + pol.why, 'tree_farm {action:"harvest"} fells the farm\'s own grown trees; tree_farm {action:"build"} starts the farm')
     const before = S.logs(); await S.chopTree(clamp(num(a.n) || 6, 1, 20), { ms: 100000 })
     return { ok: S.logs() > before, note: `logs ${before} -> ${S.logs()}`, hint: S.logs() > before ? undefined : 'no tree in sight: scout' }
+  })
+
+  // ---- the lit birch tree farm (brain/treefarm/farm.js): primitives only; WHEN to build, tend or harvest is the mind's call ----
+  // Walter 2026-11-10: a lit, self-sustaining birch farm next to the base, saplings 3 blocks apart, a torch in every square, movable underground later;
+  // natural trees above ground are preserved. Saplings come from the LEAVES of natural birch (never the trunk).
+  const treeApi = () => api.treefarm || null
+  function naturalTrees() {
+    const t = treeApi()
+    if (!t || !t.naturalPolicy) return { natural: true, why: 'no tree farm module' }
+    try { return t.naturalPolicy({ logs: S.logs() + Math.floor(S.planks() / 4) }) } catch { return { natural: true, why: 'policy unavailable' } }
+  }
+  const homeSpot = () => { const h = G.state && G.state.home; return Array.isArray(h) && h.length === 3 ? { x: h[0], y: h[1], z: h[2] } : null }
+  def('tree_farm', '{action: build|tend|harvest|saplings|status, logs?} the LIT BIRCH TREE FARM next to the base: saplings 3 blocks apart in a lattice, a torch in the middle of every square, it grows by itself and every felled tree is replanted. build = pick clear level ground near home, get a few birch saplings (breaks a few LEAVES of natural birch trees; the trunks are never cut), plant them and light them; if it says what is missing (saplings, torches), fetch or craft that and call build again. tend = replant empty spots and relight dark ones. harvest = fell the farm\'s GROWN trees only (each is replanted); {logs: N} stops at N logs. saplings = just collect birch saplings. status = counts. Daytime, outdoors. Natural trees are kept: once the farm has grown trees, harvest is how you get wood.', async (a) => {
+    const t = treeApi(); if (!t) return fail('tree farm module not loaded')
+    const act = clean(a.action).toLowerCase() || 'status'
+    const farm = t.farm
+    if (act === 'status') {
+      if (!farm.has()) return { ok: true, note: 'no tree farm yet: tree_farm build', policy: naturalTrees().why }
+      return { ok: true, note: farm.farms().map(farm.line).join(' '), status: farm.farms().map(farm.status), policy: naturalTrees().why }
+    }
+    if (!['build', 'tend', 'harvest', 'saplings'].includes(act)) return fail('action must be build, tend, harvest, saplings or status')
+    if (S.isNight()) return fail('night: tree farm work is for daylight', 'sleep, or work underground')
+    if (!S.ctx) return fail('no task context')
+    if (act !== 'build' && !farm.has()) return fail('no tree farm yet', 'tree_farm {action:"build"} first')
+    const before = inv()
+    const requestTorches = async () => { if (cnt('torch') < 8 && cnt(/^(coal|charcoal)$/) >= 1 && (cnt('stick') >= 1 || S.planks() >= 2 || S.logs() >= 1)) await S.craft('torch', cnt('torch') + 16).catch(() => false) }
+    try {
+      if (act === 'build') {
+        const left = S.stepDeadline ? S.stepDeadline - Date.now() - 8000 : 0
+        const r = await farm.build(S.ctx, { home: homeSpot(), quiet: true, requestTorches, ms: left > 20000 ? left : undefined })
+        if (!r.ok && !r.planted && !r.lit) return fail(r.why || (r.needs && r.needs.join('; ')) || 'nothing could be done', r.hint || (r.needs && r.needs.join('; ')))
+        return { ok: true, note: `${r.created ? 'started the farm; ' : ''}planted ${r.planted}, lit ${r.lit}; ${r.status ? farm.line(farm.farms().find(f => f.id === r.farm)) : ''}`, ...(r.needs.length ? { hint: r.needs.join('; ') } : {}), ...(r.more ? { more: 'call tree_farm build again to continue' } : {}) }
+      }
+      if (act === 'tend') {
+        const r = await farm.tend(S.ctx, { requestTorches })
+        const x = r[0] || {}
+        return { ok: x.ok !== false, note: x.ok === false ? x.why : `planted ${x.planted}, lit ${x.lit}`, ...(x.noSapling ? { hint: 'no birch saplings: tree_farm saplings' } : {}), ...(x.noTorches ? { hint: 'no torches: craft some' } : {}) }
+      }
+      if (act === 'saplings') {
+        const f = farm.farms()[0]
+        const r = await farm.saplings(S.ctx, f, 8, {})
+        return { ok: r.have > 0, note: `${r.have} ${f.species} saplings on me (${r.sources.join(', ') || 'none found'})`, ...(r.hint ? { hint: r.hint } : {}) }
+      }
+      const r = await farm.harvest(S.ctx, { logs: clamp(num(a.logs) || 0, 0, 256) || null, count: 6 })
+      const g = diff(before, inv()).gained
+      return { ok: r.logs > 0, note: `harvested ${r.logs} logs`, gained: top(g, 5), ...(r.logs > 0 ? {} : { hint: 'no grown tree in the farm yet: wait (saplings need about a game day and light 9+), tend, or get wood another way' }) }
+    } catch (e) {
+      if (S.isAbort(e) || (e && (e.name === 'Interrupt' || e.name === 'AbortError'))) throw e
+      if (e && e.why) return fail('stopped: ' + clean(e.why), 'danger or low health: deal with it, then call again')
+      throw e
+    }
   })
   def('hunt', '{kind?: cow|pig|sheep|chicken|rabbit} kill visible farm animals for food (raw meat: smelt it) and wool.', async (a) => {
     const kinds = a.kind ? [clean(a.kind).toLowerCase()] : ['cow', 'pig', 'sheep', 'chicken', 'rabbit']
@@ -561,6 +615,7 @@ module.exports = function think(G, S, M, api, log) {
     'HOW TO THINK:',
     '- Opening (in order): chop_trees (8+ logs) -> craft planks, crafting table, wooden pickaxe, sword -> gather stone (cobblestone) -> stone pickaxe/sword/axe, furnace -> hunt animals for food -> coal -> torches. Before the first night, have a shelter: dig into a hillside or wall yourself into a 1x2 cell with blocks, place a torch, wait or sleep. Craft a bed (3 wool + 3 planks; sheep give wool) as soon as you can and sleep in it; it sets your respawn point. Protect the bed: never break it.',
     '- Then: iron (strip mine with tunnel, torch as you go, branch off), smelt, craft iron pickaxe, sword and ARMOR (armor is wanted here: wear it with equip_gear), bucket, shield. Armor matters a lot on Hard.',
+    '- WOOD: natural trees are kept (Walter). Build the lit birch tree farm next to the base early (tree_farm build; saplings come from birch LEAVES, not trunks), tend it, and take wood with tree_farm harvest once trees have grown. chop_trees on natural trees is for the first logs only.',
     '- Survival: eat when food <= 14; never fight below 10 hp, retreat or wall_in; keep 16+ filler blocks (cobblestone/dirt) for walling in and bridging; keep 8+ blocks from creepers; never enter lava or deep water caves; never dig straight down; do not travel far at night: shelter, sleep, or work inside a sealed tunnel.',
     '- After a death you respawn at the bed (or world spawn) with an empty bag: recover_death only if close and safe, otherwise restart the opening nearby. Learn from the lesson log.',
     '- Use note_place to remember good spots (shelter, work chest, ore). place_chest puts a chest; keep spare items in it near your shelter.',

@@ -245,6 +245,13 @@ module.exports = function plan(G, S, M, api, log) {
       run: async () => {
       // trees are a surface job: from the mine, walk home first (it kept failing from underground and marking every trunk unreachable)
       if (!S.skyVisible() && home()) { const h0 = home(); await S.goto(new goals.GoalNear(h0.x, h0.y, h0.z, 3), { dig: false, ms: 120000 }); st.badTrees = [] }
+      // the lit tree farm gives the wood once it has grown trees (natural trees are kept); S.chopTree refuses natural ones by itself
+      if (api.treefarm && api.treefarm.farm.has() && !api.treefarm.naturalPolicy({ logs: S.logs() + Math.floor(S.planks() / 4) }).natural) {
+        let r = { logs: 0 }
+        try { r = await api.treefarm.farm.harvest(S.ctx, { logs: 16, count: 6 }) } catch (e) { if (S.isAbort(e) || (e && e.why === undefined)) throw e; note('wood-stock: farm harvest stopped: ' + e.why) }
+        await S.pickup(10, 4000)
+        note(`wood-stock: tree farm gave ${r.logs} logs, now ${S.logs()}`); return r.logs > 0
+      }
       let got = await S.chopTree(12, { ms: 150000 })
       if (!got) {
         // walk the grove / the trees seen before around home, staying on the surface
@@ -290,45 +297,17 @@ module.exports = function plan(G, S, M, api, log) {
       const sh = S.items().find(i => i.name === 'shield'); if (sh) { try { await bot.equip(sh, 'off-hand') } catch {} }
       return true } },
 
-    // tree farm (Walter: birch, saplings with 3 blocks between them, well lit): a 4-block lattice around home, a torch in the middle of each
-    // lattice square, every sapling spot needs open sky above for the tree; spots are remembered and replanted when a tree is felled
-    { id: 'grove', budget: 180000, need: () => !!home() && Date.now() > (st.groveRestUntil || 0) && S.items().some(i => /_sapling$/.test(i.name)) && (st.grove || []).filter(q => { const b = S.block(v(q[0], q[1], q[2])); return b && (/_sapling$|_log$/.test(b.name)) }).length < 24 && !S.isNight(), cool: 90000, run: async () => {
-      const h = home(); st.grove = (st.grove || [])
-      const live = (q) => { const b = S.block(v(q[0], q[1], q[2])); return b && /_sapling$|_log$/.test(b.name) }
-      const spots = []
-      for (let dx = -20; dx <= 20; dx++) for (let dz = -20; dz <= 20; dz++) {
-        if (((dx % 4) + 4) % 4 || ((dz % 4) + 4) % 4) continue
-        const d = Math.hypot(dx, dz); if (d < 8 || d > 20) continue
-        for (let dy = 8; dy >= -10; dy--) {
-          const p = v(h.x + dx, h.y + dy, h.z + dz), g = S.block(p.offset(0, -1, 0)), c = S.block(p)
-          if (!g || !c) continue
-          if (S.isAir(c) && /^(grass_block|dirt|podzol|coarse_dirt)$/.test(g.name)) {
-            let open = true; for (let k = 1; k <= 6 && open; k++) { const a = S.block(p.offset(0, k, 0)); if (a && !S.isAir(a) && !/leaves/.test(a.name)) open = false }
-            if (open && !(st.farm || []).some(q => Math.abs(q[0] - p.x) <= 2 && Math.abs(q[2] - p.z) <= 2)) spots.push(p)
-            break
-          }
-          if (!S.isAir(c)) break
-        }
-      }
-      spots.sort((p, q) => S.dist(p) - S.dist(q))
-      let planted = 0
-      for (const p of spots) {
-        if (planted >= 6) break
-        if (live([p.x, p.y, p.z])) continue
-        const sap = S.items().filter(i => /_sapling$/.test(i.name)).sort((a, b) => (/birch/.test(b.name) ? 1 : 0) - (/birch/.test(a.name) ? 1 : 0))[0]; if (!sap) break
-        const r = await S.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { dig: false, ms: 30000 }); if (!r.ok) continue
-        if (await S.placeAgainst(S.block(p.offset(0, -1, 0)), v(0, 1, 0), sap.name)) {
-          if (!st.grove.some(q => q[0] === p.x && q[2] === p.z)) st.grove.push([p.x, p.y, p.z])
-          planted++
-          // light the square: a torch two blocks off the sapling, on the diagonal (between four lattice spots)
-          const tp = p.offset(2, 0, 2), tg = S.block(tp.offset(0, -1, 0)), tc = S.block(tp)
-          if (cnt('torch') > 2 && tg && S.solid(tg) && tc && S.isAir(tc) && !bot.findBlock({ matching: ids(/^(torch|wall_torch)$/), maxDistance: 3, point: tp })) await S.placeAgainst(tg, v(0, 1, 0), 'torch')
-        }
-      }
-      // nowhere left to plant on the lattice: rest the step an hour instead of retrying every few minutes (failed x6 by 08:51)
-      if (!planted) st.groveRestUntil = Date.now() + 3600000
-      G.save(); note(`grove: planted ${planted}, ${st.grove.filter(live).length} live trees/saplings on the lattice`)
-      return planted > 0 } },
+    // tree farm (Walter: birch, saplings with 3 blocks between them, well lit): brain/treefarm/farm.js owns the lattice (layout.js: period 4, a torch
+    // in the middle of every square, one species, room above every spot, kept off natural trees); this step only calls it and mirrors the sapling
+    // cells into st.grove (the established-blocks list and wood-stock read that). The think-brain calls the same thing as tree_farm build / tend.
+    { id: 'grove', budget: 180000, need: () => !!home() && !!api.treefarm && Date.now() > (st.groveRestUntil || 0) && !S.isNight() && (!api.treefarm.farm.has() || api.treefarm.farm.farms().some(f => { const s = api.treefarm.farm.status(f); return s.empty > 0 || s.unlit > 0 })), cool: 90000, run: async () => {
+      const tf = api.treefarm.farm
+      const r = await tf.build(S.ctx, { home: home(), quiet: true, ms: 150000, requestTorches: async () => { if (cnt('torch') < 8 && cnt(/^(coal|charcoal)$/) >= 1 && (cnt('stick') >= 1 || S.planks() >= 2 || S.logs() >= 1)) await S.craft('torch', cnt('torch') + 16).catch(() => false) } })
+      st.grove = tf.farms().flatMap(f => require('../treefarm/layout').spots(f).map(q => [q.x, q.y, q.z]))
+      // nothing to do for now (no saplings, no torches, no site): rest the step instead of retrying every few minutes
+      if (!r.planted && !r.lit) st.groveRestUntil = Date.now() + (r.why ? 3600000 : 1800000)
+      G.save(); note(`grove: ${r.why ? 'no site (' + r.why + ')' : `planted ${r.planted}, lit ${r.lit}`}${r.needs && r.needs.length ? '; needs ' + r.needs.join('; ') : ''}`)
+      return (r.planted + r.lit) > 0 } },
 
     // ---- surface lighting (Walter 2026-11-04): a regular torch grid over the land around home looks good and keeps it safe, and it has to reach
     // far enough that mobs spawning on nearby land cannot notice the bot and walk in. Torch light 14 drops 1 per block and mobs spawn only at

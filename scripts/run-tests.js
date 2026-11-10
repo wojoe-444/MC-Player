@@ -13,11 +13,8 @@ const ROOT = path.join(__dirname, '..')
 const KNOWN_FLAKY = new Set(['test/treefarm.test.js', 'test/treefarm.canopy.test.js', 'test/treefarm.clear.test.js'])
 // Tests that fail on main for a reason not yet fixed. They are listed here by exact name, printed in every run as KNOWN FAILING, and do not fail the run;
 // any other failure does. When one starts passing the runner says so, so the entry gets deleted. Keep this list short and give each a reason.
-const KNOWN_FAILING = {
-  // The mock world's 10 ms item-fall timer leaves one pillar-block drop hanging at its old height when this test runs after other tests in the same process
-  // (alone it passes); the drop is then never collected. The treefarm pillar goes away with the motor layer (docs/HILLCLIMB-INSIGHTS.md item 7), and this test with it.
-  'test/treefarm.test.js': ['a pillar left in the state by a crash is taken down at the start of the next run']
-}
+// (Empty: the pillar-drop race behind the last entry was fixed by waiting for the fall in treefarm/engine.js.)
+const KNOWN_FAILING = {}
 const DIRS = ['test', 'app/test', 'reviewer/test']
 const CONCURRENCY = Number(process.env.TEST_CONCURRENCY) || 4
 

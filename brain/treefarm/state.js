@@ -2,7 +2,7 @@
 // a pillar we may still be standing on, run history.
 const fs = require('fs')
 
-const blank = () => ({ version: 1, sites: [], pending: [], pillar: null, worksite: null, groveAt: {}, decay: [], lastRun: 0, lastResult: null, askedAt: 0, stats: { trees: 0, logs: 0, planted: 0 }, updatedAt: null })
+const blank = () => ({ version: 1, sites: [], farms: [], pending: [], pillar: null, worksite: null, groveAt: {}, decay: [], lastRun: 0, lastResult: null, askedAt: 0, stats: { trees: 0, logs: 0, planted: 0, lit: 0, leavesBroken: 0 }, updatedAt: null })
 
 function load({ file, log = () => {} }) {
   const s = blank()
@@ -11,6 +11,7 @@ function load({ file, log = () => {} }) {
     Object.assign(s, own, { stats: { ...s.stats, ...(own.stats || {}) } })
   } catch (e) { if (e.code !== 'ENOENT') log(`treefarm state unreadable (${e.message}); starting fresh`) }
   if (!Array.isArray(s.sites)) s.sites = []
+  if (!Array.isArray(s.farms)) s.farms = []
   if (!Array.isArray(s.pending)) s.pending = []
   if (!Array.isArray(s.decay)) s.decay = []
   return s

@@ -395,6 +395,12 @@ module.exports = function makeSkills({ bot, api, log }) {
 
   // Chop whole trees: nearest visible log, then every log connected to it (bottom first).
   S.chopTree = async (want = 6, { ms = 180000 } = {}) => {
+    // Walter 2026-11-10: natural trees above ground are kept. Once the lit tree farm has grown trees (or the bag has a bootstrap supply) this
+    // refuses, and the wood comes from api.treefarm.farm.harvest (tree_farm harvest) instead.
+    try {
+      const pol = api.treefarm && api.treefarm.naturalPolicy ? api.treefarm.naturalPolicy({ logs: S.logs() + Math.floor(S.planks() / 4) }) : null
+      if (pol && !pol.natural) { S.treeRefusal = pol.why; return 0 }
+    } catch {}
     const t0 = now(); let got = 0
     while (got < want && now() - t0 < ms) {
       S.check()
