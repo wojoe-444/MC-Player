@@ -12,6 +12,7 @@
 // Never throws into the caller: a bug in a check is logged once per rule and the packet goes out. The bot's own play is not changed in log mode.
 const fs = require('fs')
 const path = require('path')
+const { Vec3 } = require('vec3')
 
 const DEFAULT_RULES = path.join(__dirname, 'rules.json')
 const TIERS = { wooden: 1, golden: 1.5, stone: 2, iron: 3, diamond: 4, netherite: 5 }
@@ -87,7 +88,7 @@ function install(bot, opts = {}) {
     minToolTier(name, p, r) {
       if (name !== 'block_dig' || p.status !== 0) return null           // status 0 = start digging
       const held = toolInfo(heldName()); if (!held) return null
-      const b = p.location ? bot.blockAt({ x: p.location.x, y: p.location.y, z: p.location.z }) : null
+      const b = p.location ? bot.blockAt(new Vec3(p.location.x, p.location.y, p.location.z)) : null
       if (!b) return null
       // what the block needs: the lowest tier among the tools that can harvest it; no list means any tool will do, so the floor tier is enough
       let need = TIERS[r.floor || 'stone'] || 2
@@ -111,7 +112,7 @@ function install(bot, opts = {}) {
       for (let dx = -(d - 1); dx <= d - 1; dx++) for (let dy = -(d - 1); dy <= d - 1; dy++) for (let dz = -(d - 1); dz <= d - 1; dz++) {
         if (!dx && !dy && !dz) continue
         if (Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz)) >= d) continue
-        const b = bot.blockAt({ x: cx + dx, y: cy + dy, z: cz + dz })
+        const b = bot.blockAt(new Vec3(cx + dx, cy + dy, cz + dz))
         if (b && /(^|_)torch$/.test(b.name)) return `torch at ${cx},${cy},${cz} is ${Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz))} from the torch at ${cx + dx},${cy + dy},${cz + dz}`
       }
       return null
