@@ -27,7 +27,9 @@ const opt = (k, d) => { const i = args.indexOf('--' + k); return i >= 0 ? args[i
 const RUNS = +opt('runs', 30)
 const PORT = +opt('port', 25611)
 const OUT = opt('out', path.join(require('os').tmpdir(), 'pillar-look-lab.out.jsonl'))
-const VERSION = '1.21.4'
+const VANILLA = args.includes('--vanilla') // join a real server on --port (trial-server skill, op'd TrialA) instead of starting flying-squid
+const VERSION = VANILLA ? '1.21.6' : '1.21.4'
+const NAME = VANILLA ? 'TrialA' : 'LabPillar'
 const SEED = +opt('seed', 12345)
 let rs = SEED
 const rnd = () => { rs = (rs * 1664525 + 1013904223) % 4294967296; return rs / 4294967296 }
@@ -45,9 +47,9 @@ function startServer () {
 }
 
 async function main () {
-  const server = startServer()
-  await new Promise(r => setTimeout(r, 2500))
-  const bot = mineflayer.createBot({ host: 'localhost', port: PORT, username: 'LabPillar', version: VERSION, auth: 'offline', checkTimeoutInterval: 120000 })
+  const server = VANILLA ? null : startServer()
+  await new Promise(r => setTimeout(r, VANILLA ? 0 : 2500))
+  const bot = mineflayer.createBot({ host: 'localhost', port: PORT, username: NAME, version: VERSION, auth: 'offline', checkTimeoutInterval: 120000 })
   await new Promise((res, rej) => { bot.once('spawn', res); bot.once('error', rej); bot.once('kicked', k => rej(new Error('kicked ' + JSON.stringify(k)))) })
   await bot.waitForChunksToLoad()
   await bot.waitForTicks(20)
@@ -60,7 +62,13 @@ async function main () {
   const refPos = new Vec3(cell.x, floorY, cell.z)
   const Item = require('prismarine-item')(VERSION)
   const dirt = bot.registry.itemsByName.dirt
-  const give = () => { bot.inventory.slots[36] = new Item(dirt.id, 64); bot.setQuickBarSlot(0) }
+  const cmd = async c => { bot.chat(c); await bot.waitForTicks(4) }
+  let given = 0
+  const give = async () => {
+    if (!VANILLA) { bot.inventory.slots[36] = new Item(dirt.id, 64); bot.setQuickBarSlot(0); return }
+    if (given++ % 20 === 0) { await cmd('/clear ' + NAME); await cmd('/give ' + NAME + ' minecraft:dirt 64'); await bot.waitForTicks(6) }
+    bot.setQuickBarSlot(0)
+  }
 
   // instrument the packet writer
   let tick = 0
@@ -86,14 +94,22 @@ async function main () {
 
   async function oneRun (vname, scen, n) {
     const v = VARIANTS[vname]
-    give()
+    await give()
     // start position: random offset inside the cell (a 0.6 wide player in a 1x1 shaft can be +-0.2 off centre)
     const ox = (rnd() * 2 - 1) * 0.2, oz = (rnd() * 2 - 1) * 0.2
-    bot.entity.position.set(cell.x + 0.5 + ox, cell.y, cell.z + 0.5 + oz)
-    bot.entity.velocity.set(0, 0, 0)
-    bot.entity.onGround = true
     bot.setControlState('jump', false)
-    await bot.waitForTicks(8)
+    if (VANILLA) {
+      // the real server moves the bot and clears the last block, so the server's own position is what the placement is judged against
+      await cmd(`/setblock ${cell.x} ${cell.y} ${cell.z} minecraft:air`)
+      await cmd(`/tp ${NAME} ${(cell.x + 0.5 + ox).toFixed(3)} ${cell.y} ${(cell.z + 0.5 + oz).toFixed(3)} 0 0`)
+      for (let i = 0; i < 40 && Math.hypot(bot.entity.position.x - (cell.x + 0.5 + ox), bot.entity.position.z - (cell.z + 0.5 + oz)) > 0.05; i++) await bot.waitForTicks(1)
+      await bot.waitForTicks(10)
+    } else {
+      bot.entity.position.set(cell.x + 0.5 + ox, cell.y, cell.z + 0.5 + oz)
+      bot.entity.velocity.set(0, 0, 0)
+      bot.entity.onGround = true
+      await bot.waitForTicks(8)
+    }
     const bx = bot.entity.position.x, bz = bot.entity.position.z
     // head state before the jump, as reach.js does: pitch straight down, forced
     let yaw0
@@ -127,10 +143,14 @@ async function main () {
     yawDelta = Math.abs(norm(wantYaw - bot.entity.yaw))
     // yaw the server has seen so far is bot.entity.yaw only after the slew; the wait is the gap to the last SENT yaw
     const p = v.force ? bot._placeBlockWithOptions(ref, new Vec3(0, 1, 0), { forceLook: true, swingArm: 'right' }) : bot.placeBlock(ref, new Vec3(0, 1, 0))
-    p.catch(e => { err = e.message })
+    let placed = null
+    p.then(() => { placed = true }).catch(e => { err = e.message })
     for (let i = 0; i < 40 && !placePacket; i++) await bot.waitForTicks(1)
+    // vanilla: wait for the server's verdict (placeBlock rejects with "Server refused ..." or "did not answer")
+    for (let i = 0; i < 30 && VANILLA && placed === null && !err; i++) await bot.waitForTicks(1)
     bot.setControlState('jump', false)
     const out = { vname, scen, n, ox: +ox.toFixed(3), callDy: +callDy.toFixed(3), yawDelta: +yawDelta.toFixed(3), packet: !!placePacket }
+    if (VANILLA) { out.observedRefused = !!err && /refused/i.test(err); out.placed = placed === true; out.err = err ? err.slice(0, 90) : null }
     if (placePacket) {
       out.waitTicks = placePacket.tick - callTick
       out.sentDy = +(placePacket.sentY - cell.y).toFixed(3)
@@ -139,7 +159,8 @@ async function main () {
     }
     // undo the local placement and settle
     const destPos = cell
-    try { const stone = 0; bot.world.setBlockStateId(destPos, stone) } catch {}
+    if (VANILLA) await cmd(`/setblock ${destPos.x} ${destPos.y} ${destPos.z} minecraft:air`)
+    else { try { bot.world.setBlockStateId(destPos, 0) } catch {} }
     await bot.waitForTicks(12)
     return out
   }
@@ -155,17 +176,17 @@ async function main () {
   }
 
   // summary
-  const lines = ['| scenario | variant | runs | packet sent | mean yaw to turn (rad) | mean ticks call->packet | max ticks | would refuse |', '|---|---|---|---|---|---|---|---|']
+  const lines = ['| scenario | variant | runs | packet sent | mean yaw to turn (rad) | mean ticks call->packet | max ticks | would refuse (model)' + (VANILLA ? ' | refused by server |' : ' |'), '|---|---|---|---|---|---|---|---|' + (VANILLA ? '---|' : '')]
   for (const scen of SCEN) for (const vname of Object.keys(VARIANTS)) {
     const rr = results.filter(r => r.scen === scen && r.vname === vname)
     const sent = rr.filter(r => r.packet)
     const avg = a => a.length ? +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2) : null
-    lines.push(`| ${scen} | ${vname} | ${rr.length} | ${sent.length} | ${avg(rr.map(r => r.yawDelta).filter(x => x != null))} | ${avg(sent.map(r => r.waitTicks))} | ${Math.max(0, ...sent.map(r => r.waitTicks))} | ${sent.filter(r => r.wouldRefuse).length}/${sent.length} |`)
+    lines.push(`| ${scen} | ${vname} | ${rr.length} | ${sent.length} | ${avg(rr.map(r => r.yawDelta).filter(x => x != null))} | ${avg(sent.map(r => r.waitTicks))} | ${Math.max(0, ...sent.map(r => r.waitTicks))} | ${sent.filter(r => r.wouldRefuse).length}/${sent.length} |` + (VANILLA ? ` ${rr.filter(r => r.observedRefused).length}/${rr.length} |` : ''))
   }
   console.log(lines.join('\n'))
   fs.writeFileSync(OUT.replace(/\.jsonl$/, '.md'), lines.join('\n') + '\n')
   bot.quit()
-  try { server._server.close() } catch {}
+  try { if (server) server._server.close() } catch {}
   setTimeout(() => process.exit(0), 500)
 }
 main().catch(e => { console.error(e); process.exit(1) })
