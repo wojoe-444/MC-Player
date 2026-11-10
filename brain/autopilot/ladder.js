@@ -94,7 +94,10 @@ module.exports = function ladder(bot, S, goals, v, log) {
   // Ride the ladder by hand to level y, the bot already in the shaft column: up = face the wall and hold jump+forward; down = let go and slide
   // (about 3 blocks a second), sneaking the moment the feet reach y so it holds there. The pathfinder has no ladder moves, so a go-to from
   // inside the shaft to a level in it failed both ways (storage room: Smeo444 04:29 from below, OzoGo444 04:43 from above).
-  L.inColumn = (sh) => { const e = bot.entity.position; return Math.hypot(e.x - sh.entry[0] - 0.5, e.z - sh.entry[2] - 0.5) < 0.9 }
+  // in the column = in the shaft's own block cell and close to its middle. The old 0.9 radius counted the cell beside it: OzoGo444 stood at
+  // (-6019.x, 21, -2355) next to the column (feet in air, pressed against the rock), rideTo held jump and forward for 90 s and never climbed
+  // ('climb not rising ... feet air, collidedH true, ground true', 09:49-09:50)
+  L.inColumn = (sh) => { const e = bot.entity.position; return Math.floor(e.x) === sh.entry[0] && Math.floor(e.z) === sh.entry[2] && Math.hypot(e.x - sh.entry[0] - 0.5, e.z - sh.entry[2] - 0.5) < 0.6 }
   // Into the shaft column at the bot's own level. The pathfinder treats a cell holding a ladder as solid, so a go-to aimed at the shaft cell
   // never finds a path (OzoGo444 04:58, looping 'not out at the top' every 3 s two blocks from the shaft). Instead: walk to a side cell of the
   // column (digging it open if it is rock, with the usual liquid checks), then step in with the movement keys.
