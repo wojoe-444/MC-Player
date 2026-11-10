@@ -739,6 +739,8 @@ module.exports = function makeSkills({ bot, api, log }) {
     const b = S.block(p)
     if (!b) return 'fail'
     if (S.passable(b)) return 'ok'
+    // a ladder is a way through, not an obstacle: tunnels started at the shaft bottom cleared its two bottom rungs again and again (05:04)
+    if (b.name === 'ladder') return 'ok'
     if (b.name === 'lava') return 'lava'
     if (S.isWaterish(b)) return 'water'
     const h = S.hazardNear(p, 1)
