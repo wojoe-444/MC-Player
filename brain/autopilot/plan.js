@@ -885,7 +885,7 @@ module.exports = function plan(G, S, M, api, log) {
   // the placed-block log (brain/placed.js): Walter's (any player's who is not a bot) blocks are always built; a bot's own blocks are built
   // unless they are plain filler (pillar and bridge scaffolding, cave seals: the bots take those down again as they go)
   const PL = (() => { try { return require('../placed').attach(bot, (m) => log('PLACED', m)) } catch (e) { log('PLAN', 'placed log not loaded: ' + e.message); return null } })()
-  S.placed = PL
+  S.placedLog = PL
   const BOTS = /^(OzoGo444|Smeo444)$/
   const FILL = /^(cobblestone|cobbled_deepslate|dirt|coarse_dirt|stone|netherrack|gravel|sand|andesite|diorite|granite|tuff|deepslate)$/
   S.isEstablished = (block) => {
@@ -1240,15 +1240,19 @@ module.exports = function plan(G, S, M, api, log) {
   // ---- scaffolding is incidental, not established (Walter's screenshots: cobble pillars, holes and stray blocks around the house) ----
   // every block the bot places (its own placing, the pathfinder's scaffolding, nav pillars) is remembered; plain scaffold blocks that are
   // still there after 10 minutes, on the surface and outside the home/farm, are taken down again, top first.
-  if (!bot._placeLogPatched) {
-    bot._placeLogPatched = true
-    const orig = bot.placeBlock.bind(bot)
-    bot.placeBlock = async function (ref, face, ...rest) {
-      const held = bot.heldItem && bot.heldItem.name
-      const r = await orig(ref, face, ...rest)
-      try { const p = ref.position.plus(face); const sx = bot._ap && bot._ap.G && bot._ap.G.state; if (sx && held) { sx.placed = (sx.placed || []).concat([[p.x, p.y, p.z, held, Date.now()]]).slice(-600) } } catch {}
-      return r
+  // filled from mineflayer's 'blockPlaced' event: a wrapper on bot.placeBlock missed every caller of _placeBlockWithOptions (the forced-look
+  // placing, bug hunt 2026-11-10 #2). Recorded as the item name (wall_torch -> torch) as the readers expect.
+  {
+    if (bot._stPlacedListener) bot.removeListener('blockPlaced', bot._stPlacedListener)
+    bot._stPlacedListener = (oldB, newB) => {
+      try {
+        if (!newB || !newB.position) return
+        const p = newB.position, sx = bot._ap && bot._ap.G && bot._ap.G.state; if (!sx) return
+        const name = newB.name.replace(/^wall_torch$/, 'torch').replace(/^(\w+)_wall_(sign|banner)$/, '$1_$2')
+        sx.placed = (sx.placed || []).concat([[p.x, p.y, p.z, name, Date.now()]]).slice(-600)
+      } catch {}
     }
+    bot.on('blockPlaced', bot._stPlacedListener)
   }
   const SCAFFOLD = /^(cobblestone|cobbled_deepslate|dirt|andesite|diorite|granite|tuff|netherrack|stone)$/
   let _tidy = { at: 0, list: [] }
