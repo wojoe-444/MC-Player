@@ -1,0 +1,9 @@
+{
+  "name": "roadmap",
+  "version": 1,
+  "kind": "observer",
+  "summary": "Checks the ROADMAP.md items that the bot's own records can prove (a mine is recorded, a tree farm has sites, a storage waypoint exists...) and writes brain/state/roadmap.json: phase progress as a number that moves on its own, with the items nothing measures yet listed as unmeasured (docs/HILLCLIMB-INSIGHTS.md item 11).",
+  "requires": [],
+  "provides": [],
+  "claims": []
+}
