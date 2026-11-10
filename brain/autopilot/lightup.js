@@ -197,17 +197,25 @@ module.exports = function lightup(G, S, M, api, log) {
 
   async function scan(opts = {}) { const r = await scanPlan({ ...DEFAULTS, ...opts }); return { ...summary(r), sample: r.plan.torches.slice(0, 6).map(t => t.at) } }
   const status = () => { const u = U(); return { last: u.last || null, at: u.at || 0, nextAt: u.nextAt || 0, total: u.total || 0, farm: !!farm() } }
-  G.lightUp = { run, scan, status, DEFAULTS }
+  // The scan lists dark spawn cells in loaded chunks through rock: the one place a bot decision would use block data it cannot see. The project rule
+  // is survival-legit with no x-ray, so the exception sits behind an approval that has to come from Walter himself (the README quotes him, but a
+  // quote in a file is not his go-ahead in this thread). Off until LIGHTUP_XRAY_OK=1 in the bot's environment or a brain/state/lightup-approved.json
+  // file exists; neither the step nor the skill does anything without it.
+  const approved = () => process.env.LIGHTUP_XRAY_OK === '1' || require('fs').existsSync(require('path').join(process.env.BOT_RUNTIME_DIR || process.cwd(), 'brain', 'state', 'lightup-approved.json'))
+  const NEEDS_OK = { ok: false, why: 'the light-up scan reads dark cells through rock; it stays off until Walter approves that exception (lightup-approved.json)' }
+  const guarded = (fn) => async (...a) => approved() ? fn(...a) : NEEDS_OK
+  G.lightUp = { run: guarded(run), scan: guarded(scan), status, DEFAULTS, approved }
 
   return {
     id: 'mob-farm-light', budget: DEFAULTS.ms + 120000, cool: 300000,
     need: () => {
+      if (!approved()) return false
       if (!farm() || bot.isSleeping || bot.health < DEFAULTS.minHealth) return false
       if (S.isNight() && !S.underground()) return false
       if (Date.now() < (U().nextAt || 0)) return false
       return torchCount() >= DEFAULTS.minTorches || S.count(/^(coal|charcoal)$/) >= 1
     },
-    run: async () => { const r = await run(); return !!r.ok },
+    run: async () => { const r = await G.lightUp.run(); return !!r.ok },
   }
 }
 module.exports.DEFAULTS = DEFAULTS

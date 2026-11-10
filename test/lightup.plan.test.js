@@ -2,6 +2,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const P = require('../brain/lightup/plan')
+process.env.LIGHTUP_XRAY_OK = '1'   // the module is gated on the owner approving the through-rock scan; these tests exercise it as approved
 
 // rock everywhere except the carved boxes; torches[] light the cave by the same flood the planner uses
 function grid({ caves = [], torches = [], sky = () => false } = {}) {
@@ -162,4 +163,16 @@ test('the fallback step needs a built farm, a healthy bot and torches (or coal);
 
 test('an old-world mobfarm.json without a platform is not a farm for this task', () => {
   assert.equal(rig({ items: { torch: 20 }, farmCfg: { killSpot: [1, 2, 3], chests: [[1, 2, 3]] } }).step.need(), false)
+})
+
+test('without the approval the step stays off and run/scan refuse, saying why', async () => {
+  const keep = process.env.LIGHTUP_XRAY_OK; delete process.env.LIGHTUP_XRAY_OK
+  try {
+    const G = { state: {}, steps: [], note() {}, save() {} }
+    const S = { bot: { isSleeping: false, health: 20, entity: { position: { x: 0, y: 60, z: 0 } } }, isNight: () => false, underground: () => true, count: () => 9, block: () => null, v: (x, y, z) => ({ x, y, z }) }
+    const step = require('../brain/autopilot/lightup')(G, S, {}, { statePath: () => require('path').join(require('os').tmpdir(), 'lu-gate-test.json') }, () => {})
+    assert.strictEqual(step.need(), false)
+    const r = await G.lightUp.run(); assert.strictEqual(r.ok, false); assert.match(r.why, /approves/)
+    const r2 = await G.lightUp.scan(); assert.strictEqual(r2.ok, false)
+  } finally { if (keep !== undefined) process.env.LIGHTUP_XRAY_OK = keep }
 })
