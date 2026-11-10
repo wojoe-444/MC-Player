@@ -288,7 +288,9 @@ class Navigator extends EventEmitter {
     })
   }
 
-  // Does the bot's real position satisfy `goal` (same test the pathfinder uses, tolerant of standing on a half block)?
+  // Does the bot's real position satisfy `goal` (same test the pathfinder uses, tolerant of standing on a half block and of a goal in the cell just above the top rung
+  // of a ladder, which a body cannot occupy: test/nav.ladder.test.js)? THE definition of "arrived": S.goto (autopilot/skills.js) asks this too. It used to demand the
+  // exact feet cell, so a goal one block above or below the bot came back as an instant "nopath" from a navigator that had just said ok (BUG-HUNT finding 10).
   satisfied(goal, dynamic = false) {
     if (dynamic || !goal || typeof goal.isEnd !== 'function') return true
     const p = this.bot.entity.position.floored()

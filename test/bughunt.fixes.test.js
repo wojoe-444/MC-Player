@@ -52,3 +52,16 @@ test('reach defaults carry no coordinates from the first world; the ladder wall 
   assert.match(src, /below && below\.boundingBox === 'block' \? \{ b: below, face: v\(0, 1, 0\) \} : above && above\.boundingBox === 'block' \? \{ b: above, face: v\(0, -1, 0\) \}/)
   assert.ok(!/S\.block\(wb\.offset\(0, -1, 0\)\) \|\| S\.block\(wb\.offset\(0, 1, 0\)\)/.test(src))
 })
+
+test('arrived (finding 10): the navigator is the one definition; S.goto asks it instead of demanding the exact cell (source check + the tolerance it relies on)', () => {
+  const { Vec3 } = require('vec3')
+  const { Navigator } = require('../brain/nav/navigator')
+  const goalAt = (x, y, z) => ({ isEnd: (p) => p.x === x && p.y === y && p.z === z })
+  const nav = (x, y, z) => Object.assign(Object.create(Navigator.prototype), { bot: { entity: { position: new Vec3(x, y, z) } } })
+  assert.strictEqual(nav(5.5, 64, 5.5).satisfied(goalAt(5, 64, 5)), true)
+  assert.strictEqual(nav(5.5, 64, 5.5).satisfied(goalAt(5, 65, 5)), true)              // the cell above the top rung cannot be stood in: one off in y counts
+  assert.strictEqual(nav(5.5, 64, 5.5).satisfied(goalAt(5, 66, 5)), false)
+  assert.strictEqual(nav(5.5, 64, 5.5).satisfied(goalAt(6, 64, 5)), false)
+  const skills = fs.readFileSync(path.join(__dirname, '..', 'brain', 'autopilot', 'skills.js'), 'utf8')
+  assert.match(skills, /nav\.nav\.satisfied\(goal\)/)
+})
