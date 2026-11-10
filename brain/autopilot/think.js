@@ -425,7 +425,7 @@ module.exports = function think(G, S, M, api, log) {
     return { ok: true, note: 'chest at ' + fmtPos(b.position).join(',') }
   })
 
-  def('equip_gear', '{} hold the best sword (and a shield in the off hand if you have one). Wears the best armor you have.', async () => {
+  def('equip_gear', '{} hold the best sword (and a shield in the off hand if you have one). Armor only once it is allowed (Act 2: none until diamond gear with Mending).', async () => {
     const worn = []
     const sh = bot.inventory.items().find(i => i.name === 'shield'); if (sh) { try { await bot.equip(sh, 'off-hand'); worn.push('shield') } catch {} }
     for (const slot of (bot._armorAllowed && !bot._armorAllowed()) ? [] : ['head', 'torso', 'legs', 'feet']) {
