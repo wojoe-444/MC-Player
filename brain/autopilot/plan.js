@@ -943,9 +943,11 @@ module.exports = function plan(G, S, M, api, log) {
   const dayRoll = (d) => {
     if (st.dayStat && st.dayStat.day != null) {
       const armor = ['head', 'torso', 'legs', 'feet'].filter(sl => worn(sl)).map(sl => worn(sl).name.replace(/_(helmet|chestplate|leggings|boots)$/, '')).join('/') + (hasShield() ? '+shield' : '')
-      const done = { ...st.dayStat, armor: armor || 'none' }
+      // the commit(s) the code was at during that day (brain/runlog): a change shows as before and after on the same bot
+      let commits; try { commits = bot._runInfo ? bot._runInfo.dayCommits(st.dayStat.day) : undefined } catch {}
+      const done = { ...st.dayStat, armor: armor || 'none', ...(commits && commits.length ? { commits } : {}) }
       st.dayStats = (st.dayStats || []).concat([done]).slice(-30)
-      note(`day ${done.day}: iron mined ${done.iron || 0}, ingots ${done.ingots || 0}, tunnels ${done.tunnels || 0}, deaths ${done.deaths || 0}, armor ${done.armor}`)
+      note(`day ${done.day}: iron mined ${done.iron || 0}, ingots ${done.ingots || 0}, tunnels ${done.tunnels || 0}, deaths ${done.deaths || 0}, armor ${done.armor}${done.commits ? ', commit ' + done.commits.join('>') : ''}`)
     }
     st.dayStat = { day: d }; G.save()
   }

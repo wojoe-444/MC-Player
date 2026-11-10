@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "note": "The rules of play as data. brain/gate reads this file; it is meant to become the one place a rule lives (docs/HILLCLIMB-INSIGHTS.md items 3 and 8). mode: off | log (record every violation with its call site, let the packet through) | enforce (drop the packet and record it).",
+  "rules": {
+    "noArmor": {
+      "mode": "log",
+      "armorSlots": [5, 6, 7, 8],
+      "liftedBy": "ALLOW_ARMOR=1 in the environment or brain/safety/gear.allowArmor = true (the flip happens when the bots have diamond gear with Mending)",
+      "packets": ["window_click", "use_item"]
+    },
+    "minToolTier": {
+      "mode": "log",
+      "note": "stone is the default; a higher tier only when the block requires it (iron for diamond/gold/redstone/emerald, diamond for obsidian). Violation: the held pickaxe/axe/shovel outranks what the block needs AND a tool of a sufficient lower tier is in the bag.",
+      "floor": "stone",
+      "packets": ["block_dig"]
+    },
+    "lavaWalk": {
+      "mode": "log",
+      "note": "never move with a lava bucket selected",
+      "packets": ["position", "position_look"]
+    },
+    "torchSpacing": {
+      "mode": "log",
+      "minDistance": 3,
+      "note": "torches at least 2 air apart (distance 3 between torch cells)",
+      "packets": ["block_place"]
+    },
+    "chatRate": {
+      "mode": "log",
+      "minGapMs": 1000,
+      "repeatWindowMs": 60000,
+      "packets": ["chat_message"]
+    }
+  }
+}
