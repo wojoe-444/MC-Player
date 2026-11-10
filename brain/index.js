@@ -558,6 +558,9 @@ module.exports = function attach(deps) {
     loadModules()
     for (const h of handles) { try { h.start && h.start() } catch (e) { log('BRAIN_MODULE_ERROR', `${h.name}.start: ${e.stack || e.message}`) } }
     checkRequires()
+    // Hands, watch stage (brain/motor/hands.js): installed AFTER the modules started so it wraps the autopilot's equip wrapper too and sees the real caller.
+    // Records which call sites swap the held item against each other; changes nothing. HANDS=off disables it.
+    if (process.env.HANDS !== 'off') { try { require('./motor/hands').install(bot, { stateDir: path.dirname(statePath('x')), log: (m) => log('HANDS', m) }) } catch (e) { log('HANDS', 'not installed: ' + e.message) } }
     scheduler.start()
     log('BRAIN', `started; modules: ${handles.map(h => h.name).join(', ') || 'none'}; routines: ${scheduler.status().routines.map(r => r.name + (r.enabled ? '+' : '-')).join(' ')}`)
   }
