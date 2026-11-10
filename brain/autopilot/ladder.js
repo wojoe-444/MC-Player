@@ -34,10 +34,28 @@ module.exports = function ladder(bot, S, goals, v, log) {
     return ladders()
   }
   // place a ladder in cell c, hung on the wall at c+wall (that wall block must be solid)
+  // The ladder's plate sits against the wall; the server refuses it while the player's box overlaps the plate, i.e. while the bot stands in
+  // that column pressed toward the wall (04:36: 'refused to place ladder at (-6018, 50, -2355)', the bot in that very cell, off centre). So a bot
+  // in the column first steps to the side away from the wall, and if the wall it has is open, any other solid side of the cell will do.
+  async function awayFromWall(c, wall) {
+    const e = bot.entity.position
+    if (Math.floor(e.x) !== c.x || Math.floor(e.z) !== c.z || e.y > c.y + 1 || e.y + 1.8 < c.y) return
+    const tgt = v(c.x + 0.5 - wall[0] * 0.28, e.y, c.z + 0.5 - wall[1] * 0.28)
+    try {
+      for (let i = 0; i < 12 && Math.hypot(tgt.x - bot.entity.position.x, tgt.z - bot.entity.position.z) > 0.06; i++) {
+        await bot.lookAt(tgt.offset(0, 1.6, 0), true); bot.setControlState('sneak', true); bot.setControlState('forward', true); await sleep(50)
+      }
+    } catch {} finally { bot.setControlState('forward', false); bot.setControlState('sneak', false) }
+  }
   async function hang(c, wall) {
     const cur = S.block(c); if (cur && cur.name === 'ladder') return true
-    const w = S.block(c.offset(wall[0], 0, wall[1])); if (!w || w.boundingBox !== 'block') return false
-    return await S.placeAgainst(w, v(-wall[0], 0, -wall[1]), 'ladder').catch(() => false)
+    const sides = [wall, ...[[1, 0], [0, 1], [-1, 0], [0, -1]].filter(([x, z]) => x !== wall[0] || z !== wall[1])]
+    for (const w0 of sides) {
+      const w = S.block(c.offset(w0[0], 0, w0[1])); if (!w || w.boundingBox !== 'block' || !solid(w.position)) continue
+      await awayFromWall(c, w0)
+      if (await S.placeAgainst(w, v(-w0[0], 0, -w0[1]), 'ladder').catch(() => false)) return true
+    }
+    return false
   }
 
   // the shaft column (entry down to the bottom): no torches or other blocks go in it
