@@ -40,7 +40,7 @@ function merge(prev, bot, answer, { now, run, evidence, age = true }) {
   }
   for (const key of answer.resolved || []) {
     const old = open.get(key)
-    if (old && !seen.has(key)) { open.delete(key); resolved.unshift({ ...old, resolvedAt: at, why: 'no longer happening' }) }
+    if (old && !seen.has(key)) { open.delete(key); resolved.unshift({ ...old, resolvedAt: at, why: 'closed by the reviewer: gone, or merged into another finding' }) }
   }
   for (const [key, f] of [...open]) {
     if (seen.has(key) || !age) continue
@@ -52,6 +52,7 @@ function merge(prev, bot, answer, { now, run, evidence, age = true }) {
     open: [...open.values()].sort((a, b) => (RANK[b.severity] - RANK[a.severity]) || (b.lastSeen > a.lastSeen ? 1 : -1)),
     recentlyResolved: resolved.slice(0, 15),
     bag: evidence && evidence.telemetrySummary && evidence.telemetrySummary.now ? evidence.telemetrySummary.now.bag : undefined,
+    detectorEvents: prev && prev.detectorEvents,
     lastRun: run,
   }
 }
