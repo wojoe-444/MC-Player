@@ -34,7 +34,7 @@ The plan has five parts, each useful on its own:
 | Telling Claude what memory is for works better than rules about what to write. A "record only failures" rule removed much of the gain. | `lessons.md` records only failures, by construction. The new prompts say what the memory is for and leave the judgement to the model. |
 | A wrong note is trusted by later sessions. One wrong landmark note kept Claude from ever passing Mt. Moon. Dreaming checked the note against the transcript and fixed it. | We need a transcript good enough to check against, and a job that does the checking. We have neither as a routine. |
 | Injected context must stay small, because longer instruction files reduce adherence. Much of dreaming's work is moving detail down and leaving links. | The caps are enforced in code. The same pruning applies to the reviewer prompt and to the project's `MEMORY.md`, which both grow by patch. |
-| Opus 5 was the first model to close the loop: a rule, how it knows the rule is true, and the traps. Sonnet 5.5 and Opus 5.5 do the same. Sonnet 4.6 had to be told to read its memory and test its theories. | Anything that writes memory runs on Sonnet 5.5 or better. Every policy in memory carries its evidence. |
+| Opus 5 was the first model to close the loop: a rule, how it knows the rule is true, and the traps. Sonnet 5.5 and Opus 5.5 do the same. Sonnet 4.6 had to be told to read its memory and test its theories. | Walter's call (2026-11-10): every scheduled job runs on Haiku 5.5 at XHigh effort, so the loop can run often without draining usage. Haiku is not one of the models the article saw close the loop unprompted, so the prompts say it outright (read memory first, test a rule before keeping it), each job is one narrow task, and code does every check code can do. Every policy in memory carries its evidence. |
 | Several agents writing one shared page lost facts (41 of 57 kept). One writer per page kept all 57. | One owner per memory file. |
 | A wiki helps when an answer needs several sources. It can also grow larger than its sources and add nothing. | `registry.json` is already our wiki of the world. We do not build another. |
 | Dreaming costs compute, so tune how often it runs to how fast things change. | The schedules below start slow and tighten only when a number says so. |
@@ -178,15 +178,15 @@ The caps are enforced in code. A write that would pass a cap is refused, so the 
 flowchart LR
   subgraph laptop [Laptop]
     play["Bot plays one in-game day"] --> journal[("Journal")]
-    journal --> review["Review: Haiku, every 10 min"]
+    journal --> review["Review: every 10 min"]
     review --> findings[("Findings")]
-    journal --> brief["Dawn brief: Sonnet"]
+    journal --> brief["Dawn brief"]
     findings --> brief
     memory[("global.md and notes")] --> brief
     brief --> plan["brief.json"]
     brief --> memory
     plan --> play
-    journal --> dream["Dream: Opus, every 6 h"]
+    journal --> dream["Dream: every 2 h"]
     findings --> dream
     dream --> memory
     dream --> orders[("Work orders")]
@@ -209,20 +209,28 @@ flowchart LR
 | --- | --- | --- | --- | --- | --- |
 | 1 | Journal | inside the bot | always | none | new, small |
 | 2 | Review | laptop, Task Scheduler | every 10 min | Haiku 5.5 | exists |
-| 3 | Dawn brief | laptop, started by the bot | hourly at an in-game dawn, and on respawn | Sonnet 5.5 | new |
-| 4 | Dream | laptop, Task Scheduler | every 6 h | Opus 5.5 | new |
+| 3 | Dawn brief | laptop, started by the bot | hourly at an in-game dawn, and on respawn | Haiku 5.5 | new |
+| 4 | Dream | laptop, Task Scheduler | every 2 h | Haiku 5.5 | new |
 | 5 | Sync | laptop, Task Scheduler | hourly | none | new, small |
-| 6 | Fixer | Claude app scheduled task, new session each time | every 3 h | Fable 5.2 | new |
+| 6 | Fixer | Claude app scheduled task, new session each time | every 3 h | Haiku 5.5 | new |
 | 7 | Deployer | laptop, Task Scheduler | every 30 min | none | exists, not scheduled |
-| 8 | Digest and memory upkeep | Claude app scheduled task | daily | Sonnet 5.5 | digest exists, not scheduled |
+| 8 | Digest and memory upkeep | Claude app scheduled task | daily | Haiku 5.5 | digest exists, not scheduled |
 
 The laptop jobs use the reviewer's pattern: one Task Scheduler entry each, installed and removed from the Bot Dashboard app, running the Claude Agent SDK on Walter's Claude login with no API key. Model, effort and cadence for all of them live in one config file.
+
+**One model for every job: Haiku 5.5 at XHigh effort** (Walter, 2026-11-10: cheap enough to schedule at will, and it must not drain usage). The reviewer already runs this way. What the choice asks of the design:
+- **Narrow jobs.** The dream runs its five steps as five short calls, each with one question and only the files it needs, in place of one long session.
+- **Code checks what code can.** The caps, the rule text, whether a cited journal line exists, and whether a hold names a survival step are checked by code before anything is saved. A failed check discards that write and keeps the old file.
+- **Explicit prompts.** Each prompt says what the memory is for, and also says to read it first and to test a rule against the journal before keeping it. The article found models below Opus 5 needed that said.
+- **The fixer is the job to watch.** It writes code the bots run. Its guards stay as designed: one work order per run, the scenario must fail before the fix and pass after, a canary deploy, and a verdict from the journal a day later. "Work orders reopened after fixed" in the measures below is the number that says whether Haiku is enough for it.
+- **Cadence is cheap to raise.** The dream moves from every 6 hours to every 2. If a measure says a job is not keeping up, run it more often before anything else.
 
 **1. Journal.** An observer module like `brain/runlog`.
 - Reads: step changes, flags, watchdog alarms, deaths, items acquired, gate blocks, commit changes, registry changes, chat with Walter.
 - Writes: one JSON line per event to the day's file, and a rollup per in-game day and per real day (per step: runs, successes, failures, timeouts, stalled minutes; flags by kind; deaths; items gained; commits run). It keeps 30 days.
-- Salience tags, set by code and free: deaths, first-time events, a watchdog fix above level 1, a gate block, anything Walter says.
-- The watchdog stops appending to `lessons.md`.
+- Salience tags, set by code and free: deaths, first-time items and steps, a watchdog fix above level 1, a blocked packet, the first high flag of a kind in six hours, a registry change, anything a person says.
+- Built: `brain/journal` and `tools/journal.js` (schema in `brain/journal/README.md`). On first run it reads the existing logs back as far as they go, 30 days at most.
+- Still to do: the watchdog stops appending to `lessons.md`. That waits until the dream owns the notes, because `reflect.js` and the reviewer still read those lines.
 
 **2. Review.** Unchanged, except its findings gain the two consumers below and a finding closes with a reason: went quiet, or fixed by a named PR.
 
@@ -246,7 +254,7 @@ An illustration of a brief:
 
 The next dawn it sees that plan beside what happened. That comparison is the learning loop from the article: predict, check, write the rule with its evidence.
 
-**4. Dream.** One agent with file tools limited to the memory folders, and read access to both bots' journals. Its goal, stated in its prompt: fewer stalls and deaths and more roadmap progress, without Walter watching. In order:
+**4. Dream.** Five short calls in order, each with file tools limited to the memory folders and read access to both bots' journals. The goal, stated in every prompt: fewer stalls and deaths and more roadmap progress, without Walter watching. The steps:
 1. **Correct.** Check every policy and trap against the journal and `rules.json`. Rewrite what is wrong, and mark what has no evidence as untested.
 2. **Cut.** Delete anything the bot can read off its own state. Merge duplicates. Keep the caps.
 3. **Promote and demote.** Keep `global.md` to what matters every day. Move detail into a note and leave a link.
@@ -327,7 +335,7 @@ The build-inspection sense being added in the thread "Teach bots to see broken b
 1. **Where the synced bundle lives.**
    - Recommended: a new private repo (for example `mc-player-memory`) that the laptop pushes to hourly and the app's agents read. It doubles as a backup and a history of the bots' memory.
    - Alternative: run the fixer on the laptop as well, with no sync at all. That costs laptop time while Minecraft is running, and the runs are not visible in the app.
-2. **Model use on Walter's Claude login.** Per day: review 144 runs (as now), brief about 24 per bot plus respawns, dream 4, fixer 8, digest 1. Every number is one line in a config file.
+2. **Model use on Walter's Claude login.** Answered 2026-11-10: Haiku 5.5 at XHigh effort for every job. Per day: review 144 runs (as now), brief about 24 per bot plus respawns, dream 12 runs of five short calls, fixer 8, digest 1. Every number is one line in a config file.
 3. **The deployer taking over `MC-Player-live`** from hand copying, and two more Task Scheduler entries (dream, sync) installed from the app like the reviewer's.
 
 Phases 0 to 2 touch only bot code and the bot's own folders, apart from the Task Scheduler entries in item 3.

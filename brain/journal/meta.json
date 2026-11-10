@@ -1,0 +1,9 @@
+{
+  "name": "journal",
+  "version": 1,
+  "kind": "observer",
+  "summary": "One searchable record per bot per day (brain/state/journal/YYYY-MM-DD.jsonl) and the day's rollup. Collects what other modules already log (steps, commits, flags, items, alarms, deaths, gate, registry) plus step results, chat and dawn. Never moves the bot.",
+  "requires": [],
+  "provides": [],
+  "claims": []
+}
