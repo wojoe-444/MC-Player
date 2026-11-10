@@ -1288,6 +1288,38 @@ module.exports = function plan(G, S, M, api, log) {
     x.closed = left === 0 ? true : false; x.tries = (x.tries || 0) + 1; if (x.tries >= 3 && left) x.closed = 'partly'
     G.save(); note(`close-stairs: old staircase at ${e} ${left === 0 ? 'closed' : 'partly closed'} (${placed} blocks)`)
     return placed > 0 } })
+  // ---- torch spacing (Walter 2026-11-10): any two torches with fewer than two blocks between them are a violation. Of each such pair
+  // one goes, the one with more neighbours, and only when the light recomputed without it leaves no cell within 8 that turns spawnable
+  // (block light 0). Within 48 of home, ten a pass. ----
+  const torchPairs = () => {
+    const h = home(); if (!h) return []
+    const ts = bot.findBlocks({ matching: ids(/^(torch|wall_torch)$/), point: h, maxDistance: 48, count: 400 })
+    const near = (a, b) => !a.equals(b) && Math.abs(a.x - b.x) <= 2 && Math.abs(a.y - b.y) <= 2 && Math.abs(a.z - b.z) <= 2
+    const out = []
+    for (const t of ts) { const n = ts.filter(o => near(t, o)).length; if (n) out.push({ t, n }) }
+    return out.sort((a, b) => b.n - a.n)
+  }
+  steps.push({ id: 'torch-spacing', budget: 360000, cool: 600000, need: () => !S.isNight() && !!home() && Date.now() > (st.torchSpaceAt || 0) && torchPairs().length > 0, run: async () => {
+    delete require.cache[require.resolve('./light')]
+    const L = require('./light')(bot, v(0, 0, 0).constructor)
+    let removed = 0, kept = 0
+    const gone = new Set(), k = (p) => p.x + ',' + p.y + ',' + p.z
+    for (const { t } of torchPairs()) {
+      if (removed >= 10) break
+      if (gone.has(k(t))) continue
+      // still crowded after what this pass took out?
+      if (!bot.findBlocks({ matching: ids(/^(torch|wall_torch)$/), point: t, maxDistance: 4, count: 12 }).some(o => !o.equals(t) && !gone.has(k(o)) && Math.abs(o.x - t.x) <= 2 && Math.abs(o.y - t.y) <= 2 && Math.abs(o.z - t.z) <= 2)) continue
+      const without = await L.compute(t, 12, 8, { exclude: new Set([...gone, k(t)]) }), withIt = await L.compute(t, 12, 8, { exclude: gone })
+      let dark = false
+      for (let dx = -8; dx <= 8 && !dark; dx++) for (let dz = -8; dz <= 8 && !dark; dz++) for (let dy = -3; dy <= 3 && !dark; dy++) { const p = t.offset(dx, dy, dz); if (without.spawnable(p) && !withIt.spawnable(p)) dark = true }
+      if (dark) { kept++; continue }
+      const b = S.block(t); if (!b || !/torch/.test(b.name)) continue
+      if (await S.mine(b, { dig: false, force: true, escalate: false })) { removed++; gone.add(k(t)) }
+    }
+    if (removed) await S.pickup(6, 3000)
+    st.torchSpaceAt = Date.now() + (removed ? 20 : 60) * 60000; G.save()
+    note(`torch-spacing: took out ${removed} too-close torches (kept ${kept} that the light needs)`)
+    return removed > 0 } })
   steps.push({ id: 'tidy', budget: 150000, cool: 300000, need: () => !S.isNight() && ((bot.time && bot.time.timeOfDay) || 0) >= 2000 && !!home() && (tidyList().length > 0 || extraTorches().length > 0), run: async () => {
     let n = 0
     let tn = 0
@@ -1460,7 +1492,7 @@ module.exports = function plan(G, S, M, api, log) {
   insertAfter('furnace', [byId.torches, byId['wood-stock'], byId.wear, byId.shield, byId['iron-smelt'], byId['iron-gear']])
   insertAfter('food', ['berries', 'fish', 'rod', 'string', 'hunt-memory', 'tend'].map(id => steps.find(s => s.id === id)).concat([byId.seeds, byId.farm]))   // kelp diving dropped: it drowned the bot
   // iron before upkeep: grove, lighting and tidying kept winning every pick and the hillclimber never went mining (02:50)
-  insertAfter('coal', [byId.stash, byId.shelter, byId.iron, byId.grove, byId['light-home'], steps.find(s => s.id === 'light-mine'), steps.find(s => s.id === 'close-stairs'), steps.find(s => s.id === 'tidy')].filter(Boolean))
+  insertAfter('coal', [byId.stash, byId.shelter, byId.iron, byId.grove, byId['light-home'], steps.find(s => s.id === 'light-mine'), steps.find(s => s.id === 'close-stairs'), steps.find(s => s.id === 'torch-spacing'), steps.find(s => s.id === 'tidy')].filter(Boolean))
   insertAfter('wood-stock', [steps.find(s => s.id === 'scout'), steps.find(s => s.id === 'storage')])
   // routine work at a fixed site (site.json; Smeo444's birch farm), right after the survival basics
   try { delete require.cache[require.resolve('./site')]; insertAfter('tool-kit', [require('./site')(G, S, M, api, log)]) } catch (e) { log('PLAN', 'site not loaded: ' + e.message) }

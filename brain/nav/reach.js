@@ -532,13 +532,6 @@ class Reach {
     } finally { bot.clearControlStates() }
   }
 
-  // Tell the server which hotbar slot is selected, again. mineflayer's setQuickBarSlot returns early when its own record already says that slot, so a server that
-  // is on another slot (it showed the sword) is never corrected and every block_place is made with the wrong item in hand.
-  resendHeldSlot() {
-    const bot = this.bot
-    try { if (bot.quickBarSlot != null && bot._client && bot._client.write) bot._client.write('held_item_slot', { slotId: bot.quickBarSlot }) } catch { /* offline */ }
-  }
-
   // Jump and place a block under the feet; repeat. Needs two free cells above the head.
   async pillar(run) {
     const bot = this.bot
@@ -554,31 +547,31 @@ class Reach {
     try {
       markPlacing(bot, 4000)
       await bot.equip(it, 'hand')
+      // not holding the block after all (the bag drifted from the server's): no jumping in place with a sword
+      if (!bot.heldItem || bot.heldItem.name !== it.name) { this.log('pillar: not holding ' + it.name + ' (' + (bot.heldItem ? bot.heldItem.name : 'nothing') + ')'); return false }
       await bot.look(bot.entity.yaw, -Math.PI / 2, true)
+      // from the ground only: a jump started while still dropping onto the last block put the place attempt on the way down, where the
+      // server (a tick behind) already has the feet back in the cell (logged 03:43: tick 3, +1.12 up but falling at -0.155, refused; the
+      // server had the bot at +0.42)
+      for (let w = 0; w < 20 && !bot.entity.onGround && !this.stopped(run); w++) await this.ticks(1, run)
       bot.setControlState('jump', true)
       let placed = false
       for (let i = 0; i < 40 && !placed && !this.stopped(run); i++) {
         await this.ticks(1, run)
         // near the top of the jump, not the moment the feet clear the cell: the server checks the new block against where it last heard the
         // player was, a tick behind, and refused the block again and again at +1.0 (Smeo444 climbing its shaft, 22:52)
-        if (bot.entity.position.y >= f.y + 1.1) {
+        // rising or at the top of the jump only (vy > -0.05), never on the way down
+        if (bot.entity.position.y >= f.y + 1.1 && bot.entity.velocity.y > -0.05) {
           // one more tick first, so the server has the position packet that puts the feet above the cell before the place packet arrives
           await this.ticks(1, run)
-          // the server refused, not the network: try once more at once, in the same jump, while the feet are still clear of the cell (the window is two or three ticks)
-          for (let attempt = 1; attempt <= 2 && !placed; attempt++) {
-            try {
-              if (!bot.heldItem || bot.heldItem.name !== it.name) await bot.equip(it, 'hand')
-              this.resendHeldSlot()
-              await bot.placeBlock(ref, new Vec3(0, 1, 0)); placed = true
-            } catch (e) {
-              // "Server refused to place dirt ... still air" came 219 times from Smeo444 in 14 h while Walter watched it jump with a sword in hand: the bot believed it held dirt, the server's
-              // selected slot was elsewhere. The log line says what the bot believed, so a repeat can be told apart from a collision with the player's own box.
-              const above = bot.entity.position.y - f.y
-              this.log(`pillar place: ${e.message} [bot thinks it holds ${bot.heldItem ? bot.heldItem.name : 'nothing'} in hotbar slot ${bot.quickBarSlot}, feet ${above.toFixed(2)} above the cell, attempt ${attempt}]`)
-              if (!/refused/.test(String(e.message)) || above < 1.05) break
-            }
-          }
-          break
+          if (bot.entity.position.y < f.y + 1.1 || bot.entity.velocity.y < -0.1) continue
+          // every attempt is logged in full until the jump-and-place failures are understood (Walter 2026-11-10)
+          const at = { tick: i, dy: +(bot.entity.position.y - f.y).toFixed(3), vy: +bot.entity.velocity.y.toFixed(3), ground: bot.entity.onGround, held: bot.heldItem ? bot.heldItem.name : null, slot: bot.quickBarSlot, ref: ref.name + '@' + ref.position, dest: this.blk(f.x, f.y, f.z) ? this.blk(f.x, f.y, f.z).name : '?' }
+          try { if (!bot.heldItem || bot.heldItem.name !== it.name) await bot.equip(it, 'hand'); await bot.placeBlock(ref, new Vec3(0, 1, 0)); placed = true; this.log('pillar ok ' + JSON.stringify(at)) } catch (e) {
+            // what the server says the bag and hand are, right after the refusal
+            let srv = null
+            try { bot._client.write('window_click', { windowId: 0, stateId: -1, slot: -999, mouseButton: 0, mode: 0, changedSlots: [], cursorItem: null }); await new Promise(r => setTimeout(r, 300)); srv = { held: bot.heldItem ? bot.heldItem.name : null, slot: bot.quickBarSlot, have: bot.inventory.items().filter(x => x.name === it.name).reduce((n, x) => n + x.count, 0), dy: +(bot.entity.position.y - f.y).toFixed(3), destNow: this.blk(f.x, f.y, f.z) ? this.blk(f.x, f.y, f.z).name : '?' } } catch {}
+            this.log('pillar FAIL ' + JSON.stringify(at) + ' -> ' + e.message.slice(0, 90) + ' | server ' + JSON.stringify(srv)); break }
         }
       }
       bot.setControlState('jump', false)
