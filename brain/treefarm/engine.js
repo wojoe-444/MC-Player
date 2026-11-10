@@ -6,6 +6,9 @@
 const { Vec3 } = require('vec3')
 const T = require('./trees')
 const util = require('../util')
+const L = require('./layout')
+const createFarm = require('./farm')
+const createTorches = require('../lighting/torches')
 const motor = require('../motor')
 
 const HOSTILE = /^(zombie|skeleton|creeper|spider|cave_spider|husk|drowned|witch|pillager|vindicator|phantom|slime|silverfish|enderman|zombie_villager|stray|bogged|breeze)$/
@@ -32,7 +35,7 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
   const eye = () => bot.entity.position.offset(0, 1.62, 0)
   const inReach = (p) => eye().distanceTo(p.offset(0.5, 0.5, 0.5)) <= C.reach
   const isNight = () => !!(bot.time && bot.time.timeOfDay >= C.dayEnd)
-  const addPending = (p, species) => { if (!S.pending.some(e => e.x === p.x && e.y === p.y && e.z === p.z)) S.pending.push({ x: p.x, y: p.y, z: p.z, species, at: now() }) }
+  const addPending = (p, species, strict = false) => { if (!S.pending.some(e => e.x === p.x && e.y === p.y && e.z === p.z)) S.pending.push({ x: p.x, y: p.y, z: p.z, species, at: now(), ...(strict ? { strict: true } : {}) }) }
   const dropPending = (e) => { S.pending = S.pending.filter(x => x !== e) }
   const seeNow = (b) => !!b && !!canSee && canSee(b)        // Walter's rule: no clear ray from the eye, no action (and without the helper, no action at all)
 
@@ -255,14 +258,15 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
   }
 
   // ---------- planting ----------
-  function pickSapling(species) {
+  // strict: only that species (a tree farm is one species; a grove in the woods takes what it has)
+  function pickSapling(species, strict = false) {
     const items = bot.inventory.items().filter(i => T.SAPLING_NAMES.has(i.name))
-    return items.find(i => i.name === T.SAPLING[species]) || items.filter(i => !T.BIG.has(T.saplingSpecies(i.name))).sort((a, b) => b.count - a.count)[0] || null
+    return items.find(i => i.name === T.SAPLING[species]) || (strict ? null : items.filter(i => !T.BIG.has(T.saplingSpecies(i.name))).sort((a, b) => b.count - a.count)[0]) || null
   }
-  async function ensureSapling(ctx, species) {
-    if (pickSapling(species)) return true
-    if (!(await fetch(ctx, n => n === T.SAPLING[species], C.keepSaplings, 'sapling:' + species))) await fetch(ctx, n => T.SAPLING_NAMES.has(n) && !T.BIG.has(T.saplingSpecies(n)), C.keepSaplings, 'sapling:any')
-    return !!pickSapling(species)
+  async function ensureSapling(ctx, species, strict = false) {
+    if (pickSapling(species, strict)) return true
+    if (!(await fetch(ctx, n => n === T.SAPLING[species], C.keepSaplings, 'sapling:' + species)) && !strict) await fetch(ctx, n => T.SAPLING_NAMES.has(n) && !T.BIG.has(T.saplingSpecies(n)), C.keepSaplings, 'sapling:any')
+    return !!pickSapling(species, strict)
   }
   // Stand next to the soil under `p` (never inside the cell we plant in).
   async function standNear(ctx, p) {
@@ -279,22 +283,23 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
     return true
   }
   // Plant `species` (or any sapling we have) on the soil under p. true | false | 'nosapling'
-  async function plantAt(ctx, p, species) {
-    if (!(await ensureSapling(ctx, species))) return 'nosapling'
+  async function plantAt(ctx, p, species, { strict = false } = {}) {
+    if (!(await ensureSapling(ctx, species, strict))) return 'nosapling'
     const floor = bot.blockAt(p.offset(0, -1, 0))
-    if (!floor || !T.isSoil(floor)) return false
-    if (!(await standNear(ctx, p))) return false
+    if (!floor || !T.isSoil(floor)) { log(`plant ${key(p)}: floor is ${floor && floor.name}`); return false }
+    if (!(await standNear(ctx, p))) { log(`plant ${key(p)}: no standing place (${bot._lastGotoErr || 'no path'}; bot at ${bot.entity.position.floored()})`); return false }
     for (let i = 0; i < C.replantTries; i++) {
       ctx.checkpoint()
       const cur = bot.blockAt(p)
       if (cur && T.saplingSpecies(cur.name)) return true
-      if (!cur || !T.isAir(cur)) return false
-      if (!(await see(ctx, floor, 'a sapling spot'))) return false          // no clear line to the soil: do not place through anything
-      const sap = pickSapling(species); if (!sap) return 'nosapling'
+      if (!cur || !T.isAir(cur)) { log(`plant ${key(p)}: cell holds ${cur && cur.name}`); return false }
+      if (!(await see(ctx, floor, 'a sapling spot'))) { log(`plant ${key(p)}: no clear line to the soil`); return false }          // no clear line to the soil: do not place through anything
+      const sap = pickSapling(species, strict); if (!sap) return 'nosapling'
       try { await bot.equip(sap, 'hand'); await bot.placeBlock(floor, new Vec3(0, 1, 0)) } catch (e) { log(`plant ${key(p)}: ${e.message}`) }
       await ctx.sleep(C.plantWaitMs)
       const after = bot.blockAt(p)
       if (after && T.saplingSpecies(after.name)) { S.stats.planted++; return true }
+      log(`plant ${key(p)}: try ${i + 1} left ${after && after.name}`)
     }
     return false
   }
@@ -306,7 +311,7 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
       const cur = bot.blockAt(p), floor = bot.blockAt(p.offset(0, -1, 0))
       if (!cur || !floor) continue                                   // chunk not loaded now: keep it for later
       if (T.saplingSpecies(cur.name) || !T.isAir(cur) || !T.isSoil(floor)) { dropPending(e); continue }   // already planted, or something else is there now
-      const r = await plantAt(ctx, p, e.species)
+      const r = await plantAt(ctx, p, e.species, { strict: !!e.strict })
       if (r === true) { sum.planted++; dropPending(e) } else if (r === 'nosapling') { sum.noSapling++; break } else sum.failedPlant++
       save()
     }
@@ -478,7 +483,7 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
   }
 
   // Chop every log of the tree we can get to, replant its bases. Returns the number of logs cut.
-  async function chopTree(ctx, tree, sum, atSite = false) {
+  async function chopTree(ctx, tree, sum, atSite = false, siteSpecies = null) {
     const present = () => tree.logs.filter(p => { const b = bot.blockAt(p); return b && b.name === tree.logName })
     const dist = (p) => eye().distanceTo(p.offset(0.5, 0.5, 0.5))
     const byY = (a, b) => a.y - b.y || dist(a) - dist(b)
@@ -510,6 +515,9 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
           }
         }
         if (leafBudget > 0 && await clearLeaf(ctx, rem.filter(inReach).sort(byY))) { leafBudget--; sum.leaves++; continue }
+        // climbing only helps if a log that is left can ever come into reach from this column (a limb 8 blocks away cannot): otherwise stop and let the next column be picked
+        { const cx = S.pillar ? S.pillar.x : col.x, cz = S.pillar ? S.pillar.z : col.z
+          if (!rem.some(p => Math.hypot(p.x - cx, p.z - cz) <= C.reach - 0.3 && p.y >= bot.entity.position.y - 3)) return }
         if (!(await raise(ctx, tree, sum, col))) return
         usedPillar = usedPillar || !!S.pillar
       }
@@ -535,7 +543,7 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
         await work(col)
         const rem = present()
         if (!rem.length || sum.noScaffold || steps >= maxSteps) break
-        if (S.pillar) { await descend(ctx); await collectDrops(ctx, bot.entity.position, 4, 12, C.scaffold) }      // the pillar blocks are needed again for the next column
+        if (S.pillar) { await descend(ctx); await ctx.sleep(C.fallSettleMs ?? 300); await collectDrops(ctx, bot.entity.position, 4, 12, C.scaffold) }      // the pillar blocks are needed again for the next column
         const next = pickColumn(rem, triedCols)
         if (!next) break
         triedCols.add(key(next)); col = next; viewBudget = 3
@@ -546,14 +554,15 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
     }
     ctx.checkpoint()
     const left = present().length
-    if (S.pillar) await descend(ctx)
+    if (S.pillar) { await descend(ctx); await ctx.sleep(C.fallSettleMs ?? 300) }
     ctx.checkpoint()
     if (left) sum.leftLogs += left
+    log(`chopTree ${key(tree.trunk)} ${tree.species}: ${tree.logs.length} logs, cut ${cut}, left ${left}, steps ${steps}/${maxSteps}${S.pillar ? ', still on the pillar' : ''}`)
     await ctx.sleep(C.dropWaitMs)
     await collectDrops(ctx, new Vec3(tree.trunk.x + 0.5, tree.trunk.y, tree.trunk.z + 0.5), 10, 14, usedPillar ? C.scaffold : null)
     if (cut && !left) await clearCanopy(ctx, tree, sum)         // before replanting: the sapling would stand in the way of the pillar column
-    const regrow = atSite && C.preferSpecies ? C.preferSpecies : tree.species          // a tree farm is replanted with the preferred species (spruce), the woods with what grew there
-    for (const p of tree.bases) if (T.isAir(bot.blockAt(p))) addPending(p, regrow)
+    const regrow = siteSpecies || (atSite && C.preferSpecies ? C.preferSpecies : tree.species)          // a lit tree farm is replanted with its own species (birch), other sites with the preferred one (spruce), the woods with what grew there
+    for (const p of tree.bases) if (T.isAir(bot.blockAt(p))) addPending(p, regrow, !!siteSpecies)
     save()
     await replantPending(ctx, sum)
     if (cut) {
@@ -607,7 +616,7 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
   function areas(manual, center, radius) {
     if (center) return [{ name: 'here', pos: center, radius: radius || C.naturalRadius }]
     const me = bot.entity.position
-    const list = (sitesFn() || []).map(s => ({ name: s.name, pos: new Vec3(s.x, s.y, s.z), radius: s.radius || C.siteRadius, site: true }))
+    const list = (sitesFn() || []).map(s => ({ name: s.name, pos: new Vec3(s.x, s.y, s.z), radius: s.radius || C.siteRadius, site: true, species: s.species || null, farm: s.farm ? (S.farms || []).find(f => f.id === s.farm) || null : null }))
     list.sort((a, b) => a.pos.distanceTo(me) - b.pos.distanceTo(me))
     if (manual) list.push({ name: 'the woods', pos: me.floored(), radius: C.naturalRadius, natural: true })
     return list
@@ -622,7 +631,7 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
   // ---------- the job ----------
   const newSum = () => ({ trees: 0, logs: 0, planted: 0, noSapling: 0, failedPlant: 0, unreachable: 0, leftLogs: 0, skipped: 0, toFurnace: 0, toChest: 0, saplingsStored: 0, noScaffold: false, leaves: 0, leavesCleared: 0, decayPicked: 0, worksiteUsed: false, worksiteLeft: false, hauled: false, storageFull: false, furnaceFull: false, found: 0 })
 
-  async function run(ctx, { manual = false, count = null, wantLogs = null, center = null, radius = null, followUp = false } = {}) {
+  async function run(ctx, { manual = false, count = null, wantLogs = null, center = null, radius = null, followUp = false, farmOnly = false } = {}) {
     if (running) return { status: 'done' }
     running = true; stopFlag = false
     const sum = newSum()
@@ -632,13 +641,16 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
       if (!followUp) { S.lastRun = now(); save() }                      // a follow-up visit (leftover pillar, work-site chest, decay drops) does not restart the 45-minute clock
       const wasUp = !!S.pillar
       await descend(ctx)                                     // an earlier stop may have left us on the pillar
-      if (wasUp) await collectDrops(ctx, bot.entity.position, 5, 8, C.scaffold)
+      if (wasUp) { await ctx.sleep(C.fallSettleMs ?? 300); await collectDrops(ctx, bot.entity.position, 5, 8, C.scaffold) }      // the pillar blocks fall as items and need a moment to land
       guard()
       await replantPending(ctx, sum)
       await collectDecayed(ctx, sum)
+      if (farm.has() && !stopFlag) {                                           // lit farm upkeep first: empty lattice spots get a sapling, dark torch spots a torch
+        try { await farm.tend(ctx, { quiet: true, sum, harvest: !followUp }) } catch (e) { if (e && (e.name === 'AbortError' || e instanceof Danger)) throw e; log(`farm tend: ${e && e.message}`) }
+      }
       if (followUp) { if (!stopFlag) await finalUnload(ctx, sum); return finish(sum, false) }
-      const targets = areas(manual, center, radius)
-      if (!targets.length) { askForSite(); return { status: 'done' } }
+      const targets = areas(manual, center, radius).filter(a => !farmOnly || a.farm)
+      if (!targets.length) { if (!farmOnly) askForSite(); return { status: 'done' } }
       const cap = count || (manual ? C.maxTreesManual : C.maxTreesIdle)
       // A job far from the final chests and no chest in the bag: ask the crafting module for one (once), and come back when it is done.
       // Walter OK'd temporary chests near the tree farm. If it cannot make one the job goes ahead without (final chests as before).
@@ -655,8 +667,13 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
           if (!r.ok) continue
         }
         const found = discover(area.natural ? bot.entity.position.floored() : area.pos, area.radius)
+        if (area.farm) {                                                       // a lit lattice farm: only its own trees are cut, a natural tree next to it stays standing
+          const before = found.trees.length
+          found.trees = found.trees.filter(t => L.isSpot(area.farm, t.trunk.x, t.trunk.z))
+          found.skipped += before - found.trees.length
+        }
         sum.found += found.trees.length; sum.skipped += found.skipped
-        if (area.site && !found.trees.length && !stopFlag) await plantEmptySite(ctx, area, sum)
+        if (area.site && !area.farm && !found.trees.length && !stopFlag) await plantEmptySite(ctx, area, sum)
         for (const tree of found.trees) {
           if (stopFlag || sum.trees >= cap || (wantLogs && sum.logs >= wantLogs)) break
           if (!manual && isNight()) { stopFlag = true; break }
@@ -666,7 +683,7 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
             if (bot.inventory.emptySlotCount() <= C.minFreeSlots) await unload(ctx, sum)
             if (bot.inventory.emptySlotCount() <= C.minFreeSlots) throw new Full(sum.storageFull)
           }
-          await chopTree(ctx, tree, sum, !!area.site)
+          await chopTree(ctx, tree, sum, !!area.site, area.species)
         }
         if (!stopFlag) for (const a of targets.filter(x => x.site)) await collectDrops(ctx, a.pos, Math.min(a.radius, 30), 8)   // saplings/apples from decayed leaves
       }
@@ -803,6 +820,13 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
 
   function abort() { stopFlag = true; halt() }
 
+  // ---------- the lit lattice farm (farm.js, layout.js) ----------
+  const torches = createTorches({ bot, canSee, log, now })
+  const farm = createFarm({
+    bot, say, goals, config: C, state: S, save, now, log, torches, T, L, Danger,
+    eng: { goto, near, see, plantAt, pickSapling, fetch, collectDrops, guard, countWhere, isReach: inReach, unload, finalUnload, run: (ctx, o) => run(ctx, o), isRunning: () => running, halt, abortFlag: () => stopFlag }
+  })
+
   // Routine due check (daytime, overworld). 'trees': the regular run, every `intervalMinutes` (45; Walter), or once a day to ask when no site is known.
   // 'followup': something is left to finish (a pillar to take down, a work-site chest to haul, drops where a felled tree stood): that visit
   // does not chop anything and does not restart the 45-minute clock. Manual commands never wait for any of this.
@@ -813,6 +837,7 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
       if (now() - (S.askedAt || 0) >= C.askEveryHours * 3600000) return 'trees'
     }
     if (S.pillar || S.worksite) return 'followup'
+    if (farm.tendDue()) return 'followup'                                     // a lit farm: replant and relight every few minutes of daylight
     const wait = C.decayWaitMs ?? 120000
     if (S.decay.some(e => now() - e.at >= wait && now() - e.at < (C.decayGiveUpMs ?? 1500000) && now() - (e.lastVisit || 0) >= wait)) return 'followup'
     return null
@@ -830,13 +855,13 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
 
   function snapshot() {
     return {
-      running, sites: (sitesFn() || []).map(s => `${s.name} (${s.x}, ${s.z})`), pendingReplants: S.pending.length, decayWatch: S.decay.length, onPillar: !!S.pillar, worksite: S.worksite ? `${S.worksite.x}, ${S.worksite.y}, ${S.worksite.z}` : null,
+      running, farms: S.farms.map(f => farm.status(f)), sites: (sitesFn() || []).map(s => `${s.name} (${s.x}, ${s.z})`), pendingReplants: S.pending.length, decayWatch: S.decay.length, onPillar: !!S.pillar, worksite: S.worksite ? `${S.worksite.x}, ${S.worksite.y}, ${S.worksite.z}` : null,
       lastRunAgoS: S.lastRun ? Math.round((now() - S.lastRun) / 1000) : null, lastResult: S.lastResult, stats: S.stats,
       logsInBag: logsInBag(), saplingsInBag: countWhere(n => T.SAPLING_NAMES.has(n)), last: last && { agoS: Math.round((now() - last.at) / 1000), msg: last.msg }
     }
   }
 
-  return { run, plantGrove, growGrove, dueKind, abort, due, snapshot, markSite, forgetSites, descend, replantPending, unload, discover, isRunning: () => running }
+  return { run, plantGrove, growGrove, dueKind, abort, due, snapshot, markSite, forgetSites, descend, replantPending, unload, discover, farm, isRunning: () => running }
 }
 module.exports.Danger = Danger
 module.exports.Full = Full

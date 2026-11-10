@@ -121,7 +121,7 @@ function extend(bot) {
     // the drop falls to the first solid block under it (items do not hang in the air), merges with a stack of the same item close by
     let fy = y; while (fy > 1 && !solidAt(x, fy - 1, z)) fy--
     const at = new Vec3(x + 0.5, fy + 0.25, z + 0.5)
-    const near = Object.values(bot.entities).find(e => e.name === 'item' && e.itemName === name && e.position.distanceTo(at) < 1.5)
+    const near = Object.values(bot.entities).find(e => e.name === 'item' && e.itemName === name && e.position.distanceTo(at) < 1.5 && Math.abs(e.position.y - at.y) < 0.3)   // same support only: a stack still hovering over a dug-out block must fall on its own
     if (near) near.itemCount++; else bot.addItemEntity(at.x, at.y, at.z, name, 1)
     fallIfUnsupported()
     if (bot.onDig) bot.onDig(bot.digs, b)

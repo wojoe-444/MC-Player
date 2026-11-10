@@ -58,6 +58,26 @@ Negations ("don't chop trees") and questions ("how many trees are there") are le
 `reach`, `minLogs`, `minLeaves`, `maxTreesManual/Idle`, `intervalMinutes` (45), `dayEnd`, `keepLogs/Saplings/Sticks`, `maxPillar`, `scaffold`, `storage`, `takeFromChests` (set false to stop it taking saplings/dirt out of chests), `worksite`, `grove`, `sitePattern`, `sites`.
 **Taking items out of Walter's chests**: replant saplings and climbing dirt come from the wood chests. Walter said this is OK (2026-10-26); `takeFromChests: false` would switch it off.
 
+## The lit birch lattice farm (ROADMAP Phase 2 item 4)
+
+Walter's design: a lit, self-sustaining birch farm next to the base, saplings with 3 blocks between them, a torch in the middle of every square, natural trees above ground kept, movable underground later. Code: `layout.js` (pure geometry, no bot), `farm.js` (the bot work), wired into `engine.js` (`engine.farm`) and `index.js` (`api.treefarm`). The old `plant a grove` (spacing 4 grid, no light, any species) still works for ad-hoc groves.
+
+| piece | what it does |
+|---|---|
+| lattice | sapling every 4 blocks (3 between), a torch at (+2,+2) of each sapling plus a ring round the outside: 20 torches for 4x3, torches 4 apart (3 air between). Worst cell of the farm has block light 10 (saplings grow at 9, nothing spawns at 1+). Default 4 x 3 = 12 saplings. |
+| site | `farm.create`: scans the ground round home once (30 blocks), picks the level rectangle (torch ring included) with free soil and 7 blocks of room above every spot, at 6 to 26 blocks from home, **no natural tree, water or lava inside it**, off the base and other farms. No site: says why and what to try. |
+| saplings | `farm.saplings`: bag, drops on the ground, wood chests, then **leaves of natural birch by hand** (shears give leaf blocks, not saplings): at most 10 per tree, 60 per call, nearest tree first, lowest leaves first, line of sight for every break. **No trunk is cut for a sapling.** 5 percent per leaf: a farm of 4 starts from about 80 leaves; after that the farm feeds itself (felled trees drop saplings from their decaying leaves, the engine already collects them). With no birch leaves in range it says so and what to do. |
+| plant / light | `farm.plant` (one species, strict; never another sapling) and `farm.light` (clears the grass in a torch cell first, then `brain/lighting/torches.js` places with line of sight; never stands in the target cell). Underground mode: the same lattice, a dirt block first on a stone floor. |
+| upkeep | `farm.tend`: pick up drops, replant every empty spot, relight dark spots. The idle routine does it every 15 minutes (`farm.tendMinutes`) and before every harvest; before a harvest it keeps one sapling in the bag for each tree about to be felled. |
+| harvest | `farm.harvest` = `engine.run({farmOnly})`: only trees standing on a lattice spot are felled (pillar, canopy, drops, replant with birch as before); a natural tree beside the farm is never touched. |
+| keep natural trees | `farm.naturalPolicy`: natural trees may be felled only while there is no grown tree in the farm and the bag holds under 16 logs (bootstrap), or before any farm exists. `S.chopTree` (autopilot) and the `chop_trees` skill obey it. |
+| chat | `build a tree farm`, `tend the tree farm` (new); `tree status` shows the farm line. |
+| think-brain | skill `tree_farm {action: build|tend|harvest|saplings|status}` in `autopilot/think.js` (the mind decides when; the observation has a `tree_farm` line); the legacy `grove` and `wood-stock` steps call the same code. |
+
+Tests: `test/treefarm.layout.test.js` (pure), `test/treefarm.farm.test.js` (mock bench). Real server: `tools/treefarm-lab.js` against the trial server (flat world, cheats for setup and `randomTickSpeed`): site pick, 4 + 8 saplings and 20 torches accepted by the server, 12 of 12 lit saplings grow into birch trees at night while 4 unlit control saplings do not, harvest of 3 trees with real physics (pillar, replant, torches survive, natural tree untouched), and leaves-to-saplings with the trunk standing.
+
+Not proven: a farm under a real cave roof (underground mode is geometry and unit tests only), Serene Seasons winter (saplings do not grow in some seasons: check on the live world), bone meal (not used).
+
 ## Tests
 
 `node --test test/treefarm.test.js test/treefarm.clear.test.js test/treefarm.canopy.test.js test/treefarm.schedule.test.js` (61 tests, ~85 s, helpers in `test/treefarm.helpers.js`: mock bot with jump/fall physics, trees, items that fall, the real `brain/los.js`). Covers tree recognition (houses, stripped, small, persistent leaves), short and 16-tall trees, 2x2 dark oak, no dirt / dirt from a chest, line of sight, replant (timeouts, no sapling, from chest), deposit rules and full chests, danger, abort and crash on the pillar, only-own-blocks descent, lava in hand, idle site rules/quiet/night/due, grove, work-site chest (far, near, recovery), chat phrases, and loading through the real `brain/index.js`.

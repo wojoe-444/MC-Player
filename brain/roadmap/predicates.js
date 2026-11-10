@@ -35,7 +35,7 @@ const PREDICATES = [
     return JSON.stringify(f.crafting || {}).concat(JSON.stringify(f.chestIndex || {})).toLowerCase().includes('reset')
   }, needs: 'the shared registry (rooms[].reset) / crafting-chests.json / chest-index.json' },
   { id: '2.3.torches', phase: '2', title: 'Lit area and torch spacing around home', check: () => null, needs: 'a count of lit cells around home in lighting-state.json' },
-  { id: '2.4.treefarm', phase: '2', title: 'Tree farm has sites and has planted saplings', check: (f) => (f.treefarm ? arr(f.treefarm.sites).length > 0 && ((f.treefarm.stats || {}).planted || 0) > 0 : null), needs: 'treefarm-state.json' },
+  { id: '2.4.treefarm', phase: '2', title: 'Lit tree farm: a lattice farm is recorded, saplings are planted and torches are placed', check: (f) => (f.treefarm ? arr(f.treefarm.farms).length > 0 && ((f.treefarm.stats || {}).planted || 0) > 0 && ((f.treefarm.stats || {}).lit || 0) > 0 : null), needs: 'treefarm-state.json' },
   { id: '2.5.respawn', phase: '2', title: 'Spare beds and mini reset chests at base, mine and camps', check: () => null, needs: 'a registry of beds and reset chests by place' },
   { id: '2.6.smelter', phase: '2', title: 'Hopper smelter on charcoal is running', check: () => null, needs: 'a "hopper smelter built" flag in furnace-state.json' },
   { id: '2.7.cropfarm', phase: '2', title: 'Underground crop farm and composter', check: () => null, needs: 'a farm registry with depth and crops' },

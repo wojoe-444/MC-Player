@@ -42,6 +42,7 @@
   "askEveryHours": 24,
   "worksite": { "enabled": true, "minDistance": 40, "craft": true, "craftWaitMs": 20000 },
   "grove": { "spacing": 4, "count": 9, "radius": 14, "height": 7 },
+  "farm": { "cols": 4, "rows": 3, "species": "birch", "startSaplings": 4, "searchRadius": 30, "minRing": 6, "maxRing": 26, "leafRadius": 40, "leavesPerTree": 10, "leafBudget": 60, "bootstrapLogs": 16, "workMs": 150000, "maxFarms": 1, "tendMinutes": 15 },
   "sitePattern": "tree ?farm|wood ?farm|lumber|grove",
   "sites": []
 }

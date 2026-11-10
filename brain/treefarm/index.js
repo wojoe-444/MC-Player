@@ -16,6 +16,7 @@ const P = {
   STATUS: /\b(?:tree|wood|lumber)(?: ?farm)?\b.*\b(?:status|report|progress)\b|\bhow (?:is|are) the (?:trees?|tree ?farm|grove|woodcutting|wood)\b/,
   HERE: /\btree ?farm here\b|\b(?:this|here) is (?:a |the |my )?(?:tree ?farm|grove)\b|\bmark (?:this|here)\b.*\b(?:tree ?farm|grove)\b/,
   FORGET: /\b(?:forget|remove|clear|unmark)\b.*\b(?:tree ?farms?|groves?)\b/,
+  FARM: /\b(?:start|make|build|set up|create|grow|begin|tend|fix|restart)\b.*\b(?:lit |birch |sapling )?tree ?farm\b|\b(?:lit|birch|sapling) (?:tree )?farm\b.*\b(?:start|build|tend)\b/,
   GROVE: /\bplant\b.*\b(?:grove|forest|saplings?|trees?)\b|\b(?:start|make|grow|begin)\b.*\b(?:a |the )?(?:grove|forest|tree ?farm)\b/,
   CHOP: new RegExp(`\\b(?:chop|cut|fell|cut down|harvest|farm|gather|collect|fetch|get|bring)\\b.*\\b${WOOD}\\b|\\b(?:wood ?cutting|lumber ?jack)\\b`)
 }
@@ -63,6 +64,22 @@ function register(api) {
     name: 'treefarm', key: 'treefarm', replace: true, priority: PRIORITY.CHAT, onUserStop: 'cancel',
     abort: () => engine.abort(), run: (ctx) => engine.run(ctx, { manual: true, ...opts })
   })
+  // The lit lattice farm (farm.js): "build a tree farm" starts it near home (or where I stand), "tend the tree farm" replants and relights.
+  const farmTask = (opts = {}) => scheduler.submit({
+    name: 'treefarm', key: 'treefarm', replace: true, priority: PRIORITY.CHAT, onUserStop: 'cancel',
+    abort: () => engine.abort(),
+    run: async (ctx) => {
+      try {
+        const r = await engine.farm.build(ctx, { quiet: false, ...opts })
+        if (!r.ok && r.why) say(`I could not start the tree farm: ${r.why}`.slice(0, 230))
+        else if (r.needs && r.needs.length) say(`Tree farm needs: ${r.needs.join('; ')}`.slice(0, 230))
+        return r.more ? { status: 'retry', afterMs: 5000 } : { status: 'done' }
+      } catch (e) {
+        if (e && e.name === 'AbortError') throw e
+        say(`Tree farm stopped: ${e && (e.why || e.message)}`.slice(0, 200)); return { status: 'done' }
+      }
+    }
+  })
   const groveTask = () => scheduler.submit({
     name: 'treefarm', key: 'treefarm', replace: true, priority: PRIORITY.CHAT, onUserStop: 'cancel',
     abort: () => engine.abort(), run: (ctx) => engine.plantGrove(ctx)
@@ -80,13 +97,14 @@ function register(api) {
     const age = s.lastRunAgoS === null ? 'no run yet' : `last run ${Math.round(s.lastRunAgoS / 60)} min ago`
     const r = s.lastResult
     const res = r ? ` Last: ${r.trees} tree(s), ${r.logs} logs, ${r.planted} planted.` : ''
-    return `Tree routine is ${scheduler.isEnabled('treefarm') ? 'ON' : 'OFF (say "tree routine on")'}, ${age}.${res} On me: ${s.logsInBag} logs, ${s.saplingsInBag} saplings. ${s.pendingReplants ? s.pendingReplants + ' spot(s) waiting for a sapling. ' : ''}Tree farms: ${s.sites.join(', ') || 'none known (say "tree farm here" or "plant a grove")'}.`.slice(0, 235)
+    return `Tree routine is ${scheduler.isEnabled('treefarm') ? 'ON' : 'OFF (say "tree routine on")'}, ${age}.${res} On me: ${s.logsInBag} logs, ${s.saplingsInBag} saplings. ${s.pendingReplants ? s.pendingReplants + ' spot(s) waiting for a sapling. ' : ''}Tree farms: ${s.sites.join(', ') || 'none known (say "build a tree farm" or "tree farm here")'}.${engine.farm.has() ? ' ' + engine.farm.farms().map(engine.farm.line).join(' ') : ''}`.slice(0, 235)
   }
   const commands = [
     { name: 'tree-stop', help: 'stop chopping', risk: 'low', allowNeg: true, match: P.STOP, run() { scheduler.cancel('treefarm', 'user-stop'); say('OK, stopped chopping.') } },
     { name: 'tree-routine-on', help: 'tree routine on', risk: 'high', allowNeg: true, match: P.ROUTINE_ON, run() { scheduler.setEnabled('treefarm', true); say('Tree routine on: when I am idle in daytime I chop the grown trees at the tree farm, replant, and put the wood away.') } },
     { name: 'tree-routine-off', help: 'tree routine off', risk: 'low', allowNeg: true, match: P.ROUTINE_OFF, run() { scheduler.setEnabled('treefarm', false); scheduler.cancel('treefarm', 'routine-off'); say('Tree routine off.') } },
     { name: 'tree-status', help: 'tree status | how is the tree farm', risk: 'low', allowNeg: true, match: P.STATUS, run() { say(statusLine()) } },
+    { name: 'build-tree-farm', help: 'build a tree farm | tend the tree farm', risk: 'high', match: P.FARM, run() { farmTask() } },
     { name: 'tree-farm-here', help: 'tree farm here', risk: 'high', match: P.HERE, run() { const p = engine.markSite(); say(`OK, ${p.x}, ${p.y}, ${p.z} is a tree farm now. I will chop the grown trees around it.`) } },
     { name: 'tree-farm-forget', help: 'forget tree farm', risk: 'low', match: P.FORGET, run() { const n = engine.forgetSites(); say(n ? 'Forgot the tree farm sites I had saved (waypoints stay).' : 'I had no saved tree farm sites.') } },
     { name: 'plant-grove', help: 'plant a grove', risk: 'high', match: P.GROVE, run() { groveTask() } },
@@ -109,6 +127,8 @@ function register(api) {
     return false
   }
 
+  // for the think-brain skill (autopilot/think.js) and the legacy grove step: primitives only, the caller decides when
+  api.treefarm = { engine, farm: engine.farm, naturalPolicy: (o) => engine.farm.naturalPolicy(o), sitesFn }
   return {
     name: 'treefarm',
     provides: ['treefarm'],
