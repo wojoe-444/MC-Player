@@ -3,7 +3,7 @@
 // bot work, built from primitives of the tree farm engine (goto, line of sight, plantAt, collectDrops, fetch):
 //
 //   create(ctx, { home })       pick a level, clear rectangle near home (no natural tree, water or lava inside), record the farm
-//   saplings(ctx, farm, want)   get birch saplings: the bag, drops on the ground, the wood chests, then LEAVES of standing natural birch trees
+//   saplings(ctx, farm, want)   get saplings of the farm's species: the bag, drops on the ground, the wood chests, then LEAVES of standing natural trees of it
 //                               (by hand, a few per tree; no trunk is ever cut for a sapling)
 //   plant(ctx, farm)            a sapling on every free lattice spot (one species, strictly)
 //   light(ctx, farm)            a torch in the middle of every lattice square (clears the grass in the cell first), line of sight for every block
@@ -18,7 +18,7 @@
 const { Vec3 } = require('vec3')
 
 const DEFAULTS = {
-  cols: 4, rows: 3, species: 'birch', mode: 'surface',
+  cols: 4, rows: 3, species: 'birch', speciesFallback: ['birch', 'oak', 'spruce', 'acacia', 'jungle'], mode: 'surface',
   startSaplings: 4,          // plant this many first; the farm grows itself from there (every felled tree drops saplings from its decaying leaves)
   searchRadius: 30, minRing: 6, maxRing: 26, minFrac: 0.75,
   leafRadius: 40, leavesPerTree: 10, leafBudget: 60,
@@ -62,6 +62,19 @@ module.exports = function createFarm({ bot, say, goals, config: C, state: S, sav
     const i = S.sites.findIndex(x => x.farm === f.id)
     if (i >= 0) S.sites[i] = site; else S.sites.push(site)
   }
+  // Which species the farm grows: the configured one when it has a source of saplings (some in the bag, or natural leaves of that species
+  // within leafRadius), otherwise the first fallback that has. Only small-sapling species (a 2x2 of dark oak would not fit the lattice).
+  // -> { species, fellBack, source: 'bag'|'leaves'|null }. With no source anywhere it stays on the configured species (the chest may supply it).
+  function pickSpecies(wanted) {
+    const o = F(), first = wanted || o.species
+    const order = [first, ...(o.speciesFallback || []).filter(x => x !== first)].filter(x => T.SAPLING[x] && !T.BIG.has(x))
+    const bag = (sp) => bot.inventory.items().filter(i => i.name === T.SAPLING[sp]).reduce((n, i) => n + i.count, 0)
+    for (const sp of order) {
+      const src = bag(sp) > 0 ? 'bag' : leafCandidates({ species: sp }).length ? 'leaves' : null
+      if (src) return { species: sp, fellBack: sp !== first, source: src, wanted: first }
+    }
+    return { species: first, fellBack: false, source: null, wanted: first }
+  }
   // Walk near home (so the chunks around it are loaded), scan the ground once, pick the best rectangle, record it.
   async function create(ctx, { home = null, cols, rows, species, mode, avoid = [] } = {}) {
     const o = F()
@@ -78,11 +91,12 @@ module.exports = function createFarm({ bot, say, goals, config: C, state: S, sav
     const rect = L.pickRect(grid, h, { cols: cols || o.cols, rows: rows || o.rows, minFrac: o.minFrac, minRing: o.minRing, maxRing: o.maxRing, avoid: keep })
     if (!rect) return { ok: false, why: 'no level clear ground of that size near home (natural trees, water, buildings or unloaded chunks in the way)', hint: 'try another side of the base, or scout for an open meadow and set a new home' }
     const id = `farm${S.farms.length + 1}`
-    const f = L.makeFarm({ id, x: rect.x, y: rect.y, z: rect.z, cols: rect.cols, rows: rect.rows, species: species || o.species, mode: m, at: now() })
+    const pick = pickSpecies(species)                            // an explicit species is tried first too, but never forced onto a place with no way to get its saplings
+    const f = L.makeFarm({ id, x: rect.x, y: rect.y, z: rect.z, cols: rect.cols, rows: rect.rows, species: pick.species, mode: m, at: now() })
     L.surveyFarm(f, get, { yHint: rect.y, mode: m })
     S.farms.push(f); register(f); save()
-    log(`TREEFARM_FARM created ${f.id} at ${f.x},${f.y},${f.z} ${f.cols}x${f.rows} ${f.species} (${rect.ok} of ${f.cols * f.rows} spots clear)`)
-    return { ok: true, farm: f, spotsClear: rect.ok }
+    log(`TREEFARM_FARM created ${f.id} at ${f.x},${f.y},${f.z} ${f.cols}x${f.rows} ${f.species} (${rect.ok} of ${f.cols * f.rows} spots clear)${pick.fellBack ? `; no ${pick.wanted} saplings or leaves in reach, so ${pick.species} (${pick.source})` : ''}`)
+    return { ok: true, farm: f, spotsClear: rect.ok, species: pick }
   }
 
   // ---------- saplings ----------
@@ -162,8 +176,8 @@ module.exports = function createFarm({ bot, say, goals, config: C, state: S, sav
     const r = await breakLeaves(ctx, f, want, deadline)
     out.have = bagSaplings(f)
     if (r.broken) out.sources.push(`${r.broken} leaves`)
-    if (r.noLeaves) out.hint = `no natural ${f.species} leaves within ${F().leafRadius} blocks: scout for a birch wood (leaves only, the trees stay), or put ${f.species} saplings in the wood chest`
-    else if (out.have < want) out.hint = `${r.broken} leaves gave ${r.got} sapling(s): the drop chance is about 5 percent per leaf; call again, or try another birch tree`
+    if (r.noLeaves) out.hint = `no natural ${f.species} leaves within ${F().leafRadius} blocks: scout for a wood of ${f.species} trees (leaves only, the trees stay), or put ${f.species} saplings in the wood chest`
+    else if (out.have < want) out.hint = `${r.broken} leaves gave ${r.got} sapling(s): the drop chance is about 5 percent per leaf; call again, or try another ${f.species} tree`
     return out
   }
 

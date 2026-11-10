@@ -491,7 +491,7 @@ module.exports = function think(G, S, M, api, log) {
     try { return t.naturalPolicy({ logs: S.logs() + Math.floor(S.planks() / 4) }) } catch { return { natural: true, why: 'policy unavailable' } }
   }
   const homeSpot = () => { const h = G.state && G.state.home; return Array.isArray(h) && h.length === 3 ? { x: h[0], y: h[1], z: h[2] } : null }
-  def('tree_farm', '{action: build|tend|harvest|saplings|status, logs?} the LIT BIRCH TREE FARM next to the base: saplings 3 blocks apart in a lattice, a torch in the middle of every square, it grows by itself and every felled tree is replanted. build = pick clear level ground near home, get a few birch saplings (breaks a few LEAVES of natural birch trees; the trunks are never cut), plant them and light them; if it says what is missing (saplings, torches), fetch or craft that and call build again. tend = replant empty spots and relight dark ones. harvest = fell the farm\'s GROWN trees only (each is replanted); {logs: N} stops at N logs. saplings = just collect birch saplings. status = counts. Daytime, outdoors. Natural trees are kept: once the farm has grown trees, harvest is how you get wood.', async (a) => {
+  def('tree_farm', '{action: build|tend|harvest|saplings|status, logs?} the LIT BIRCH TREE FARM next to the base: saplings 3 blocks apart in a lattice, a torch in the middle of every square, it grows by itself and every felled tree is replanted. build = pick clear level ground near home, get a few saplings (breaks a few LEAVES of natural trees; the trunks are never cut). The species is birch, or oak/spruce/acacia/jungle when no birch is within reach, plant them and light them; if it says what is missing (saplings, torches), fetch or craft that and call build again. tend = replant empty spots and relight dark ones. harvest = fell the farm\'s GROWN trees only (each is replanted); {logs: N} stops at N logs. saplings = just collect saplings of the farm species. status = counts. Daytime, outdoors. Natural trees are kept: once the farm has grown trees, harvest is how you get wood.', async (a) => {
     const t = treeApi(); if (!t) return fail('tree farm module not loaded')
     const act = clean(a.action).toLowerCase() || 'status'
     const farm = t.farm
@@ -515,7 +515,7 @@ module.exports = function think(G, S, M, api, log) {
       if (act === 'tend') {
         const r = await farm.tend(S.ctx, { requestTorches })
         const x = r[0] || {}
-        return { ok: x.ok !== false, note: x.ok === false ? x.why : `planted ${x.planted}, lit ${x.lit}`, ...(x.noSapling ? { hint: 'no birch saplings: tree_farm saplings' } : {}), ...(x.noTorches ? { hint: 'no torches: craft some' } : {}) }
+        return { ok: x.ok !== false, note: x.ok === false ? x.why : `planted ${x.planted}, lit ${x.lit}`, ...(x.noSapling ? { hint: `no ${(farm.farms()[0] || {}).species || 'birch'} saplings: tree_farm saplings` } : {}), ...(x.noTorches ? { hint: 'no torches: craft some' } : {}) }
       }
       if (act === 'saplings') {
         const f = farm.farms()[0]
