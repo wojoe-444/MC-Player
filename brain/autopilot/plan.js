@@ -73,6 +73,22 @@ module.exports = function plan(G, S, M, api, log) {
   delete require.cache[require.resolve('./ladder')]
   const LD = require('./ladder')(bot, S, goals, v, log); M.LD = LD
   S.isShaftCell = (p) => { try { return LD.isShaftCell(p) } catch { return false } }
+  // cells that stay open whatever else wants to fill them (nav's breach refill): shaft columns, storage rooms and the corridor to each
+  bot._keepOpen = (p) => {
+    try {
+      if (LD.isShaftCell(p)) return true
+      for (const r of LD.rooms()) {
+        const b = r.box; if (!b) continue
+        if (p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1 && p.z >= b.z0 && p.z <= b.z1) return true
+        const sh = LD.shafts().find(q => q.id === r.shaft); if (!sh) continue
+        const e = sh.entry
+        if (p.y < r.y || p.y > r.y + 1) continue
+        const inX = p.x >= Math.min(e[0], b.x0) && p.x <= Math.max(e[0], b.x1), inZ = p.z >= Math.min(e[2], b.z0) && p.z <= Math.max(e[2], b.z1)
+        if (inX && inZ && (p.x === e[0] || p.z === e[2])) return true
+      }
+    } catch {}
+    return false
+  }
   // Up from underground by the laddered shaft, never by digging: a go-to from the mine to a target well above (stash heading home, Smeo444
   // 04:29) made nav escalate and tunnel up through gravel into lava, and the bot died. When the goal is more than 6 blocks up, there is no
   // sky, and a recorded shaft within 48 blocks spans the bot's level, the bot walks to the shaft at its own level and climbs it first.

@@ -109,7 +109,7 @@ module.exports = function storage(G, S, M, api, log) {
     }
     // then the ladder by hand to the room's level, and off into the corridor
     await LD().rideTo(sh, P.y)
-    for (const c of P.corridor) await walk(c, 8000)
+    for (const c of P.corridor) { await clear(c); await clear(c.offset(0, 1, 0)); await walk(c, 8000) }
     await walk(P.at(3, 0), 8000)
     return inRoom(P)
   }

@@ -69,6 +69,9 @@ class Breaches {
       if (props.half === 'upper') return                                                    // doors: the lower half carries the item
       if (!this.wanted(oldB)) return
       const p = oldB.position
+      // the shaft column, a storage room and its corridor stay open: nav refilled the room's corridor with cobblestone after a go-to had dug
+      // through it, and both bots were shut out of the room (04:47, -6018,55..56,-2356)
+      try { if (this.r.bot._keepOpen && this.r.bot._keepOpen(p)) return } catch {}
       this.list.push({ x: p.x, y: p.y, z: p.z, name: oldB.name, props, from: { x: me.x, y: me.y, z: me.z }, tries: 0 })
       this.r.log(`breach: broke ${oldB.name} at ${p.x},${p.y},${p.z}`)
     } catch { /* never let bookkeeping break a dig */ }
@@ -120,6 +123,7 @@ class Breaches {
       const away = this.r.bot.entity.position.distanceTo(new Vec3(rec.x + 0.5, rec.y + 0.5, rec.z + 0.5))
       if (away > 48) { keep.push(rec); continue }
       let ok = false
+      try { if (this.r.bot._keepOpen && this.r.bot._keepOpen(rec)) continue } catch {}
       try { ok = await this.sealOne(rec, run) } catch (e) { this.r.log('breach seal failed: ' + e.message) }
       if (!ok && ++rec.tries < 3) keep.push(rec)
     }
