@@ -388,7 +388,11 @@ module.exports = function plan(G, S, M, api, log) {
         }
         return out }
       let moved = 0
-      const chests = bot.findBlocks({ matching: ids(/^chest$/), maxDistance: 12, count: 16, point: h }).filter(p => Math.abs(p.y - h.y) <= 1).slice(0, 12)   // (floor level only, as restock)
+      // the storage room when there is one (Walter 2026-11-10: overflow from every task goes to central storage), else the home chests
+      const room = G.storageRoom && G.storageRoom()
+      const chests = room && (room.chests || []).length ? room.chests.map(q => v(...q)).filter(q => { const b = S.block(q); return !b || b.name === 'chest' })
+        : bot.findBlocks({ matching: ids(/^chest$/), maxDistance: 12, count: 16, point: h }).filter(p => Math.abs(p.y - h.y) <= 1).slice(0, 12)   // (floor level only, as restock)
+      if (room) note(`stash: to the storage room (${chests.length} chests)`)
       for (let round = 0; round < chests.length + 2 && plan().length; round++) {
         let pos = chests[round]
         if (!pos) {
@@ -396,13 +400,17 @@ module.exports = function plan(G, S, M, api, log) {
           // a few places around the house, not just one: by the shelter every cell is kept clear, and with no chest placed the bag's
           // rubble was dropped on the ground (179 items at 13:25, against Walter's no-item-piles rule)
           let placed = null
-          for (const [ox, oz] of [[0, 0], [6, 0], [-6, 0], [0, 6], [0, -6]]) {
-            if (!S.has('chest') || placed) break
-            await S.goto(new goals.GoalNear(h.x + ox, h.y, h.z + oz, ox || oz ? 1 : 4), { dig: false, ms: 40000, escalate: false })
-            placed = await S.placeNear('chest')
+          // the storage room grows by a double chest in its row first
+          if (room && G.storageAddDouble && await G.storageAddDouble()) { const nr = G.storageRoom(), last = nr && nr.chests.slice(-2); if (last && last.length) { pos = v(...last[0]); note('stash: the storage room grew by a double chest at ' + pos) } }
+          if (!pos) {
+            for (const [ox, oz] of [[0, 0], [6, 0], [-6, 0], [0, 6], [0, -6]]) {
+              if (!S.has('chest') || placed) break
+              await S.goto(new goals.GoalNear(h.x + ox, h.y, h.z + oz, ox || oz ? 1 : 4), { dig: false, ms: 40000, escalate: false })
+              placed = await S.placeNear('chest')
+            }
+            if (!placed) { note('stash: chests full and no spot found for the new chest'); break }
+            pos = placed.position; note('stash: new home chest at ' + pos)
           }
-          if (!placed) { note('stash: chests full and no spot found for the new chest'); break }
-          pos = placed.position; note('stash: new home chest at ' + pos)
         }
         const r = await S.goto(new goals.GoalLookAtBlock(pos, bot.world, { reach: 3.5 }), { dig: false, ms: 60000 }); if (!r.ok) continue
         let c; S.closeWindows(); try { c = await bot.openContainer(bot.blockAt(pos)) } catch { continue }
@@ -1500,6 +1508,7 @@ module.exports = function plan(G, S, M, api, log) {
   // and mobs waiting in the shaft hold the farm's mob cap (four skeletons waited 30 min behind back-to-back birch rounds, 04:00)
   try { delete require.cache[require.resolve('./mobfarm')]; insertAfter('tool-kit', [require('./mobfarm')(G, S, M, api, log)]) } catch (e) { log('PLAN', 'mobfarm not loaded: ' + e.message) }
   // long goals from brain/state/goals.json, expanded through the recipe tree (pursue.js)
+  try { delete require.cache[require.resolve('./storage')]; const sr = require('./storage')(G, S, M, api, log); const ii = G.steps.findIndex(x => x.id === 'iron'); G.steps.splice(ii >= 0 ? ii + 1 : G.steps.length, 0, sr) } catch (e) { log('PLAN', 'storage not loaded: ' + e.message) }
   try { delete require.cache[require.resolve('./pursue')]; G.steps.push(require('./pursue')(G, S, M, api, log, { daylightOk: () => true })) } catch (e) { log('PLAN', 'pursue not loaded: ' + e.message) }
   log('PLAN', 'survival processes loaded: ' + G.steps.map(s => s.id).join(' > '))
 }

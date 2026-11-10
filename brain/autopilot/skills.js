@@ -820,7 +820,8 @@ module.exports = function makeSkills({ bot, api, log }) {
     () => bestOf(/^(cobblestone|cobbled_deepslate|dirt|stone|andesite|diorite|granite|tuff)$/), () => bestOf(/^torch$/),
     () => bestOf(FOOD), () => bestOf(/^ladder$/) || bestOf(/^bow$/), () => null]
   S.sortHotbar = async () => {
-    if (!bot.entity || bot.currentWindow || bot.targetDigBlock || bot.usingHeldItem) return 0
+    // never while a job holds the hands (a pillar or a placement in progress: a slot swap mid-jump changes the held block)
+    if (!bot.entity || bot.currentWindow || bot.targetDigBlock || bot.usingHeldItem || Date.now() < (bot._placingUntil || 0) || (bot._reflexes && bot._reflexes.heldByOther && bot._reflexes.heldByOther('hands', 'hotbar'))) return 0
     if (bot._combat && bot._combat.engaged && bot._combat.engaged()) return 0
     let moved = 0
     for (let k = 0; k < 9; k++) {
