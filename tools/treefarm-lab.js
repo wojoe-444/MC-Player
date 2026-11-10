@@ -144,11 +144,12 @@ bot.once('spawn', async () => {
       // control: 4 saplings in the dark, same area, 24 blocks from any torch
       const ctl = [[30, 30], [34, 30], [30, 34], [34, 34]]
       for (const [x, z] of ctl) await cmd(`/setblock ${x} -60 ${z} minecraft:birch_sapling`, 120)
-      await cmd('/time set 18000'); await cmd('/gamerule randomTickSpeed 1500')
+      await cmd('/time set 18000')
       // the rest of the lattice gets its saplings now, so the whole farm grows together
       await give('birch_sapling', 8); await sleep(400)
       const t1 = await farm.tend(ctx, { quiet: true })
       check('tend: the remaining lattice spots are planted', sp.filter(s => name(s.x, s.y, s.z) === 'birch_sapling').length + sp.filter(s => /_log$/.test(name(s.x, s.y, s.z) || '')).length === 12, JSON.stringify({ planted: t1[0] && t1[0].planted }))
+      await cmd('/gamerule randomTickSpeed 1500')      // fast growth only once everything is planted (planting while trees shoot up round the bot is not what is under test)
       // wait for growth, bot stays away so it does not stand in a trunk column
       await tryGoto(new goals.GoalNear(f.x - 6, f.y, f.z - 4, 1), 'wait spot', 20000)
       // (the client's light numbers in mineflayer are not reliable, so light is judged by what the server does: lit saplings grow at night, the unlit control group does not)
