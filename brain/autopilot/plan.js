@@ -392,6 +392,7 @@ module.exports = function plan(G, S, M, api, log) {
       const room = G.storageRoom && G.storageRoom()
       // a new room starts with its first double chest, before anything is stored at home
       if (room && !(room.chests || []).length && G.storageAddDouble) await G.storageAddDouble().catch(() => false)
+      else if (room && G.storageGo) await G.storageGo().catch(() => false)
       const chests = room && (room.chests || []).length ? room.chests.map(q => v(...q)).filter(q => { const b = S.block(q); return !b || b.name === 'chest' })
         : bot.findBlocks({ matching: ids(/^chest$/), maxDistance: 12, count: 16, point: h }).filter(p => Math.abs(p.y - h.y) <= 1).slice(0, 12)   // (floor level only, as restock)
       if (room) note(`stash: to the storage room (${chests.length} chests)`)
