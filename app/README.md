@@ -12,7 +12,7 @@ npm start          # or double-click start-app.bat
 
 Needs Node 18+ and, for the reviews, the `claude` CLI on PATH (run `claude` once to log in).
 
-On launch the app starts `dashboard/server.js` on port 8765 (or attaches if a dashboard is already running there) and opens it in a window. **App > Claude reviews** (Ctrl+2) opens the trigger panel.
+On launch the app starts `dashboard/server.js` on port 8765 (or attaches if a dashboard is already running there) and opens it in a window. The window has a tab bar across the top: **Dashboard**, **Claude reviews** and **Settings** (a dot on Settings means an update is available). Ctrl+1/2/3 and the App menu switch tabs too.
 
 ## Install as a normal Windows app
 
@@ -26,7 +26,7 @@ This builds `dist/Bot-Dashboard-Setup-<version>.exe` (build it on Windows: embed
 
 ## Updating the installed app
 
-**App > Settings** (Ctrl+,) has **Check for updates**. If a newer version exists, **Update and restart** downloads it, stops the dashboard server, runs the installer silently and relaunches the app. Nothing is downloaded or installed until you press it, and settings and reviews in `%APPDATA%` are kept.
+The **Settings** tab has **Check for updates** (the app also checks quietly 20 seconds after start and every 6 hours; that only puts a dot on the tab). If a newer version exists, **Update and restart** downloads it, stops the dashboard server, runs the installer silently and relaunches the app. Nothing is downloaded or installed until you press it, and settings and reviews in `%APPDATA%` are kept.
 
 How it works: `.github/workflows/release-app.yml` builds the Windows installer on GitHub Actions and publishes it as a release (`v0.1.<run number>`, with `latest.yml`) whenever `app/`, `dashboard/` or `reviewer/` change on `main` (or run it by hand from the Actions tab). The installed app uses `electron-updater` (`lib/updater.js`) to compare its version with the latest release of `wojoe-444/MC-Player` (public repo, no token needed). So an update is available a few minutes after a merge to `main`, once the workflow finishes. Running from source (`npm start`) shows "updates only work in the installed app"; there, use `git pull`. A local `build-installer.bat` build is version 0.1.0 and never touches the releases.
 

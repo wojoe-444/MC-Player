@@ -1,5 +1,5 @@
 // Electron entry: starts (or attaches to) the dashboard server, shows it in a window, and runs background triggers.
-const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, WebContentsView, Menu, ipcMain, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { spawn } = require('child_process')
@@ -17,7 +17,7 @@ let schedule = null
 try { schedule = require(path.join(REVIEWER_DIR, 'lib', 'schedule')) } catch (e) { console.log('reviewer not available:', e.message) }
 const ICON = path.join(__dirname, 'build', 'icon.ico')
 let config, dash, triggers, reviewsDir
-let mainWin = null, reviewsWin = null, settingsWin = null
+let mainWin = null
 let updates
 
 const log = (...a) => console.log(new Date().toISOString(), ...a)
@@ -35,38 +35,60 @@ function lockDown(win, allowOrigin) {
   })
 }
 
-function openMain() {
-  if (mainWin) return mainWin.focus()
+// One window with a tab bar (Dashboard | Claude reviews | Settings). Each tab is its own web view, so the dashboard keeps its state while you look at another tab.
+const TAB_H = 42
+const TABS = [['dashboard', 'Dashboard'], ['reviews', 'Claude reviews'], ['settings', 'Settings']]
+let tabsView = null, views = {}, activeTab = 'dashboard'
+
+function tabsState() {
+  const u = updates ? updates.state() : null
+  return { active: activeTab, tabs: TABS.map(([id, label]) => ({ id, label })), badges: { settings: !!u && (u.status === 'available' || u.status === 'downloading' || u.status === 'ready') } }
+}
+const sendTabs = () => { if (tabsView) tabsView.webContents.send('tabs', tabsState()) }
+const sendTo = (id, channel, payload) => { const v = views[id]; if (v && !v.webContents.isDestroyed()) v.webContents.send(channel, payload) }
+
+function layoutTabs() {
+  if (!mainWin) return
+  const [w, h] = mainWin.getContentSize()
+  tabsView.setBounds({ x: 0, y: 0, width: w, height: TAB_H })
+  for (const v of Object.values(views)) v.setBounds({ x: 0, y: TAB_H, width: w, height: Math.max(0, h - TAB_H) })
+}
+
+function selectTab(id) {
+  if (!views[id]) return
+  activeTab = id
+  for (const [k, v] of Object.entries(views)) v.setVisible(k === id)
+  if (mainWin && !mainWin.isDestroyed()) mainWin.setTitle(id === 'dashboard' ? 'Bot Dashboard' : 'Bot Dashboard: ' + TABS.find(t => t[0] === id)[1])
+  sendTabs()
+}
+
+function openMain(tab) {
+  if (mainWin) { if (mainWin.isMinimized()) mainWin.restore(); mainWin.focus(); if (tab) selectTab(tab); return }
   mainWin = new BrowserWindow({
     width: 1400, height: 900, title: 'Bot Dashboard', icon: ICON, backgroundColor: '#0b0d10',
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   })
-  lockDown(mainWin, dash.url)
-  mainWin.loadURL(dash.url)
-  mainWin.on('closed', () => { mainWin = null })
-}
-
-function openReviews() {
-  if (reviewsWin) return reviewsWin.focus()
-  reviewsWin = new BrowserWindow({
-    width: 760, height: 820, title: 'Claude reviews', icon: ICON, backgroundColor: '#0b0d10',
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: path.join(__dirname, 'preload.js') },
+  const preload = path.join(__dirname, 'preload.js')
+  const mk = (webPreferences) => { const v = new WebContentsView({ webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, ...webPreferences } }); v.setBackgroundColor('#0b0d10'); mainWin.contentView.addChildView(v); return v }
+  views.dashboard = mk({})
+  views.reviews = mk({ preload })
+  views.settings = mk({ preload })
+  tabsView = mk({ preload })
+  lockDown(views.dashboard, dash.url)
+  views.dashboard.webContents.loadURL(dash.url)
+  for (const id of ['reviews', 'settings']) { lockDown(views[id], 'file://'); views[id].webContents.loadFile(path.join(__dirname, 'renderer', id + '.html')) }
+  lockDown(tabsView, 'file://')
+  tabsView.webContents.loadFile(path.join(__dirname, 'renderer', 'tabs.html'))
+  mainWin.on('resize', layoutTabs)
+  mainWin.on('closed', () => {
+    for (const v of [...Object.values(views), tabsView]) { try { v.webContents.close() } catch {} }
+    mainWin = null; tabsView = null; views = {}
   })
-  lockDown(reviewsWin, 'file://')
-  reviewsWin.loadFile(path.join(__dirname, 'renderer', 'reviews.html'))
-  reviewsWin.on('closed', () => { reviewsWin = null })
+  layoutTabs()
+  selectTab(tab || 'dashboard')
 }
-
-function openSettings() {
-  if (settingsWin) return settingsWin.focus()
-  settingsWin = new BrowserWindow({
-    width: 560, height: 520, title: 'Settings', icon: ICON, backgroundColor: '#0b0d10',
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: path.join(__dirname, 'preload.js') },
-  })
-  lockDown(settingsWin, 'file://')
-  settingsWin.loadFile(path.join(__dirname, 'renderer', 'settings.html'))
-  settingsWin.on('closed', () => { settingsWin = null })
-}
+const openReviews = () => openMain('reviews')
+const openSettings = () => openMain('settings')
 
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) } catch { return null } }
 async function reviewerState() {
@@ -84,7 +106,7 @@ function runReviewerNow() {
   const child = spawn(process.execPath, [path.join(REVIEWER_DIR, 'run.js'), '--once', '--force'], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', BOT_OZO_DIR: d.ozoDir, BOT_SMEO_DIR: d.smeoDir }, windowsHide: true, stdio: 'ignore',
   })
-  const done = () => { reviewerRunning = false; if (reviewsWin) reviewerState().then(r => reviewsWin && reviewsWin.webContents.send('reviewer', r)) }
+  const done = () => { reviewerRunning = false; reviewerState().then(r => sendTo('reviews', 'reviewer', r)) }
   child.once('exit', done); child.once('error', done)
   return true
 }
@@ -93,16 +115,25 @@ function snapshot() {
   return { triggers: triggers.list(), reviews: listReviews(reviewsDir), dashboard: { url: dash.url, attached: dash.attached }, claude: config.data.claude }
 }
 
+const activeWc = () => (views[activeTab] && !views[activeTab].webContents.isDestroyed() ? views[activeTab].webContents : null)
+
 function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'App', submenu: [
-      { label: 'Dashboard', accelerator: 'CmdOrCtrl+1', click: openMain },
+      { label: 'Dashboard', accelerator: 'CmdOrCtrl+1', click: () => openMain('dashboard') },
       { label: 'Claude reviews', accelerator: 'CmdOrCtrl+2', click: openReviews },
-      { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: openSettings },
+      { label: 'Settings', accelerator: 'CmdOrCtrl+3', click: openSettings },
       { label: 'Open dashboard in browser', click: () => shell.openExternal(dash.url) },
       { type: 'separator' }, { role: 'quit' },
     ] },
-    { label: 'View', submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { role: 'togglefullscreen' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }] },
+    { label: 'View', submenu: [
+      { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => activeWc() && activeWc().reload() },
+      { label: 'Developer tools', accelerator: 'CmdOrCtrl+Shift+I', click: () => activeWc() && activeWc().toggleDevTools() },
+      { role: 'togglefullscreen' },
+      { label: 'Reset zoom', accelerator: 'CmdOrCtrl+0', click: () => activeWc() && activeWc().setZoomLevel(0) },
+      { label: 'Zoom in', accelerator: 'CmdOrCtrl+=', click: () => activeWc() && activeWc().setZoomLevel(activeWc().getZoomLevel() + 0.5) },
+      { label: 'Zoom out', accelerator: 'CmdOrCtrl+-', click: () => activeWc() && activeWc().setZoomLevel(activeWc().getZoomLevel() - 0.5) },
+    ] },
   ]))
 }
 
@@ -117,7 +148,7 @@ app.whenReady().then(async () => {
 
   triggers = new TriggerManager(config, {})
   triggers.register(createReviewTrigger({ reviewsDir, getConfig: () => config.data }))
-  triggers.on('update', () => { if (reviewsWin) reviewsWin.webContents.send('state', snapshot()) })
+  triggers.on('update', () => sendTo('reviews', 'state', snapshot()))
 
   ipcMain.handle('state', () => snapshot())
   ipcMain.handle('trigger:run', (_e, id) => { triggers.runNow(String(id)).catch(() => {}); return true })
@@ -142,15 +173,20 @@ app.whenReady().then(async () => {
   let autoUpdater = null
   if (app.isPackaged) { try { ({ autoUpdater } = require('electron-updater')) } catch (e) { log('electron-updater not available:', e.message) } }
   updates = new UpdateManager({ autoUpdater, currentVersion: app.getVersion(), isPackaged: app.isPackaged, log, beforeInstall: () => { if (dash) dash.stop(); if (triggers) triggers.stop() } })
-  updates.on('update', (s) => { if (settingsWin) settingsWin.webContents.send('update', s) })
+  updates.on('update', (s) => { sendTo('settings', 'update', s); sendTabs() })
   ipcMain.handle('update:state', () => updates.state())
   ipcMain.handle('update:check', () => updates.check())
   ipcMain.handle('update:install', () => { updates.install().catch(() => {}); return updates.state() })
+  ipcMain.handle('tabs:state', () => tabsState())
+  ipcMain.handle('tabs:select', (_e, id) => { selectTab(String(id)); return tabsState() })
   ipcMain.handle('app:info', () => ({ version: app.getVersion(), packaged: app.isPackaged, dataDir: userData, dashboardUrl: dash.url }))
 
   buildMenu()
   openMain()
   triggers.start()
+  // Quiet background check (nothing is downloaded): puts a dot on the Settings tab when a newer version exists.
+  setTimeout(() => updates.check().catch(() => {}), 20 * 1000)
+  setInterval(() => updates.check().catch(() => {}), 6 * 3600 * 1000)
 })
 
 app.on('window-all-closed', () => app.quit())
