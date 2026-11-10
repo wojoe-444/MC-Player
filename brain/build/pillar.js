@@ -3,6 +3,7 @@
 // BEFORE it is placed, so a crash or restart can remove exactly those blocks again (dismantle() on the recorded cells).
 // Only cobblestone cells of the recorded column are ever dug, always with the best pickaxe in hand.
 const { Vec3 } = require('vec3')
+const motor = require('../motor')
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 const key = (x, y, z) => `${x},${y},${z}`
@@ -32,20 +33,12 @@ module.exports = function makePillar({ bot, canSee, state, save, col, baseY, max
     const ref = blockAt(col.x, cellY - 1, col.z)
     if (!ref || ref.boundingBox === 'empty') return false
     if (!canSee || !canSee(ref)) return false
-    try { await bot.look(bot.entity.yaw, -Math.PI / 2, true) } catch {}
-    bot.setControlState('jump', true)
-    try {
-      for (let t = 0; t < 40; t++) {
-        await sleep(stepMs)
-        ctx && ctx.checkpoint()
-        if (feetY() >= cellY + 1.0) {
-          try { await bot.placeBlock(ref, new Vec3(0, 1, 0)) } catch (e) { if (e && e.name === 'AbortError') throw e; log(`pillar place ${key(col.x, cellY, col.z)}: ${e.message}`) }
-          const b = blockAt(col.x, cellY, col.z)
-          if (b && b.name === 'cobblestone') return true
-        }
-      }
-      return false
-    } finally { bot.setControlState('jump', false) }
+    // the one jump-and-place implementation (brain/motor)
+    const eq = await motor.equip(bot, 'cobblestone'); if (!eq.ok) { log(`pillar ${key(col.x, cellY, col.z)}: ${eq.reason}`); return false }
+    const r = await motor.jumpPlaceUnder(bot, { ref, feetY: cellY, held: eq.value, reequip: () => motor.equip(bot, 'cobblestone'), tick: () => sleep(stepMs), minRise: 1.0, checkpoint: ctx ? () => ctx.checkpoint() : undefined, log })
+    if (!r.ok) log(`pillar place ${key(col.x, cellY, col.z)}: ${r.reason}`)
+    const b = blockAt(col.x, cellY, col.z)
+    return !!b && b.name === 'cobblestone'
   }
 
   // Adds one block under the feet. { ok } | { ok:false, why }

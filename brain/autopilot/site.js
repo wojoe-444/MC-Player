@@ -9,6 +9,7 @@
 // for logs, leaves and the bot's own pillar block only. Tops out of reach: a one-block pillar in the stump's cell, taken down afterwards.
 const fs = require('fs')
 const { markPlacing } = require('../reflexes')
+const motor = require('../motor')
 
 module.exports = function site(G, S, M, api, log) {
   const bot = S.bot, { goals } = S, v = S.v
@@ -73,13 +74,11 @@ module.exports = function site(G, S, M, api, log) {
     await S.goto(new goals.GoalBlock(at.x, at.y, at.z), { dig: false, ms: 15000 })
     const me = S.flo(bot.entity.position); if (me.x !== at.x || me.z !== at.z) return null
     const ref = S.block(me.offset(0, -1, 0)); if (!ref || ref.boundingBox !== 'block') return null
-    await bot.equip(item, 'hand').catch(() => {}); markPlacing(bot, 4000)
-    await bot.look(bot.entity.yaw, -Math.PI / 2, true)
-    bot.setControlState('jump', true)
-    let placed = false
-    for (let i = 0; i < 30 && !placed; i++) { await wait(50); if (bot.entity.position.y >= me.y + 1) { try { await bot.placeBlock(ref, v(0, 1, 0)); placed = true } catch {} } }
-    bot.setControlState('jump', false); await wait(400)
-    return placed ? me : null
+    markPlacing(bot, 4000)
+    const eq = await motor.equip(bot, item); if (!eq.ok) return null
+    const r = await motor.jumpPlaceUnder(bot, { ref, feetY: me.y, held: eq.value, reequip: () => motor.equip(bot, item) })
+    await wait(300)
+    return r.ok ? me : null
   }
 
   async function fell(cfg, trunk) {

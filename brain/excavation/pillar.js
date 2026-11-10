@@ -3,6 +3,7 @@
 // needs a clear line to the block it is placed on, and the cells are written to the saved state while it stands, so a crash or restart can
 // remove exactly those blocks again (cleanup()).
 const { Vec3 } = require('vec3')
+const motor = require('../motor')
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 const key = (x, y, z) => `${x},${y},${z}`
@@ -18,20 +19,12 @@ module.exports = function makePillar({ bot, goals, mover, los, state, save, floo
     const ref = bot.blockAt(new Vec3(col.x, cellY - 1, col.z))
     if (!ref || ref.boundingBox === 'empty') return false
     if (!los.canSee(ref)) return false
-    try { await bot.look(bot.entity.yaw, -Math.PI / 2, true) } catch {}
-    bot.setControlState('jump', true)
-    try {
-      for (let t = 0; t < 40; t++) {
-        await sleep(stepMs)
-        ctx && ctx.checkpoint()
-        if (feetY() >= cellY + 1.0) {
-          try { await bot.placeBlock(ref, new Vec3(0, 1, 0)) } catch (e) { log(`pillar place ${key(col.x, cellY, col.z)}: ${e.message}`) }
-          const b = bot.blockAt(new Vec3(col.x, cellY, col.z))
-          if (b && b.name === 'cobblestone') return true
-        }
-      }
-      return false
-    } finally { bot.setControlState('jump', false) }
+    // the one jump-and-place implementation (brain/motor)
+    const eq = await motor.equip(bot, 'cobblestone'); if (!eq.ok) { log(`pillar ${key(col.x, cellY, col.z)}: ${eq.reason}`); return false }
+    const r = await motor.jumpPlaceUnder(bot, { ref, feetY: cellY, held: eq.value, reequip: () => motor.equip(bot, 'cobblestone'), tick: () => sleep(stepMs), minRise: 1.0, checkpoint: ctx ? () => ctx.checkpoint() : undefined, log })
+    if (!r.ok) log(`pillar place ${key(col.x, cellY, col.z)}: ${r.reason}`)
+    const b = bot.blockAt(new Vec3(col.x, cellY, col.z))
+    return !!b && b.name === 'cobblestone'
   }
 
   // Builds from the floor cell of `col` up to feet at floorY+blocks. { ok, why, height }

@@ -91,7 +91,8 @@ function extendTrees(bot) {
     bot.take(held.name, 1)
   }
   // jump and fall: 0.25 blocks per 10 ms tick (a jump peaks 1.25 above where it started)
-  let rising = false, apex = 0
+  bot.physics = false                  // this rig's own step machine below does the jumping; the excavation mock's jumpLoop would fight it
+  let phase = 'ground', apex = 0, hold = 0
   const timer = setInterval(() => {
     for (const e of Object.values(bot.entities)) if (e.name === 'item') {            // dropped items fall and are picked up when touched
       let yy = Math.floor(e.position.y)
@@ -100,14 +101,22 @@ function extendTrees(bot) {
     }
     bot.pickup()
     const p = bot.entity.position
-    const grounded = SOLID_BELOW(bot, p.x, p.y - 0.001, p.z) && Math.abs(p.y - Math.round(p.y)) < 1e-6
-    if (bot.controlStates.jump && grounded && !rising) { rising = true; apex = p.y + 1.25 }
-    if (rising) { p.y = Math.min(apex, p.y + 0.25); if (p.y >= apex) rising = false; return }
-    if (!SOLID_BELOW(bot, p.x, p.y - 0.001, p.z)) {
+    if (!bot.entity.velocity) bot.entity.velocity = { x: 0, y: 0, z: 0 }
+    const vel = bot.entity.velocity
+    const supported = () => SOLID_BELOW(bot, p.x, p.y - 0.001, p.z) && Math.abs(p.y - Math.round(p.y)) < 1e-6
+    // a small state machine like a real jump: rise 0.25 a step to +1.25, hang at the top for 4 steps (the real one stays above +1.0 for about 6 ticks), fall 0.25 a step
+    // until something solid is under the feet. Every step emits physicsTick like mineflayer, with the vertical velocity set.
+    if (phase === 'ground') { if (bot.controlStates.jump && supported()) { phase = 'up'; apex = p.y + 1.25 } else if (!supported()) phase = 'down' }
+    if (phase === 'up') { vel.y = 0.25; p.y = Math.min(apex, p.y + 0.25); if (p.y >= apex) { phase = 'hold'; hold = 4 } }
+    else if (phase === 'hold') { vel.y = 0; if (--hold <= 0) phase = 'down' }
+    else if (phase === 'down') {
       let top = Math.floor(p.y - 0.001)
       while (top > 0 && !SOLID_BELOW(bot, p.x, top - 1, p.z)) top--
-      p.y = Math.max(top, p.y - 0.25)
-    }
+      p.y = Math.max(top, p.y - 0.25); vel.y = -0.25
+      if (p.y <= top) { p.y = top; vel.y = 0; phase = 'ground' }
+    } else vel.y = 0
+    bot.entity.onGround = phase === 'ground'
+    bot.emit('physicsTick')
   }, 10)
   if (timer.unref) timer.unref()
   bot.stopPhysics = () => clearInterval(timer)

@@ -6,6 +6,7 @@
 const { Vec3 } = require('vec3')
 const T = require('./trees')
 const util = require('../util')
+const motor = require('../motor')
 
 const HOSTILE = /^(zombie|skeleton|creeper|spider|cave_spider|husk|drowned|witch|pillager|vindicator|phantom|slime|silverfish|enderman|zombie_villager|stray|bogged|breeze)$/
 const CHEST_NAMES = new Set(['chest', 'trapped_chest', 'barrel'])
@@ -319,15 +320,10 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
     const ref = bot.blockAt(cell.offset(0, -1, 0))
     if (!ref || ref.boundingBox === 'empty') return false
     const startY = bot.entity.position.y
-    await bot.equip(mat, 'hand')
-    bot.setControlState('jump', true)
-    try {
-      for (let i = 0; i < 24; i++) {
-        await ctx.sleep(25)
-        if (bot.entity.position.y >= startY + 1.0) { try { await bot.placeBlock(ref, new Vec3(0, 1, 0)) } catch (e) { log(`pillar place: ${e.message}`) } break }
-      }
-    } finally { bot.setControlState('jump', false) }
-    await ctx.sleep(150)
+    const eq = await motor.equip(bot, mat); if (!eq.ok) { log(`pillar: ${eq.reason}`); return false }
+    // the one jump-and-place implementation (brain/motor); an abort inside it propagates as the task's own AbortError
+    const r = await motor.jumpPlaceUnder(bot, { ref, feetY: Math.floor(startY + 1e-6), held: eq.value, reequip: () => motor.equip(bot, mat), checkpoint: () => ctx.checkpoint(), log })
+    if (!r.ok) log(`pillar place: ${r.reason}`)
     const nb = bot.blockAt(cell)
     if (nb && nb.name === mat.name && bot.entity.position.y >= startY + 0.9) { S.pillar.placed.push(key(cell)); save(); return true }
     return false

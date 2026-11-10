@@ -15,6 +15,7 @@ const { Vec3 } = require('vec3')
 const B = require('./blocks')
 const los = require('../los')
 const { markPlacing } = require('../reflexes')
+const motor = require('../motor')
 
 const AIR = /^(air|cave_air|void_air)$/
 const HAZARD = /^(lava|fire|soul_fire|cactus|magma_block|campfire|soul_campfire|sweet_berry_bush|powder_snow|pointed_dripstone|cobweb|wither_rose|tripwire)$/
@@ -538,9 +539,6 @@ class Reach {
 
   // Jump and place a block under the feet; repeat. Needs two free cells above the head.
   async pillar(run) {
-    // placeBlock's own lookAt is not forced: it turns the head ~0.15 rad a tick, so straight down at the top of a jump it could take many ticks
-    // and the place went out on the way down, into the feet cell (the refusals at tick 3, +1.2, vy -0.078). Forced look: same tick.
-    const place = (b, r, f) => typeof b._placeBlockWithOptions === 'function' ? b._placeBlockWithOptions(r, f, { forceLook: true, swingArm: 'right' }) : b.placeBlock(r, f)
     const bot = this.bot
     if (!(await this.ensureBlocks(1, run))) return false
     const f = this.feet()
@@ -553,54 +551,17 @@ class Reach {
     { const fb = this.blk(f.x, f.y, f.z); if (fb && fb.name !== 'air' && fb.name !== 'cave_air' && fb.boundingBox === 'empty' && !this.isHazard(fb) && !/water|lava/.test(fb.name)) { try { await bot.dig(fb, true) } catch {} await this.ticks(4, run) } }
     try {
       markPlacing(bot, 4000)
-      await bot.equip(it, 'hand')
-      // not holding the block after all (the bag drifted from the server's): no jumping in place with a sword
-      if (!bot.heldItem || bot.heldItem.name !== it.name) { this.log('pillar: not holding ' + it.name + ' (' + (bot.heldItem ? bot.heldItem.name : 'nothing') + ')'); return false }
-      await bot.look(bot.entity.yaw, -Math.PI / 2, true)
-      // from the ground only: a jump started while still dropping onto the last block put the place attempt on the way down, where the
-      // server (a tick behind) already has the feet back in the cell (logged 03:43: tick 3, +1.12 up but falling at -0.155, refused; the
-      // server had the bot at +0.42)
-      // a refusal is retried with a fresh jump (up to 3 jumps): the same jump state (tick 3, +1.2 up, vy -0.078) was placed 21 times and
-      // refused 3 times in the logs (2026-11-10), so it is server timing, not the jump; one refusal used to end the whole climb
-      let placed = false, refusals = 0
-      for (let jump = 0; jump < 3 && !placed && !this.stopped(run); jump++) {
-      if (jump) { bot.setControlState('jump', false); await this.ticks(4, run); if (this.feet().y !== f.y) break }
-      for (let w = 0; w < 20 && !bot.entity.onGround && !this.stopped(run); w++) await this.ticks(1, run)
-      bot.setControlState('jump', true)
-      for (let i = 0; i < 40 && !placed && !this.stopped(run); i++) {
-        await this.ticks(1, run)
-        // the block stays in hand through the jump: another layer swapped a sword in mid-pillar (all 10 pillar_failing flags of 2026-11-10 had
-        // a sword in hand), so take the block back the moment the hand changes, and stop if it will not come back
-        if (!bot.heldItem || bot.heldItem.name !== it.name) {
-          const f = bot.inventory.items().find(x => x.name === it.name)
-          if (!f) { this.log('pillar: out of ' + it.name); break }
-          await bot.equip(f, 'hand').catch(() => {})
-          if (!bot.heldItem || bot.heldItem.name !== it.name) { this.log('pillar: the hand will not hold ' + it.name + ' (holding ' + (bot.heldItem ? bot.heldItem.name : 'nothing') + ')'); break }
-          markPlacing(bot, 4000)
-        }
-        // near the top of the jump, not the moment the feet clear the cell: the server checks the new block against where it last heard the
-        // player was, a tick behind, and refused the block again and again at +1.0 (Smeo444 climbing its shaft, 22:52)
-        // rising or at the top of the jump only (vy > -0.05), never on the way down
-        if (bot.entity.position.y >= f.y + 1.1 && bot.entity.velocity.y > -0.05) {
-          // one more tick first, so the server has the position packet that puts the feet above the cell before the place packet arrives
-          await this.ticks(1, run)
-          if (bot.entity.position.y < f.y + 1.1 || bot.entity.velocity.y < -0.1) continue
-          // every attempt is logged in full until the jump-and-place failures are understood (Walter 2026-11-10)
-          const at = { tick: i, dy: +(bot.entity.position.y - f.y).toFixed(3), vy: +bot.entity.velocity.y.toFixed(3), ground: bot.entity.onGround, held: bot.heldItem ? bot.heldItem.name : null, slot: bot.quickBarSlot, ref: ref.name + '@' + ref.position, dest: this.blk(f.x, f.y, f.z) ? this.blk(f.x, f.y, f.z).name : '?' }
-          try { if (!bot.heldItem || bot.heldItem.name !== it.name) await bot.equip(it, 'hand'); await place(bot, ref, new Vec3(0, 1, 0)); placed = true; this.log('pillar ok ' + JSON.stringify(at)) } catch (e) {
-            // what the server says the bag and hand are, right after the refusal
-            let srv = null
-            try { (typeof bot._syncWindow === 'function' ? bot._syncWindow(bot.inventory).catch(() => {}) : null); await this.ticks(6, run); srv = { held: bot.heldItem ? bot.heldItem.name : null, slot: bot.quickBarSlot, have: bot.inventory.items().filter(x => x.name === it.name).reduce((n, x) => n + x.count, 0), dy: +(bot.entity.position.y - f.y).toFixed(3), destNow: this.blk(f.x, f.y, f.z) ? this.blk(f.x, f.y, f.z).name : '?' } } catch {}
-            refusals++
-            this.log('pillar FAIL ' + JSON.stringify({ ...at, jump }) + ' -> ' + e.message.slice(0, 90) + ' | server ' + JSON.stringify(srv)); break }
-        }
-      }
-      }
-      if (placed && refusals) this.log('pillar ok after ' + refusals + ' refusal(s)')
-      bot.setControlState('jump', false)
-      await this.ticks(6, run)
-      if (placed) this.stats.placed++
-      return placed && bot.entity.position.y >= f.y + 0.9
+      // the one jump-and-place implementation (brain/motor): forced look, ground start, top-of-jump timing, a refusal costs one jump of up to 3, Held proof of the hand
+      const eq = await motor.equip(bot, it)
+      if (!eq.ok) { this.log('pillar: ' + eq.reason); return false }
+      const r = await motor.jumpPlaceUnder(bot, {
+        ref, feetY: f.y, held: eq.value, reequip: () => { markPlacing(bot, 4000); return motor.equip(bot, it) },   // another layer swapped a sword in mid-pillar (all 10 pillar_failing flags of 2026-11-10): take the block back, refuse if it will not come back
+         tick: () => this.ticks(1, run), stopped: () => this.stopped(run),
+        log: (s) => this.log(s)
+      })
+      if (r.ok) this.stats.placed++
+      else if (r.by !== 'aborted') this.log('pillar refused: ' + JSON.stringify({ by: r.by, why: r.reason }))
+      return r.ok
     } catch (e) { this.log('pillar: ' + e.message); return false } finally { bot.clearControlStates() }
   }
 

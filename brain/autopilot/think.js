@@ -7,6 +7,7 @@ const path = require('path')
 const { Vec3 } = require('vec3')
 const { parseModelJson } = require('../fastlane/decide')
 const profileLib = require('../profile')
+const motor = require('../motor')
 const { createMemory } = require('./memory')
 const { LOG_RE, FOOD_VALUE, HOSTILE } = require('./skills').consts
 
@@ -386,14 +387,11 @@ module.exports = function think(G, S, M, api, log) {
       const mat = ['cobblestone', 'dirt', 'cobbled_deepslate', 'stone', 'netherrack', 'andesite', 'diorite', 'granite'].find(m => S.has(m)); if (!mat) return { ok: done > 0, note: `pillared ${done}; out of blocks` }
       const head = S.block(fl().offset(0, 2, 0)); if (head && S.solid(head)) { if (!(await S.clearCell(fl().offset(0, 2, 0)).catch(() => 'fail')) || S.solid(S.block(fl().offset(0, 2, 0)))) return { ok: done > 0, note: `pillared ${done}; blocked overhead` } }
       const base = fl(); const it = bot.inventory.items().find(x => x.name === mat)
-      await bot.equip(it, 'hand').catch(() => {})
-      await bot.look(bot.entity.yaw, -Math.PI / 2, true).catch(() => {})
       const ref = S.block(base.offset(0, -1, 0)); if (!ref) break
-      bot.setControlState('jump', true)
-      let placed = false
-      for (let k = 0; k < 14 && !placed; k++) { await S.wait(60); if (pos().y > base.y + 0.9) { try { await bot.placeBlock(ref, v(0, 1, 0)); placed = true } catch {} } }
-      bot.setControlState('jump', false); await S.wait(200)
-      if (Math.floor(pos().y) > base.y) done++; else break
+      // the one jump-and-place implementation (brain/motor)
+      const eq = await motor.equip(bot, it); if (!eq.ok) return { ok: done > 0, note: `pillared ${done}; ${eq.reason}` }
+      const r = await motor.jumpPlaceUnder(bot, { ref, feetY: base.y, held: eq.value, reequip: () => motor.equip(bot, it), checkpoint: () => S.check() })
+      if (Math.floor(pos().y) > base.y) done++; else return { ok: done > 0, note: `pillared ${done}; ${r.ok ? 'did not rise' : r.by + ': ' + r.reason}` }
     }
     return { ok: done > 0, note: `climbed ${done}; now y${Math.floor(pos().y)}` }
   })
