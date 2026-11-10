@@ -532,6 +532,13 @@ class Reach {
     } finally { bot.clearControlStates() }
   }
 
+  // Tell the server which hotbar slot is selected, again. mineflayer's setQuickBarSlot returns early when its own record already says that slot, so a server that
+  // is on another slot (it showed the sword) is never corrected and every block_place is made with the wrong item in hand.
+  resendHeldSlot() {
+    const bot = this.bot
+    try { if (bot.quickBarSlot != null && bot._client && bot._client.write) bot._client.write('held_item_slot', { slotId: bot.quickBarSlot }) } catch { /* offline */ }
+  }
+
   // Jump and place a block under the feet; repeat. Needs two free cells above the head.
   async pillar(run) {
     const bot = this.bot
@@ -557,7 +564,21 @@ class Reach {
         if (bot.entity.position.y >= f.y + 1.1) {
           // one more tick first, so the server has the position packet that puts the feet above the cell before the place packet arrives
           await this.ticks(1, run)
-          try { if (!bot.heldItem || bot.heldItem.name !== it.name) await bot.equip(it, 'hand'); await bot.placeBlock(ref, new Vec3(0, 1, 0)); placed = true } catch (e) { this.log('pillar place: ' + e.message); break }
+          // the server refused, not the network: try once more at once, in the same jump, while the feet are still clear of the cell (the window is two or three ticks)
+          for (let attempt = 1; attempt <= 2 && !placed; attempt++) {
+            try {
+              if (!bot.heldItem || bot.heldItem.name !== it.name) await bot.equip(it, 'hand')
+              this.resendHeldSlot()
+              await bot.placeBlock(ref, new Vec3(0, 1, 0)); placed = true
+            } catch (e) {
+              // "Server refused to place dirt ... still air" came 219 times from Smeo444 in 14 h while Walter watched it jump with a sword in hand: the bot believed it held dirt, the server's
+              // selected slot was elsewhere. The log line says what the bot believed, so a repeat can be told apart from a collision with the player's own box.
+              const above = bot.entity.position.y - f.y
+              this.log(`pillar place: ${e.message} [bot thinks it holds ${bot.heldItem ? bot.heldItem.name : 'nothing'} in hotbar slot ${bot.quickBarSlot}, feet ${above.toFixed(2)} above the cell, attempt ${attempt}]`)
+              if (!/refused/.test(String(e.message)) || above < 1.05) break
+            }
+          }
+          break
         }
       }
       bot.setControlState('jump', false)

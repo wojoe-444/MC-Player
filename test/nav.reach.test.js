@@ -64,6 +64,30 @@ test('a sealed tower is climbed with a pillar when the target is straight up', a
   } finally { r.close() }
 })
 
+test('pillar: re-sends the selected hotbar slot before every place, tries once more after a server refusal in the same jump, and logs what it believed', async () => {
+  const r = await setup((sim) => {
+    flat(sim)
+    sim.fill(-1, 64, -1, 1, 90, 1, 'air')
+  }, { pos: [0.5, 64, 0.5] })
+  try {
+    const writes = []
+    r.bot._client = { write: (n, p) => writes.push([n, p.slotId]) }
+    r.bot.quickBarSlot = 3
+    const real = r.bot.placeBlock; let calls = 0
+    r.bot.placeBlock = async (ref, face) => { if (++calls === 1) throw new Error('Server refused to place dirt at (0, 64, 0): the block is still air'); return real(ref, face) }
+    const reach = r.nav.reach, run = { cancelled: false }
+    reach.run = run                                                       // pillar() works inside a run
+    let res
+    reach.pillar(run).then(x => { res = x })
+    await r.sim.run(() => res !== undefined, 400)
+    assert.equal(res, true, 'the pillar block went up in the same jump after the refusal\n' + r.logs.join('\n'))
+    assert.equal(calls, 2)
+    assert.ok(writes.length >= 2 && writes.every(w => w[0] === 'held_item_slot' && w[1] === 3), JSON.stringify(writes))
+    assert.ok(r.logs.some(l => /pillar place: Server refused .*bot thinks it holds .* in hotbar slot 3, feet [\d.]+ above the cell, attempt 1/.test(l)), r.logs.join('\n'))
+    assert.equal(r.log.placed.length, 1)
+  } finally { r.close() }
+})
+
 test('chests are never dug, the walls a ladder hangs on stay up', async () => {
   const r = await setup((sim) => {
     flat(sim)

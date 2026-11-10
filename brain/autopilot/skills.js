@@ -781,7 +781,11 @@ module.exports = function makeSkills({ bot, api, log }) {
       const oe = bot.equip.bind(bot)
       bot.equip = async (item, dest) => {
         if (Date.now() - (bot._lastResyncAt || 0) > 4000 && !bot.currentWindow) { light(); await new Promise(r => setTimeout(r, 350)); if (item && item.type != null) { const fresh = bot.inventory.items().find(i => i.type === item.type); if (fresh) item = fresh } }
-        return oe(item, dest)
+        const res = await oe(item, dest)
+        // mineflayer's setQuickBarSlot sends nothing when its own record already says that slot, so a server that is on another slot (the sword Walter saw while the bot
+        // thought it held dirt) is never corrected: say the selected slot again after every equip to the hand
+        if ((dest === 'hand' || dest === undefined) && bot.quickBarSlot != null) { try { bot._client.write('held_item_slot', { slotId: bot.quickBarSlot }) } catch {} }
+        return res
       }
       bot._equipWrapped = true
     }
