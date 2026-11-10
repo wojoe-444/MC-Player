@@ -1593,7 +1593,7 @@ module.exports = function plan(G, S, M, api, log) {
   } catch (e) { log('PLAN', 'resetgear not loaded: ' + e.message) }
   try { delete require.cache[require.resolve('./storage')]; const sr = require('./storage')(G, S, M, api, log); const ii = G.steps.findIndex(x => x.id === 'iron'); G.steps.splice(ii >= 0 ? ii + 1 : G.steps.length, 0, sr) } catch (e) { log('PLAN', 'storage not loaded: ' + e.message) }
   // the underground mob farm (ROADMAP Phase 2 item 8): fallback routine only; the think-brain starts it with the `mob_farm` skill
-  try { delete require.cache[require.resolve('./mobfarmbuild')]; delete require.cache[require.resolve('../mobfarm/geometry')]; const mb = require('./mobfarmbuild')(G, S, M, api, log); const si = G.steps.findIndex(x => x.id === 'storage-room'); G.steps.splice(si >= 0 ? si + 1 : G.steps.length, 0, mb) } catch (e) { log('PLAN', 'mobfarmbuild not loaded: ' + e.message) }
+  try { delete require.cache[require.resolve('./mobfarmbuild')]; delete require.cache[require.resolve('../mobfarm/geometry')]; const mb = require('./mobfarmbuild')(G, S, M, api, log); const si = G.steps.findIndex(x => x.id === 'storage-room'); G.steps.splice(si >= 0 ? si + 1 : G.steps.length, 0, mb); if (mb.repairStep) G.steps.splice(G.steps.indexOf(mb) + 1, 0, mb.repairStep) } catch (e) { log('PLAN', 'mobfarmbuild not loaded: ' + e.message) }
   // light up the dark spawn spots around that farm so they stop taking its mobs (brain/lightup, Walter 2026-11-10); the think-brain starts it with the `light_up` skill
   try {
     for (const f of ['./lightup', '../lightup/plan', '../lightup/world']) delete require.cache[require.resolve(f)]

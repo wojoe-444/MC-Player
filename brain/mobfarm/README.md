@@ -69,6 +69,10 @@ inside 24. The farm competes for the mob cap with every other dark space near th
 * `tools/trial/mobfarm-build-lab.js` runs the real build routine (real skills, real ladder registry) as a survival bot in solid stone: it digs, seals and fits the whole
   farm, then zombies and the existing kill routine work it. Nothing outside the plan is dug (every air cell in the box is in the dig list).
 
+## Checked on the real blocks
+
+`brain/inspect` compares the built farm with this design every few minutes and when the build ends (torch inside the room, light on the pads, shell leaks, slit, water levels, hopper). The first run on the farm built on 2026-11-10 found the torch at -6027,59,-2359 lighting 83% of the pads, a two-block slit, an open cell beside the kill spot and a drop column crossing six old tunnels. See `brain/inspect/README.md`.
+
 ## Known limits
 
 * Spawn rate is modest (the platform is 160 cells in a world where each spawn attempt picks a random place); it makes bones and arrows over hours, not a stack a minute.

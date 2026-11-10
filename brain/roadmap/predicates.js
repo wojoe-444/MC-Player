@@ -12,7 +12,7 @@ const arr = (a) => (Array.isArray(a) ? a : [])
 function loadFacts(stateDir, dir) {
   const s = (f) => readJson(path.join(stateDir, f))
   return {
-    autopilot: s('autopilot-state.json'), mining: s('mining-state.json'), treefarm: s('treefarm-state.json'), mobfarm: s('mobfarm.json'), husbandry: s('husbandry-state.json'),
+    autopilot: s('autopilot-state.json'), mining: s('mining-state.json'), treefarm: s('treefarm-state.json'), mobfarm: s('mobfarm.json'), husbandry: s('husbandry-state.json'), inspect: s('inspect/summary.json'),
     furnace: s('furnace-state.json'), nether: s('nether-network.json'), crafting: s('crafting-chests.json'),
     waypoints: readJson(path.join(dir, 'waypoints.json'), {}), stations: readJson(path.join(dir, 'stations.json')), chestIndex: readJson(path.join(dir, 'chest-index.json')),
     registry: readJson(process.env.BOT_REGISTRY || path.join(__dirname, '..', '..', '..', 'bot-shared', 'registry.json')),
@@ -39,7 +39,14 @@ const PREDICATES = [
   { id: '2.5.respawn', phase: '2', title: 'Spare beds and mini reset chests at base, mine and camps', check: () => null, needs: 'a registry of beds and reset chests by place' },
   { id: '2.6.smelter', phase: '2', title: 'Hopper smelter on charcoal is running', check: () => null, needs: 'a "hopper smelter built" flag in furnace-state.json' },
   { id: '2.7.cropfarm', phase: '2', title: 'Underground crop farm and composter', check: () => null, needs: 'a farm registry with depth and crops' },
-  { id: '2.8.mobfarm', phase: '2', title: 'Mob farm has a kill box and a chest', check: (f) => (f.mobfarm ? !!f.mobfarm.killBox && arr(f.mobfarm.chests).length > 0 : false), needs: 'mobfarm.json' },
+  // A farm that is recorded but fails the bot's own inspection of its blocks (brain/inspect) is not done: the first farm was "built" with a torch in the
+  // spawning room, an open slit and a drop column through old tunnels, and the predicate said done. No inspection yet (null) keeps the old meaning.
+  { id: '2.8.mobfarm', phase: '2', title: 'Mob farm has a kill box and a chest, and passes its own inspection', check: (f) => {
+    if (!f.mobfarm || !f.mobfarm.killBox || !arr(f.mobfarm.chests).length) return false
+    const rooms = (f.inspect && f.inspect.rooms) || {}
+    const mine = Object.entries(rooms).filter(([id]) => /^mobfarm/.test(id)).map(([, r]) => r).filter(r => r && r.ok !== undefined)
+    return !mine.some(r => r.ok === false)
+  }, needs: 'mobfarm.json' },
   { id: '2.9.pens', phase: '2', title: 'A fenced, lit animal pen is built', check: (f) => (f.husbandry ? arr(f.husbandry.pens).some(p => p && p.built && p.lit) : null), needs: 'husbandry-state.json' },
   { id: '2.11.lichen', phase: '2', title: 'Glow lichen farm has a wall and lichen has grown on it', check: (f) => (f.husbandry ? arr(f.husbandry.lichen).some(l => l && l.last && l.last.faces > 0) : null), needs: 'husbandry-state.json' },
   { id: '2.12.lava', phase: '2', title: 'Pointed dripstone and a safe lava farm', check: () => null, needs: 'a lava-farm record' },

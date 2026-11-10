@@ -509,6 +509,56 @@ module.exports = function mobfarmbuild(G, S, M, api, log) {
     B().phase = 'done'; B().doneAt = Date.now(); G.save()
   }
 
+  // ------------------------------------------------------------------ looking at the result (brain/inspect)
+  // The build used to end at "done" without anyone looking at what stood there. Now the blocks are compared with the design the moment it finishes, and again
+  // every few minutes by the inspect module; the faults go into the planner's state (build_problems) and the roadmap predicate. The one thing this routine
+  // repairs itself is what it can take out safely: a light source inside the spawning room (a torch lights a 17 wide room, and the farm never spawns).
+  async function inspectNow() {
+    try { const I = bot._inspect; if (!I) return null; const r = await I.run(); return (r || []).find(x => x && /^mobfarm/.test(x.id)) || null } catch { return null }
+  }
+  async function breakLight(c) {
+    const b = S.block(cv(c)); if (!b || !/torch|lantern|glowstone|campfire/.test(b.name)) return true
+    const los = require('../los'), p = cv(c)
+    const ok = () => S.eye().distanceTo(p.offset(0.5, 0.5, 0.5)) <= 3.8 && S.canSee(S.block(p) || b)
+    if (!ok()) for (const f of los.viewpoints(bot, p, { reach: 3.0, max: 4 })) {
+      await S.goto(new goals.GoalBlock(f.x, f.y, f.z), { dig: false, ms: 15000, escalate: false })
+      if (ok()) break
+    }
+    if (!ok()) { lastWhy = 'cannot see the light source at ' + c; return false }
+    if (!(await S.equipFor(b).catch(() => true))) { /* a torch breaks by hand */ }
+    const done = await S.digBlock(S.block(p) || b, { force: true })
+    await sleep(250)
+    const nb = S.block(p); return !!done || !nb || !/torch|lantern|glowstone|campfire/.test(nb.name)
+  }
+  async function repair() {
+    const insp = await inspectNow()
+    if (!insp) return { ok: false, note: 'no inspection of the farm yet: its chunks are not loaded from here (walk to the shaft at the farm) or the inspector is off' }
+    const fixes = insp.findings.filter(f => f.fix && f.fix.kind === 'break' && f.fix.cells && f.fix.cells.length)
+    const rest = insp.findings.filter(f => f.sev === 'fault' && !f.fix)
+    if (!fixes.length) return { ok: rest.length === 0, note: rest.length ? `nothing here that a repair takes out; still wrong: ${insp.headline.slice(0, 3).join(' | ')}` : 'the farm passes its inspection' }
+    const room = (LD().rooms() || []).find(r => r.type === 'mobfarm'), sh0 = room && (LD().shafts() || []).find(s => s.id === room.shaft)
+    const L = room && sh0 ? require('../inspect/mobfarm').layoutOfRoom(room, sh0) : null
+    if (!L) return { ok: false, note: 'cannot rebuild the farm design from the registry' }
+    const P = L.platform, cells = [].concat(...fixes.map(f => f.fix.cells))
+    if (!cells.every(c => L.platform.air.some(a => key3(a) === key3(c)))) return { ok: false, note: 'a repair outside the spawning room is not automatic: ' + insp.headline[0] }
+    await ensurePicks(1).catch((e) => { if (S.isAbort(e)) throw e })
+    if (!(await goLevel(sh0, L.Yp, P.corridor[0]))) return { ok: false, note: lastWhy || 'cannot get to the platform level' }
+    // open the plug (and anything else that fills the corridor), go in, take the light out, come back and close it again
+    if (!(await digList(P.corridor))) return { ok: false, note: 'cannot open the corridor: ' + lastWhy }
+    if (!(await walk(P.entry, 20000))) return { ok: false, note: 'cannot walk into the platform' }
+    let out = 0
+    for (const c of cells) { S.check(); if (await breakLight(c)) out++ }
+    if (!(await walk(P.corridor[0], 30000))) note('mob farm repair: cannot get back to the corridor to close it')
+    let plugged = 0
+    for (const c of P.plug) { if (solid(c)) { plugged++; continue } if (await M.fill(cv(c)).catch(() => false)) plugged++ }
+    note(`mob farm repair: ${out} of ${cells.length} light source(s) taken out of the spawning room, plug ${plugged}/${P.plug.length}`)
+    try { await LD().up(sh0) } catch {}
+    const again = await inspectNow()
+    const left = again ? again.findings.filter(f => f.id === 'stray-light').length : null
+    return { ok: out === cells.length && plugged === P.plug.length && !left, note: `took out ${out}/${cells.length} light source(s); plug ${plugged}/${P.plug.length}; inspection after: ${again ? (again.ok ? 'passes' : again.faults + ' fault(s) left: ' + again.headline.slice(0, 2).join(' | ')) : 'not re-run'}` }
+  }
+  const key3 = (c) => c[0] + ',' + c[1] + ',' + c[2]
+
   // ------------------------------------------------------------------ the entry
   async function run() {
     const sh = shaftOf(); if (!sh || !sh.bottom) { return stop('no laddered shaft to hang the farm on') }
@@ -538,6 +588,9 @@ module.exports = function mobfarmbuild(G, S, M, api, log) {
     }
     finish(L, sh)
     note(`mob farm built: platform y${L.Yp}, kill spot ${L.chamber.K}, chest ${L.chamber.chest}. Wait away from the platform (24+ blocks) so mobs can spawn there.`)
+    // look at what stands there before calling it done (the first farm never was: torch in the spawning room, open slit, zero kills)
+    const insp = await inspectNow()
+    if (insp) { B().inspected = { at: Date.now(), ok: insp.ok, faults: insp.faults }; G.save(); note(insp.ok ? 'mob farm inspection: passes' : `mob farm inspection: ${insp.faults} fault(s). ${insp.headline.slice(0, 3).join(' | ')}`) }
     try { await LD().up(sh) } catch {}
     return true
   }
@@ -545,9 +598,10 @@ module.exports = function mobfarmbuild(G, S, M, api, log) {
   function status() {
     const b = B(), sh = shaftOf()
     let cfg = null; try { cfg = JSON.parse(fs.readFileSync(api.statePath('mobfarm.json'), 'utf8')) } catch {}
-    return { phase: b.phase || 'not started', done: b.phase === 'done', fails: b.fails || 0, why: b.lastWhy || '', needs: needs(), shaft: sh ? sh.id : null, needBottom: b.needBottom, farm: cfg && cfg.builder === 'mobfarmbuild' ? { killSpot: cfg.killSpot, chests: cfg.chests, rest: cfg.rest } : null }
+    let insp = null; try { const r = bot._inspect && bot._inspect.last().find(x => /^mobfarm/.test(x.id)); if (r) insp = { ok: r.ok, faults: r.faults, warns: r.warns, wrong: r.headline.slice(0, 3) } } catch {}
+    return { inspection: insp, phase: b.phase || 'not started', done: b.phase === 'done', fails: b.fails || 0, why: b.lastWhy || '', needs: needs(), shaft: sh ? sh.id : null, needBottom: b.needBottom, farm: cfg && cfg.builder === 'mobfarmbuild' ? { killSpot: cfg.killSpot, chests: cfg.chests, rest: cfg.rest } : null }
   }
-  G.mobFarmBuild = { run, status, needs, stock }
+  G.mobFarmBuild = { run, status, needs, stock, repair, inspectNow }
 
   // one builder at a time: both bots share the shaft and the registry, and two farms would be dug into the same rock. The claim is a small file in
   // bot-shared; it lapses after 6 hours.
@@ -556,7 +610,27 @@ module.exports = function mobfarmbuild(G, S, M, api, log) {
   const CLAIM = process.env.BOT_MOBFARM_CLAIM || require('path').join(__dirname, '..', '..', '..', 'bot-shared', 'mobfarm-claim.json')
   const otherBotBuilding = () => { try { const c = JSON.parse(require('fs').readFileSync(CLAIM, 'utf8')); return c.by !== bot.username && Date.now() - c.at < 6 * 3600000 && !(B().phase === 'done') } catch { return false } }
   const claim = () => { try { require('fs').writeFileSync(CLAIM, JSON.stringify({ by: bot.username, at: Date.now() })) } catch { /* ignore */ } }
-  return {
+  // fallback routine for the repair (the planner is off on both live bots, so a step has to carry what the think-brain's `mob_farm repair` does):
+  // runs when the last inspection of the farm has a fault the repair can take out, one bot at a time (a small claim file in bot-shared), then rests an hour
+  const RCLAIM = process.env.BOT_MOBFARM_REPAIR_CLAIM || require('path').join(__dirname, '..', '..', '..', 'bot-shared', 'mobfarm-repair-claim.json')
+  const repairClaimedByOther = () => { try { const c = JSON.parse(require('fs').readFileSync(RCLAIM, 'utf8')); return c.by !== bot.username && Date.now() - c.at < 20 * 60000 } catch { return false } }
+  const repairStep = {
+    id: 'mob-farm-repair', budget: 600000, cool: 600000,
+    need: () => {
+      const r = bot._inspect && bot._inspect.last().find(x => x && /^mobfarm/.test(x.id))
+      if (!r || r.ok || !r.findings.some(f => f.fix)) return false
+      if (Date.now() < (B().repairRestUntil || 0) || repairClaimedByOther()) return false
+      if (bot.isSleeping || bot.health < 14 || (S.isNight() && !S.underground())) return false
+      return true
+    },
+    run: async () => {
+      try { require('fs').writeFileSync(RCLAIM, JSON.stringify({ by: bot.username, at: Date.now() })) } catch { /* ignore */ }
+      let r; try { r = await repair() } catch (e) { if (S.isAbort(e) || e.name === 'StepTimeout') throw e; r = { ok: false, note: 'error ' + e.message } }
+      B().repairRestUntil = Date.now() + (r.ok ? 3600000 : 20 * 60000); G.save()
+      note('mob farm repair: ' + r.note); return !!r.ok
+    },
+  }
+  const buildStep = {
     id: 'mob-farm-build', budget: 1200000, cool: 300000,
     need: () => {
       const b = B()
@@ -578,4 +652,6 @@ module.exports = function mobfarmbuild(G, S, M, api, log) {
     },
     run: async () => { claim(); return run() },
   }
+  buildStep.repairStep = repairStep
+  return buildStep
 }
