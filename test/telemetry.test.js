@@ -406,3 +406,17 @@ test('armor_carried: iron armor in the bag is med; Mending diamond and listed fa
   assert.strictEqual(h._tick.events().find(e => e.k === 'fail').note, ':wood-stock')   // no scheduler task in the mock, so just the step
   h.stop()
 })
+
+test('a new high flag also saves a snapshot of the world around the bot (brain/state/snapshots), once per flag', () => {
+  const { bot, dir, h } = rig()
+  bot.blockAt = () => ({ name: 'stone', getProperties: () => ({}) })
+  const real = D.analyze
+  D.analyze = () => [{ kind: 'ladder_bobbing', sev: 'high', msg: 'test', t0: 0, t1: 1, data: {} }]
+  try {
+    h.start(); h._tick.sample(); h._tick.analyze(); h._tick.analyze()
+    const snaps = fs.readdirSync(path.join(dir, 'snapshots')).filter(f => f.endsWith('.json'))
+    assert.strictEqual(snaps.length, 1, snaps.join(','))
+    const s = JSON.parse(fs.readFileSync(path.join(dir, 'snapshots', snaps[0]), 'utf8'))
+    assert.strictEqual(s.flag.kind, 'ladder_bobbing'); assert.strictEqual(s.world.size, 25)
+  } finally { D.analyze = real; h.stop() }
+})

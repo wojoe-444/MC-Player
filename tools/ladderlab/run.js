@@ -1,4 +1,4 @@
-// Scenario runner. node tools/ladderlab/run.js [name-filter] [--json] [--plain]
+// Scenario runner. node tools/ladderlab/run.js [name-filter] [--json] [--plain] [--snapshot file.json --goal x,y,z [--inv ladder=4]]
 //   --plain   the baseline: the navigator with ladder work switched off (cfg.ladders = false)
 // Every scenario runs on the real pathfinder + physics in virtual time. Pass criteria per kind:
 //   climb     arrives, no more than MAX_BACKTRACK blocks of travel against the direction of the trip (bobbing), within the tick budget
@@ -43,10 +43,16 @@ async function run(sc, { plain = false } = {}) {
 
 async function main() {
   const args = process.argv.slice(2)
-  const filter = args.find(a => !a.startsWith('--')) || ''
+  const filter = args.find((a, i) => !a.startsWith('--') && !(i > 0 && ['--snapshot', '--goal', '--inv'].includes(args[i - 1]))) || ''
   const plain = args.includes('--plain'), json = args.includes('--json')
   let fails = 0
-  for (const sc of S.filter(s => s.name.includes(filter))) {
+  const opt = (n) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : null }
+  let list = S.filter(s => s.name.includes(filter))
+  if (opt('--snapshot')) {                                            // an incident snapshot as the scenario (tools/ladderlab/fromSnapshot.js)
+    const goal = opt('--goal'), invs = opt('--inv')
+    list = [require('./fromSnapshot').loadScenario(opt('--snapshot'), { goal: goal ? goal.split(',').map(Number) : null, inv: invs ? Object.fromEntries(invs.split(',').map(kv => kv.split('=')).map(([k, v]) => [k, Number(v)])) : null })]
+  }
+  for (const sc of list) {
     let o
     try { o = await run(sc, { plain }) } catch (e) { o = { pass: false, err: e.stack.split('\n').slice(0, 3).join(' | ') } }
     if (!o.pass) fails++

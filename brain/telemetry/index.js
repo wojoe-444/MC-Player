@@ -225,6 +225,8 @@ module.exports = function register(api) {
     }
     for (const [k, a] of active) if (!seen.has(k) && t - a.last > FLAG_REPEAT_MS) active.delete(k)
     if (newHigh || t - lastWindowAt >= WINDOW_EVERY_MS) { lastWindowAt = t; captureWindow(t, flags.length ? 'flagged' : 'normal', flags.map(f => f.kind)) }
+    // a new high flag also saves the world around the bot, so the incident can be rebuilt on a trial server as a scenario (brain/snapshot, tools/snapshot-rebuild.js)
+    if (newHigh) { try { const hi = flags.find(f => f.sev === 'high'); require('../snapshot').capture(bot, { flag: hi, dir: path.join(dir, '..', 'snapshots'), task: curTask, now }) } catch (e) { api.log('telemetry', 'snapshot error: ' + e.message) } }
     writeSummary(t)
     writeAlerts(t)
   }
