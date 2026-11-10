@@ -785,6 +785,14 @@ module.exports = function plan(G, S, M, api, log) {
         const bad = (d) => (st.avoidMines || []).some(q => Math.hypot(here.x + D[d][0] * 40 - q[0], here.z + D[d][1] * 40 - q[2]) < (q[3] || 48))
         for (let k = 0; k < 4 && bad(st.mineDir); k++) st.mineDir = (st.mineDir + 1) % 4 }
       const before = ironUnits()
+      // ore the shaft itself has exposed (iron_ore on two sides of OzoGo444's shaft at y36-37 while the tunnels mined 0 for an hour): taken first,
+      // only what the bot can see from where it stands (no x-ray), a short budget, never copper or coal on its own
+      try {
+        if (st.mine && st.mine.ladder && S.underground() && Math.floor(bot.entity.position.y) <= (st.mine.bottom ? st.mine.bottom[1] + 3 : 999)) {
+          const got = await S.gather(/^(deepslate_)?(iron|gold|diamond|redstone|lapis)_ore$/, 6, { radius: 7, ms: 45000, dig: true })
+          if (got) note(`mine: ${got} ore block(s) the shaft had exposed, iron now ${ironUnits()}`)
+        }
+      } catch (e) { if (e && /Abort|StepTimeout/.test(String(e.name))) throw e }
       // 20 blocks, not 40: the walk back to the shaft stays in its own tunnels. A bottom 45 blocks off its entry sent the pathfinder
       // through the deep caves, and zombies killed the bot at y-8 (00:17)
       const t = await M.tunnel(st.mineDir, (st.mine && (st.mine.path || []).length > 3) ? 32 : 20, {   // (32 with recorded stairs: iron came at 0-2 a day from 20-block tunnels on the Earth map, 2026-11-09)
