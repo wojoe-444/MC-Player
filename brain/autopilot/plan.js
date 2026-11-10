@@ -650,6 +650,7 @@ module.exports = function plan(G, S, M, api, log) {
           { const f2 = S.flo(bot.entity.position)
             if ((st.avoidMines || []).some(q => Math.hypot(f2.x - q[0], f2.z - q[2]) < (q[3] || 48))) { st.mineSkips = 3;   /* the land-site scan runs on the next pass */ st.mineSpot = (st.mineSpot || 0) + 1; G.cool.iron = Date.now() + 20 * 60000; G.save(); note('mine: no spot away from the avoided places this round, iron paused 20 min'); return false } }
           const entry = bot.entity.position.floored(), dir0 = st.mineDir == null ? 0 : st.mineDir
+          st.stairEntries = (st.stairEntries || []).concat([{ e: [entry.x, entry.y, entry.z], closed: false }]).slice(-20)
           // a shaft cut short by the step's time budget is kept as far as it got (05:39: 35 blocks dug to y30, the budget ran out, nothing
           // was recorded, and the next trip started a fresh staircase); the next trip walks down it and carries on from there
           let r
@@ -1252,6 +1253,41 @@ module.exports = function plan(G, S, M, api, log) {
       st.litSpots = st.litSpots || {}; st.litSpots[c[0] + ',' + c[2]] = Date.now() + ((st.lightMineLeft || 0) > 0 ? 20 : 120) * 60000; G.save()
       note(`light-mine: lit round ${c.join(',')} (a danger spot: ${hotspots().length} known), ${st.lightMineLeft || 0} dark cells left`)
       return true } }) }
+  // ---- clean up after itself (Walter 2026-11-10): with a laddered shaft in use, the old staircase openings get closed with stone, top
+  // stairs first-filled, so the surface shows only the shaft and what is new since the latest fix is easy to see ----
+  steps.push({ id: 'close-stairs', budget: 150000, cool: 120000, need: () => !S.isNight() && !!(st.mine && st.mine.ladder) && !!home() && cnt(cobbleRe) >= 12 &&
+      (st.stairEntries || []).some(x => !x.closed && Math.hypot(x.e[0] - home().x, x.e[2] - home().z) < 120), run: async () => {
+    const x = st.stairEntries.find(q => !q.closed && Math.hypot(q.e[0] - home().x, q.e[2] - home().z) < 120)
+    const e = v(...x.e)
+    // the shaft's own ladder entry is never touched
+    if (st.mine && st.mine.entry && Math.hypot(st.mine.entry[0] - e.x, st.mine.entry[2] - e.z) < 2) { x.closed = true; G.save(); return true }
+    if (S.dist(e) > 4) await S.goto(new goals.GoalNear(e.x, e.y, e.z, 2), { dig: false, ms: 90000, escalate: false })
+    if (S.dist(e) > 6) { x.tries = (x.tries || 0) + 1; if (x.tries >= 3) x.closed = 'unreachable'; G.save(); return false }
+    // the first stairs: from the entry, the neighbour one lower with two air cells (the way the staircase was cut)
+    const air = (c) => { const b = S.block(c); return b && S.isAir(b) }
+    const cells = []; let c = e
+    for (let k = 0; k < 4; k++) {
+      const n = [[1, 0], [0, 1], [-1, 0], [0, -1]].map(([dx, dz]) => c.offset(dx, -1, dz)).find(q => air(q) && air(q.offset(0, 1, 0)) && !cells.some(o => o.equals(q)))
+      if (!n) break
+      cells.push(n); c = n
+    }
+    if (!cells.length) { x.closed = 'nothing open'; G.save(); return true }
+    const fill = cobbleRe
+    let placed = 0
+    // from the deepest of these up, so each block has the one below to stand on; the bot stays outside, on the entry's rim
+    for (const q of cells.slice().reverse()) {
+      for (const cc of [q, q.offset(0, 1, 0)]) {
+        if (!air(cc)) continue
+        const under = S.block(cc.offset(0, -1, 0)); if (!under || under.boundingBox !== 'block') continue
+        if (S.flo(bot.entity.position).equals(cc) || S.flo(bot.entity.position).equals(cc.offset(0, -1, 0))) await S.goto(new goals.GoalNear(e.x, e.y + 1, e.z, 2), { dig: false, ms: 8000, escalate: false })
+        const it = S.items().find(i => fill.test(i.name)); if (!it) break
+        if (await S.placeAgainst(under, v(0, 1, 0), it.name).catch(() => false)) placed++
+      }
+    }
+    const left = cells.filter(q => air(q) || air(q.offset(0, 1, 0))).length
+    x.closed = left === 0 ? true : false; x.tries = (x.tries || 0) + 1; if (x.tries >= 3 && left) x.closed = 'partly'
+    G.save(); note(`close-stairs: old staircase at ${e} ${left === 0 ? 'closed' : 'partly closed'} (${placed} blocks)`)
+    return placed > 0 } })
   steps.push({ id: 'tidy', budget: 150000, cool: 300000, need: () => !S.isNight() && ((bot.time && bot.time.timeOfDay) || 0) >= 2000 && !!home() && (tidyList().length > 0 || extraTorches().length > 0), run: async () => {
     let n = 0
     let tn = 0
@@ -1424,7 +1460,7 @@ module.exports = function plan(G, S, M, api, log) {
   insertAfter('furnace', [byId.torches, byId['wood-stock'], byId.wear, byId.shield, byId['iron-smelt'], byId['iron-gear']])
   insertAfter('food', ['berries', 'fish', 'rod', 'string', 'hunt-memory', 'tend'].map(id => steps.find(s => s.id === id)).concat([byId.seeds, byId.farm]))   // kelp diving dropped: it drowned the bot
   // iron before upkeep: grove, lighting and tidying kept winning every pick and the hillclimber never went mining (02:50)
-  insertAfter('coal', [byId.stash, byId.shelter, byId.iron, byId.grove, byId['light-home'], steps.find(s => s.id === 'light-mine'), steps.find(s => s.id === 'tidy')].filter(Boolean))
+  insertAfter('coal', [byId.stash, byId.shelter, byId.iron, byId.grove, byId['light-home'], steps.find(s => s.id === 'light-mine'), steps.find(s => s.id === 'close-stairs'), steps.find(s => s.id === 'tidy')].filter(Boolean))
   insertAfter('wood-stock', [steps.find(s => s.id === 'scout'), steps.find(s => s.id === 'storage')])
   // routine work at a fixed site (site.json; Smeo444's birch farm), right after the survival basics
   try { delete require.cache[require.resolve('./site')]; insertAfter('tool-kit', [require('./site')(G, S, M, api, log)]) } catch (e) { log('PLAN', 'site not loaded: ' + e.message) }
