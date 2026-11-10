@@ -568,9 +568,17 @@ class Reach {
   // Dig the block under the feet and drop one level, after checking there is something safe below that.
   async digDown(run) {
     const f = this.feet()
-    const under = this.blk(f.x, f.y - 1, f.z), l2 = this.blk(f.x, f.y - 2, f.z), l3 = this.blk(f.x, f.y - 3, f.z)
-    if (!under || !l2) return false
-    if (this.isHazard(l2) || (l2.boundingBox === 'empty' && (!l3 || this.isHazard(l3) || l3.name === 'lava'))) return false
+    const under = this.blk(f.x, f.y - 1, f.z)
+    if (!under) return false
+    // what the bot will land on: the first solid (or water) cell below the one it digs out must be at most 3 blocks down, loaded, and not a hazard
+    // (looking only at the next two cells let it dig its floor out over any depth of cave: docs/BUG-HUNT-2026-11-10.md, finding 9)
+    let landing = null
+    for (let k = 2; k <= 5; k++) {
+      const b = this.blk(f.x, f.y - k, f.z)
+      if (!b || this.isHazard(b) || b.name === 'lava') return false
+      if (b.boundingBox === 'block' || b.name === 'water') { landing = k; break }
+    }
+    if (landing === null) return false
     if (under.boundingBox === 'block' && !(await this.digCell({ x: f.x, y: f.y - 1, z: f.z }, run))) return false
     await this.ticks(12, run)
     return this.feet().y < f.y

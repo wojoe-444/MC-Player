@@ -23,7 +23,7 @@ module.exports = function plan(G, S, M, api, log) {
   // ---------- shared sleep status (both bots run this code; the file sits in the code folder they share) ----------
   const SLEEP_FILE = require('path').join(__dirname, '..', '..', 'bots-sleep.json')
   const readSleep = () => { try { return JSON.parse(fs.readFileSync(SLEEP_FILE, 'utf8')) } catch { return {} } }
-  const sleepMark = (on) => { try { const m = readSleep(); m[bot.username] = { sleeping: !!on, at: Date.now() }; fs.writeFileSync(SLEEP_FILE, JSON.stringify(m)) } catch {} }
+  const sleepMark = (on) => { try { const m = readSleep(); m[bot.username] = { sleeping: !!on, at: Date.now() }; const tmp = SLEEP_FILE + '.' + bot.username + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(m)); fs.renameSync(tmp, SLEEP_FILE) } catch {} }     // atomic: a torn read made readSleep() return {}, which counts as "everyone else is asleep"
   // every other bot that reported in the last minute is in bed (a bot that is offline does not count)
   const othersAsleep = () => { const m = readSleep(); return Object.entries(m).filter(([n, r]) => n !== bot.username && Date.now() - r.at < 60000).every(([, r]) => r.sleeping) }
   { const t = setInterval(() => { try { if (bot.entity) sleepMark(bot.isSleeping) } catch {} }, 15000); const prev = G.dispose; G.dispose = () => { clearInterval(t); if (prev) prev() } }

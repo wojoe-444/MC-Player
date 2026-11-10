@@ -6,7 +6,7 @@ const util = require('util')
 const { Vec3 } = require('vec3')
 const { PRIORITY: SCHED } = require('../scheduler')
 
-const FILES = ['hallway.js', 'skills.js', 'mining.js', 'goals.js', 'plan.js', 'memory.js', 'think.js', 'watchdog.js', 'commit.js']
+const FILES = ['hallway.js', 'skills.js', 'mining.js', 'goals.js', 'plan.js', 'memory.js', 'think.js', 'watchdog.js', 'commit.js', 'daylight.js']
 
 function register(api) {
   const { bot, scheduler, PRIORITY } = api

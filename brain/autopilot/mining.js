@@ -242,7 +242,7 @@ module.exports = function makeMining(S, api, log) {
           await bot.lookAt(v(b.x + 0.5, b.y + 1.6, b.z + 0.5), true); bot.setControlState('forward', true); bot.setControlState('jump', true)
           const t0 = Date.now(); while (Date.now() - t0 < 1600) { await S.wait(100); const q = bot.entity.position; if (Math.hypot(q.x - (b.x + 0.5), q.z - (b.z + 0.5)) < 0.45 && Math.floor(q.y) === b.y) { g = { ok: true }; break } }
         } catch {} finally { bot.setControlState('forward', false); bot.setControlState('jump', false) }
-        if (!g.ok) g = await S.goto(new goals.GoalBlock(b.x, b.y, b.z), { dig: false, ms: 12000 })
+        if (!g.ok) g = await S.goto(new goals.GoalBlock(b.x, b.y, b.z), { dig: false, ms: 12000, escalate: false })     // one plain attempt: the stair climb must not dig or pillar its way out
         if (!g.ok) continue
         moved = true; dirIdx = (dirIdx + t) % 4
       }
