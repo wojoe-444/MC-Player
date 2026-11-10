@@ -76,11 +76,7 @@ module.exports = function install({ bot, say, goals, tryGoto, isDoorName }) {
   const pickaxeUses = () => bot.inventory.items().filter(i => /_pickaxe$/.test(i.name)).reduce((s, i) => s + durLeft(i), 0)
 
   async function equipBest(block) {
-    let best = null, bestT = Infinity
-    for (const it of tools()) {
-      const t = block.digTime(it.type, false, false, false, [], {})
-      if (t < bestT) { bestT = t; best = it }
-    }
+    const best = require('./brain/motor/tooltier').minimumTool(block, tools(), { fallback: true })      // the lowest tier that does the job, not the fastest
     if (!best) return false
     if (!bot.heldItem || bot.heldItem.type !== best.type) await bot.equip(best, 'hand')
     return true

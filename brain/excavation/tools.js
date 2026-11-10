@@ -6,11 +6,7 @@ module.exports = function makeTools({ bot, goals, mover, limits, craft = null, g
   const pickaxeUses = () => bot.inventory.items().filter(i => /_pickaxe$/.test(i.name)).reduce((s, i) => s + durLeft(i), 0)
 
   async function equipBest(block) {
-    let best = null, bestT = Infinity
-    for (const it of usable()) {
-      const t = block.digTime(it.type, false, false, false, [], {})
-      if (t < bestT) { bestT = t; best = it }
-    }
+    const best = require('../motor/tooltier').minimumTool(block, usable(), { fallback: true })      // the lowest tier that does the job, not the fastest
     if (!best) return false
     if (!bot.heldItem || bot.heldItem.type !== best.type) await bot.equip(best, 'hand')
     return true

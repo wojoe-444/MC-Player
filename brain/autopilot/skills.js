@@ -264,20 +264,13 @@ module.exports = function makeSkills({ bot, api, log }) {
   // The minimum tool that does the job (Walter 2026-11-10, Act 2): of the tools that can harvest the block and beat the bare hand, the lowest
   // tier wins, stone first; wood and gold only when nothing else will do; never a sword on blocks. Until diamond gear with Mending is in hand
   // this keeps iron and diamond for the ores that need them (S.equipFor picked the fastest tool: 23 tool_tier flags in 5 minutes).
-  const TOOL_RANK = (n) => /^stone_/.test(n) ? 1 : /^iron_/.test(n) ? 2 : /^diamond_/.test(n) ? 3 : /^netherite_/.test(n) ? 4 : /^golden_/.test(n) ? 5 : /^wooden_/.test(n) ? 6 : 9
   S.toolFor = (block) => {
     let hand = Infinity
     try { hand = block.digTime(null, false, false, false, [], []) } catch {}
-    const cands = []
-    for (const it of bot.inventory.items()) {
-      if (!/_(pickaxe|axe|shovel|hoe)$/.test(it.name)) continue
-      if (block.harvestTools && !block.harvestTools[it.type]) continue
-      let t = Infinity
-      try { t = block.digTime(it.type, false, false, false, [], []) } catch {}
-      if (t < hand || (block.harvestTools && block.harvestTools[it.type])) cands.push({ it, t, r: TOOL_RANK(it.name) })
-    }
-    cands.sort((a, b) => a.r - b.r || a.t - b.t)
-    return { best: cands.length ? cands[0].it : null, bt: cands.length ? cands[0].t : Infinity, hand }
+    const best = require('../motor/tooltier').minimumTool(block, bot.inventory.items())      // the one definition of "minimum tool" (brain/motor/tooltier.js)
+    let bt = Infinity
+    if (best) { try { bt = block.digTime(best.type, false, false, false, [], []) } catch {} }
+    return { best, bt, hand }
   }
   // the pathfinder's own digging picks its tool here too
   try { if (bot.pathfinder && !bot.pathfinder._minTier) { bot.pathfinder._minTier = true; bot.pathfinder.bestHarvestTool = (b) => { try { return S.toolFor(b).best } catch { return null } } } } catch {}
