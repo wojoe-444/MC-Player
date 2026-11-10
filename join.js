@@ -11,9 +11,11 @@ const bot = mineflayer.createBot({
   auth: 'microsoft', version: '1.21.6', profilesFolder: './auth-cache',
   disableChatSigning: true // signed-chat acknowledgements break after incoming chat and the server kicks with chat_validation_failed
 })
-// The packet gate (brain/gate, rules in brain/gate/rules.json): every rule of play checked where packets leave the bot. LOG-ONLY by default: violations are
+// The packet gate (brain/gate, rules in brain/gate/rules.json): every rule of play checked where packets leave the bot. noArmor and chatRate are enforced, the rest log only: violations are
 // recorded with their call site in brain/state/gate-log.json (read it with `node tools/gate-report.js`) and the packet goes out unchanged. GATE=off disables it.
 if (process.env.GATE !== 'off') { try { require('./brain/gate').install(bot, { stateDir: require('path').join(process.cwd(), 'brain', 'state'), log: (l) => console.log('[gate] ' + l) }) } catch (e) { console.log('gate not installed: ' + e.message) } }
+// Body lease, watch stage (brain/motor/lease.js): which loops flip the same movement key against each other. Records only; brain/state/lease-log.json, `node tools/lease-report.js`. LEASE=off disables it.
+if (process.env.LEASE !== 'off') { try { require('./brain/motor/lease').install(bot, { stateDir: require('path').join(process.cwd(), 'brain', 'state'), log: (l) => console.log('[lease] ' + l) }) } catch (e) { console.log('lease not installed: ' + e.message) } }
 // NO ARMOR (Walter 2026-11-10, Act 2) until diamond gear with Mending: the rule sits on bot.equip itself, so no module, timer or planner tool can
 // put armor on (join.js's own 8 s wearArmor timer did, after #188 closed the brain modules). Lifted by ALLOW_ARMOR=1 or gear.allowArmor = true.
 const armorAllowed = () => process.env.ALLOW_ARMOR === '1' || !!require('./brain/safety/gear').allowArmor
