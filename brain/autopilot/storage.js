@@ -103,12 +103,17 @@ module.exports = function storage(G, S, M, api, log) {
     const cell = v(sh.entry[0], P.y, sh.entry[2]), me = bot.entity.position
     // into the shaft column: at the bot's own level when it is down in the mine next to the shaft, else at the top (nav's escalation from far
     // off: a walk-only path failed from 40 blocks out, Smeo444 04:28)
+    // beside the column already at the room's level (the corridor is one step from the column cell, not from the cell beside it)
+    const beside = !LD().inColumn(sh) && Math.abs(me.y - P.y) < 1.2 && S.dist(v(cell.x, P.y, cell.z)) < 3
     if (!LD().inColumn(sh)) {
-      if (me.y < sh.entry[1] - 2 && S.dist(v(cell.x, me.y, cell.z)) < 12) await LD().enterColumn(sh)
+      if (beside || (me.y < sh.entry[1] - 2 && S.dist(v(cell.x, me.y, cell.z)) < 12)) await LD().enterColumn(sh)
       else await LD().enterTop(sh)
     }
     // then the ladder by hand to the room's level, and off into the corridor
     await LD().rideTo(sh, P.y)
+    // the first corridor cell is reached by keys from the column: nav's ladder handling takes over a go-to on the shaft and stalled here
+    // (OzoGo444 07:51: 'stepping off at the top failed: timeout', one block from the corridor)
+    if (LD().inColumn(sh)) { await clear(P.corridor[0]); await clear(P.corridor[0].offset(0, 1, 0)); await nudge(P.corridor[0], 4000) }
     for (const c of P.corridor) { await clear(c); await clear(c.offset(0, 1, 0)); await walk(c, 8000) }
     await walk(P.at(3, 0), 8000)
     return inRoom(P)
