@@ -128,6 +128,10 @@ module.exports = function ladder(bot, S, goals, v, log) {
         let lastLog = Date.now(), y0 = at()
         while (Date.now() - t0 < ms && at() < y + 0.05) {
           await sleep(50)
+          // the keys are held again every tick: another layer clears the controls mid-climb (logged 05:23-05:24: 'keys ' empty, collided with
+          // the wall, feet in the ladder, not rising for 25 s at the shaft bottom)
+          const cs = bot.controlState || {}
+          if (!cs.jump || !cs.forward || cs.sneak) { try { bot.setControlState('sneak', false); bot.setControlState('jump', true); bot.setControlState('forward', true) } catch {} }
           // a climb that does not rise: say what the body sees (feet block, collision, keys) every 5 s, and press the keys again
           if (Date.now() - lastLog > 5000) {
             lastLog = Date.now()
