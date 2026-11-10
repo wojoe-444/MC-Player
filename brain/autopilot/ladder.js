@@ -15,7 +15,8 @@ module.exports = function ladder(bot, S, goals, v, log) {
   L.file = FILE
   L.worldKey = () => { const sp = bot.spawnPoint; return sp ? `spawn ${Math.floor(sp.x)},${Math.floor(sp.z)}` : 'unknown' }
   L.load = () => { try { return JSON.parse(fs.readFileSync(FILE, 'utf8')) } catch { return { worlds: {} } } }
-  L.save = (reg) => { try { fs.mkdirSync(path.dirname(FILE), { recursive: true }); const tmp = FILE + '.' + (bot.username || 'bot') + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(reg, null, 1)); fs.renameSync(tmp, FILE) } catch (e) { log('LADDER', 'registry write failed: ' + e.message) } }
+  const safeRename = (tmp, dst) => { try { fs.renameSync(tmp, dst) } catch (e) { if (!/EPERM|EBUSY|EACCES/.test(String(e.code || e.message))) throw e; try { fs.writeFileSync(dst, fs.readFileSync(tmp)); fs.unlinkSync(tmp) } catch (e2) { throw e2 } } }
+  L.save = (reg) => { try { fs.mkdirSync(path.dirname(FILE), { recursive: true }); const tmp = FILE + '.' + (bot.username || 'bot') + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(reg, null, 1)); safeRename(tmp, FILE) } catch (e) { log('LADDER', 'registry write failed: ' + e.message) } }
   L.world = (reg) => { const k = L.worldKey(); reg.worlds[k] = reg.worlds[k] || { shafts: [], rooms: [] }; return reg.worlds[k] }
   L.shafts = () => L.world(L.load()).shafts
   L.rooms = () => L.world(L.load()).rooms
