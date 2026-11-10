@@ -41,8 +41,8 @@ const DEFAULTS = {
   maxStall: 5,                // rounds in a row without getting closer before it gives up (silently)
   thinkBase: 5000, thinkMax: 15000,           // ms the digging planner may think per attempt (grows each round)
   planMsBase: 20000, planMsPerBlock: 400, planMsMax: 60000,   // how long one planner attempt may take in all, walking included
-  baseCenter: { x: -1059, z: 2341 }, baseRadius: 80,     // everything non-natural inside is rebuilt after a breach
-  property: { x0: -1108, x1: -1012, z0: 2242, z1: 2368, minY: 134 },   // Walter's property surface (autopilot/memory.js): even dirt and grass dug here is put back, and digging it is a last resort
+  baseCenter: null, baseRadius: 80,     // set through the nav config (reach: { baseCenter: {x, z} }) to have everything non-natural inside rebuilt after a breach. The first world's base (-1059,2341) was the default and lies inside the current world's border
+  property: null,   // { x0, x1, z0, z1, minY }: a surface where even dirt and grass dug is put back. The first world's property was the default; set it through the nav config when a world has one
   lethalHp: 6, lethalMobRange: 6, lethalMaxWaitMs: 15000
 }
 
