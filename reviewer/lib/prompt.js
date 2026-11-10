@@ -25,8 +25,8 @@ WRITING DETECTORS (Walter's design point: move knowledge from your judgement int
 Each time you see a bad pattern that none of the existing detectors covers (existingDetectors lists them), propose a small new detector so the bot flags it by itself from then on, without waiting for you. At most 2 per run, and only when a pattern is real, repeatable and describable with the telemetry fields; most runs should propose none.
 A detector only flags: it can never stop or change anything. Contract (JavaScript, runs in a sandbox with a 150 ms limit, ES2020, no require/process/this/class/async/eval/constructor, no timers):
   function detect(samples, events, now, H) { ...; return null or { sev: 'low'|'med', msg: 'one short sentence with numbers', data: { small } } }
-  samples (4 Hz, oldest first, last 5 min): { t (ms), x, y, z, g (onGround 0/1), vy, yaw, pit (pitch rad, ~1.5 = looking straight down), h (held item name, '' = empty hand), mv (1 = pathfinder/controls trying to move), act (1 = busy: sleeping, eating, container open, digging, swinging), dg (name of the block being dug), tk (scheduler task name), hp }
-  events: { k:'jump', t } | { k:'dig', t, block, x, y, z, held, need, have, ok, harvestOk } | { k:'place', t, block, x, y, z, sky, tk } | { k:'fail', t, what: 'noPath'|'timeout'|'digAbort'|'taskFailed', note } | { k:'torch', t, block, x, y, z, tk, near: [[x,y,z,distance]] } (a torch placed too close to another)
+  samples (4 Hz, oldest first, last 5 min): { t (ms), x, y, z, g (onGround 0/1), vy, yaw, pit (pitch rad, ~1.5 = looking straight down), h (held item name, '' = empty hand), mv (1 = pathfinder/controls trying to move), ld (1 = standing in a ladder/vine/scaffolding cell), st (autopilot step name, '' if none), act (1 = busy: sleeping, eating, container open, digging, swinging), dg (name of the block being dug), tk (scheduler task name), hp }
+  events: { k:'jump', t } | { k:'dig', t, block, x, y, z, held, need, have, ok, harvestOk } | { k:'place', t, block, x, y, z, sky, tk } | { k:'fail', t, what: 'noPath'|'timeout'|'digAbort'|'taskFailed', note } | { k:'work', t, what: 'pickup'|'window' } | { k:'torch', t, block, x, y, z, tk, near: [[x,y,z,distance]] } (a torch placed too close to another)
   H: since(samples, t), evSince(events, t, kind?), extent(samples), hExtent(samples), pathLength(samples), covers(samples, ms), isBlockItem(name)
   Look back over a fixed window from now (for example H.since(samples, now - 30000)), return null when the window is not covered by enough samples, and keep it simple.
 The bot replays your detector over its recent captured windows ("windows" in the input: id, kind normal or flagged, counters and a 1 Hz excerpt) BEFORE enabling it: it must fire on the window(s) you nominate in badWindows (nominate EVERY window from that list that shows the pattern; any un-nominated normal window it fires on counts against it) and stay quiet on the normal windows. If it fails, it is rejected and logged with the reason. Name: lowercase snake_case, 3-40 chars (the flag appears as custom_<name>). Put the reason in "why" (what pattern, why it is bad, what a driver should do). Do not propose a detector for something an existing one already flags.
@@ -42,7 +42,7 @@ HOW TO JUDGE
 - A healthy bot is a fine answer: status "ok", an empty findings list, and a one-line summary of what it is doing.
 - Never write anything meant for game chat. Your output goes to a findings file for Walter and the thread that drives the bots.`
 
-const KINDS = ['excessive_jumping', 'pillar_failing', 'wrong_tool', 'oscillating', 'stuck', 'idle', 'surface_blocks', 'torch_spacing', 'staircase', 'repeated_failure', 'rule_violation', 'other']
+const KINDS = ['excessive_jumping', 'pillar_failing', 'ladder_bobbing', 'wrong_tool', 'oscillating', 'stuck', 'idle', 'surface_blocks', 'torch_spacing', 'staircase', 'repeated_failure', 'rule_violation', 'other']
 
 const SCHEMA = {
   type: 'object',
@@ -111,7 +111,8 @@ const BUILTIN_DETECTORS = [
   { kind: 'wrong_tool / no_tool / cannot_harvest', what: 'held item not whitelisted for the block dug (from minecraft-data), no suitable tool at all, or the block drops nothing' },
   { kind: 'oscillating', what: 'walks 12+ blocks in 30 s inside a 3-block area, or many direction reversals' },
   { kind: 'stuck', what: 'pathfinder/controls active for 20 s without leaving a 1-block spot' },
-  { kind: 'idle', what: '2 min (med) or 5 min (high) of doing nothing at all' },
+  { kind: 'idle', what: 'standing still with no sign of work (no dig, place, pickup, container, eating, sleeping, autopilot step change): 75 s (med) / 3 min (high) when the task is unidentifiable, 2 / 5 min when a task is named; farm reseeding and other low-movement work never counts' },
+  { kind: 'ladder_bobbing', what: '4+ turns of 2+ blocks up and down the same ladder column in 2.5 min with nothing dug or placed (a shaft trip is not bobbing)' },
   { kind: 'staircase', what: '4+ successive levels dug one step sideways' },
   { kind: 'surface_blocks', what: '4+ filler blocks placed in the open air in 10 min' },
   { kind: 'repeated_failure', what: '5+ noPath/timeout/aborted dig/failed task in 5 min' },

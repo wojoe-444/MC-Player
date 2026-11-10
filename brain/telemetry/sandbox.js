@@ -3,7 +3,7 @@
 //
 //   function detect(samples, events, now, H) { ... return null | { sev: 'low'|'med', msg: 'short sentence with numbers', data: { ... } } }
 //
-//   samples: [{ t, x, y, z, g (onGround 0/1), vy, yaw, pit (pitch), h (held item name), mv (trying to move), act (busy: sleeping/eating/container/digging), dg (block being dug), tk (task), hp }]  4 Hz, oldest first, last 5 min
+//   samples: [{ t, x, y, z, g (onGround 0/1), vy, yaw, pit (pitch), h (held item name), mv (trying to move), act (busy: sleeping/eating/container/digging), dg (block being dug), ld (on a ladder), st (autopilot step), tk (task), hp }]  4 Hz, oldest first, last 5 min
 //   events:  [{ k:'jump', t } | { k:'dig', t, block, x,y,z, held, need, have, ok, harvestOk } | { k:'place', t, block, x,y,z, sky, tk } | { k:'fail', t, what, note }]
 //   now:     epoch ms.   H: { since(samples, t), evSince(events, t, kind?), extent(samples), hExtent(samples), pathLength(samples), covers(samples, ms), isBlockItem(name) }
 //
