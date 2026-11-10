@@ -25,6 +25,6 @@ What that means in practice:
 5. Keep chat short and kind; one message per second at most; never spam.
 
 ## Where things are
-`HANDOFF.md` (first-person view, bot basics), `BRAIN.md` and `brain/INTERFACE.md` (scheduler and modules), `FEATURE-REQUESTS.md` (what Walter wants next),
+`HANDOFF.md` (first-person view, bot basics), `BRAIN.md` and `brain/INTERFACE.md` (scheduler and modules), `FEATURE-REQUESTS.md` (what Walter wants next), `ROADMAP.md` (the approved phases 1 to 5, travel and lava farm designs),
 `XAERO.md` (map data), `chat.log` / `outbox.txt` / `cmd.txt` (talk to the bot), `waypoints.json`, `stations.json`, `chest-index.json`.
 The driver's long-term notes are in the Claude memory file `minecraft-bot-rules.md`.

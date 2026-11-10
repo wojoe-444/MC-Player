@@ -310,3 +310,6 @@ Other repeated bot lines in join.log (count): "It's night. Heading to the bed...
 
 ## From Walter (2026-10-27 17:54 UTC, in game): hallway / excavation method
 "The passage should be 3 blocks wide by 10 blocks tall. To do it efficiently, you should first dig out like the top 6 layers, then the bottom 4, so you won't have to use temporary columns as scaffolding. That should be a persistent strategy in excavation by the way." The first message (where the hallway starts and runs) was sent while the bot was offline and is missing; the bot asked Walter in game to resend it. Walter was at about (-1071.6,136,2299.3) facing west when he sent the rest. Owner: excavation (brain/excavation) plus the think planner.
+
+## From Walter (2026-11-10): phase plan additions (see ROADMAP.md)
+Approved in full: respawn network, hopper smelter, underground crop farm, shearing pens, sugarcane, pointed dripstone and safe lava farms (late Phase 2), camps as logged travel nodes with boats and desire paths (late Phase 2 to Phase 3), villager hall with Mending, fishing, and the tool and armor switch once diamond with Mending exists. Tool rule: the minimum tool that does the job, no wood after the early game, stone by default. Build in phase order; ROADMAP.md has the designs and the open "verify" items. Owner: the driver thread, per phase.
