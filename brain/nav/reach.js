@@ -581,7 +581,7 @@ class Reach {
           try { if (!bot.heldItem || bot.heldItem.name !== it.name) await bot.equip(it, 'hand'); await place(bot, ref, new Vec3(0, 1, 0)); placed = true; this.log('pillar ok ' + JSON.stringify(at)) } catch (e) {
             // what the server says the bag and hand are, right after the refusal
             let srv = null
-            try { (typeof bot._syncWindow === 'function' ? bot._syncWindow(bot.inventory).catch(() => {}) : null); await new Promise(r => setTimeout(r, 300)); srv = { held: bot.heldItem ? bot.heldItem.name : null, slot: bot.quickBarSlot, have: bot.inventory.items().filter(x => x.name === it.name).reduce((n, x) => n + x.count, 0), dy: +(bot.entity.position.y - f.y).toFixed(3), destNow: this.blk(f.x, f.y, f.z) ? this.blk(f.x, f.y, f.z).name : '?' } } catch {}
+            try { (typeof bot._syncWindow === 'function' ? bot._syncWindow(bot.inventory).catch(() => {}) : null); await this.ticks(6, run); srv = { held: bot.heldItem ? bot.heldItem.name : null, slot: bot.quickBarSlot, have: bot.inventory.items().filter(x => x.name === it.name).reduce((n, x) => n + x.count, 0), dy: +(bot.entity.position.y - f.y).toFixed(3), destNow: this.blk(f.x, f.y, f.z) ? this.blk(f.x, f.y, f.z).name : '?' } } catch {}
             refusals++
             this.log('pillar FAIL ' + JSON.stringify({ ...at, jump }) + ' -> ' + e.message.slice(0, 90) + ' | server ' + JSON.stringify(srv)); break }
         }

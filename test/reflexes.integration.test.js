@@ -134,5 +134,5 @@ test('markPlacing: takes hands as the placer, blocks only weapon swaps, safehand
   assert.ok(hand.claim('hands', 1000)); assert.strictEqual(reflexes.holder('hands'), 'safehand')
   const bare = mockBot({ pos: [0, 64, 0] }); markPlacing(bare, 1000); assert.ok(bare._placingUntil > Date.now())    // no registry: only the flag
   const src = fs.readFileSync(path.join(__dirname, '..', 'brain', 'combat', 'reflex.js'), 'utf8')
-  assert.match(src, /h !== 'placer' \|\| \/_sword\$\|_axe\$\//)
+  assert.match(src, /h !== 'placer' \|\| \(\/_sword\$\|_axe\$\//)
 })

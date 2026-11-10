@@ -742,7 +742,7 @@ test('module: loads next to the integrator, replaces its farm/sleep routines, sh
   const st = brain.status()
   assert.ok(st.modules.routines && st.modules.routines.farm && st.modules.routines.sleep)
   assert.strictEqual(st.modules.routines.farm.enabled, true)
-  assert.deepStrictEqual(brain.scheduler.status().routines.map(x => x.name).sort(), ['farm', 'furnace', 'sleep'])
+  assert.deepStrictEqual(brain.scheduler.status().routines.map(x => x.name).sort(), ['bag-room', 'farm', 'furnace', 'sleep'])
   assert.ok(brain.api.commands.list().some(c => c.name === 'farm-routine-on'))
   assert.ok(!st.logTail.some(l => /BRAIN_MODULE_ERROR/.test(l)))
   assert.ok(fs.existsSync(path.join(r.dir, 'state', 'routines-state.json')))

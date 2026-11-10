@@ -111,7 +111,8 @@ test('retry and park results', async () => {
   s.submit({ name: 'flaky', priority: 20, async run() { n++; return n < 2 ? { status: 'retry', afterMs: 30 } : { status: 'park', reason: 'needs go' } } })
   await wait(150)
   assert.strictEqual(n, 2)
-  assert.strictEqual(s.status().parked[0].parkReason, 'needs go')
+  // a task that parks itself is retried with a growing delay (paused in the queue); only Walter's own stop parks for good
+  assert.strictEqual(s.status().queue.find(t => t.name === 'flaky').parkReason, 'needs go')
 })
 
 test('failed task is reported and does not block the queue', async () => {

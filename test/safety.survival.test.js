@@ -74,9 +74,9 @@ test('runtime applies earlier lessons at start: stricter archers, no creeper str
 })
 
 // ---------------- loadout ----------------
-test('check(): cave needs torches, cobble, food, sword, pickaxe, 2 armor pieces; lessons raise the bar; trip is lighter', () => {
+test('check(): cave needs torches, cobble, food, sword, pickaxe (armor is not required, Walter 2026-11-10); lessons raise the bar; trip is lighter', () => {
   const none = check({ sword: 0, pickaxe: 0, torches: 0, filler: 0, food: 0, armor: 0 }, 'cave')
-  assert.deepStrictEqual(none.missing.map(m => m.what).sort(), ['armor', 'filler', 'food', 'pickaxe', 'sword', 'torches'])
+  assert.deepStrictEqual(none.missing.map(m => m.what).sort(), ['filler', 'food', 'pickaxe', 'sword', 'torches'])
   assert.strictEqual(none.missing.find(m => m.what === 'torches').fix, 'craft 16 torch')
   const full = { sword: 1, pickaxe: 1, torches: 16, filler: 64, food: 12, armor: 2 }
   assert.ok(check(full, 'cave').ok)

@@ -252,7 +252,8 @@ module.exports = function install({
     environment(t)
     const s = loadout.summary(), why = []
     if (!env.outdoors) {          // underground (covered)
-      if (s.armor < 2) why.push('armor'); if (s.torches === 0) why.push('torches'); if (s.filler < 12) why.push('filler'); if (s.food < 4) why.push('food')
+      // armor is not a requirement (Walter 2026-11-10: no armor; loadout.js already asks for none), so it never makes the bot flee early
+      if (s.torches === 0) why.push('torches'); if (s.filler < 12) why.push('filler'); if (s.food < 4) why.push('food')
     }
     prep = { unprepared: why.length > 0, why }
     return prep
@@ -563,7 +564,8 @@ module.exports = function install({
     // survival world: never stay "entombed" in the open. If any side cell at feet/head is passable we are not walled in, so release and go back to work.
     try {
       const me = bot.entity.position.floored()
-      const open = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => [0, 1].some(dy => { const b = bot.blockAt(me.offset(dx, dy, dz)); return b && b.boundingBox === 'empty' }))
+      // A side is open when something can walk in: the feet cell is passable AND has a floor. A void beside a bridge (nothing to stand on) needs no wall (seal() leaves it alone), and a passable head cell over a solid feet cell lets no mob in.
+      const open = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => { const f = bot.blockAt(me.offset(dx, 0, dz)), fl = bot.blockAt(me.offset(dx, -1, dz)); return f && f.boundingBox === 'empty' && !(fl && fl.boundingBox === 'empty') })
       if (open) { entombed = false; entombFailedAt = t; return }
     } catch {}
     await maybeEat(true)
