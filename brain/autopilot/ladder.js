@@ -40,6 +40,29 @@ module.exports = function ladder(bot, S, goals, v, log) {
     return await S.placeAgainst(w, v(-wall[0], 0, -wall[1]), 'ladder').catch(() => false)
   }
 
+  // the shaft column (entry down to the bottom): no torches or other blocks go in it
+  L.isShaftCell = (p) => L.shafts().some(sh => sh.bottom && p.x === sh.entry[0] && p.z === sh.entry[2] && p.y < sh.entry[1] && p.y >= sh.bottom[1])
+  // Repair the ladder within reach: every shaft cell from the bottom up to the feet + 3 gets its ladder back. A torch (or anything see-through)
+  // in the cell goes first, a missing wall block is filled with the bot's own stone. OzoGo444's shaft had no ladder at y50-51 (a torch in the
+  // bottom cell, 'ladder would not hang at y50'), so neither bot could climb out from the bottom (04:29, 04:34) and one dug up into lava.
+  L.repair = async (sh) => {
+    if (!sh || !sh.bottom) return 0
+    const wall = sh.wall || [1, 0], me = bot.entity.position, top = Math.min(sh.entry[1] - 1, Math.floor(me.y) + 3)
+    let n = 0
+    for (let y = sh.bottom[1]; y <= top; y++) {
+      const c = v(sh.entry[0], y, sh.entry[2]), cur = S.block(c)
+      if (!cur || cur.name === 'ladder') continue
+      if (S.dist(c.offset(0.5, 0.5, 0.5)) > 4.5) continue
+      if (cur.boundingBox === 'empty' && !/^(air|cave_air)$/.test(cur.name) && !S.isLiquid(cur)) { try { await bot.dig(cur, true) } catch {} await sleep(250) }
+      const wb = c.offset(wall[0], 0, wall[1])
+      if (!solid(wb)) { const f = S.items().find(i => /^(cobblestone|cobbled_deepslate|dirt|stone)$/.test(i.name)); const g = S.block(wb.offset(0, -1, 0)); if (f && g && g.boundingBox === 'block') await S.placeAgainst(g, v(0, 1, 0), f.name).catch(() => false) }
+      if (ladders() < 1) await L.ensureLadders(4)
+      if (await hang(c, wall)) n++
+    }
+    if (n) log('LADDER', 'repaired ' + n + ' ladder(s) in ' + sh.id)
+    return n
+  }
+
   // dig a new laddered shaft down from entry (the bot's feet cell at the top) to targetY. Returns the shaft record (also saved).
   L.dig = async (entry, targetY, { wall = null, by = bot.username, into = null } = {}) => {
     // the ladder wall: a solid side all the way is checked as we go; start with the first solid side of the entry's column
@@ -88,6 +111,7 @@ module.exports = function ladder(bot, S, goals, v, log) {
   L.up = async (sh) => {
     const e = v(...sh.entry), b = v(...sh.bottom)
     if (S.dist(b) > 3 && Math.abs(bot.entity.position.y - b.y) <= 3) await S.goto(new goals.GoalNear(b.x, b.y, b.z, 1), { dig: false, ms: 90000, escalate: false })
+    await L.repair(sh).catch(() => 0)
     const r = await S.goto(new goals.GoalBlock(e.x, e.y, e.z), { dig: false, ms: 90000, escalate: false })
     if (r.ok || S.dist(e.offset(0.5, 0, 0.5)) < 2) return true
     // by hand: on the ladder, look at the wall and hold jump

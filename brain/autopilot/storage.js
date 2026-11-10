@@ -106,6 +106,7 @@ module.exports = function storage(G, S, M, api, log) {
       // shaft bottom), then step off into the corridor
       const w = sh.wall || [1, 0]
       await S.goto(new goals.GoalBlock(cell.x, Math.floor(bot.entity.position.y), cell.z), { dig: false, ms: 8000, escalate: false }).catch(() => {})
+      await LD().repair(sh).catch(() => 0)
       try { await bot.lookAt(v(cell.x + 0.5 + w[0], bot.entity.position.y + 1.6, cell.z + 0.5 + w[1]), true); bot.setControlState('jump', true); bot.setControlState('forward', true); const t0 = Date.now(); while (Date.now() - t0 < 30000 && bot.entity.position.y < P.y + 0.1) await new Promise(r => setTimeout(r, 100)) } catch {} finally { bot.clearControlStates() }
     } else if (bot.entity.position.y < P.y - 1 && S.dist(cell) < 40) await S.goto(new goals.GoalBlock(cell.x, cell.y, cell.z), { dig: false, ms: 60000, escalate: false })
     else {
