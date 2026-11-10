@@ -784,7 +784,7 @@ module.exports = function makeSkills({ bot, api, log }) {
     }
     return out
   }
-  S.isNight = () => { const t = bot.time && bot.time.timeOfDay; return t != null && t >= 12700 && t <= 23300 }
+  S.isNight = () => require('./daylight').darkOutside(bot)       // the night clock or a thunderstorm (daylight.js)
   S.underground = () => { const p = bot.entity.position; const top = bot.world.getColumn ? null : null; return p.y < 55 || !S.skyVisible() }
   S.skyVisible = () => {
     const p = flo(bot.entity.position)
