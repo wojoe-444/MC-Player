@@ -348,6 +348,38 @@ function fileContent(bot, group, name) {
   return { name, group, size: st.size, mtime: st.mtimeMs, truncated, text };
 }
 
+// Items acquired (brain/acquired writes brain/state/acquired.jsonl: one { t, item, n } line per dropped item the bot picked up; chest withdrawals are not in it).
+// /api/acquired?window=1h|8h|24h|7d|all -> { window, since, now, trackingSince, bots: { ozo: { item: n }, smeo: { item: n } } }
+const ACQ_WINDOWS = { '1h': 3600e3, '8h': 8 * 3600e3, '24h': 24 * 3600e3, '7d': 7 * 24 * 3600e3, all: Infinity };
+const acqCache = new Map();
+function acquiredEntries(bot) {
+  const p = path.join(stateDirOf(BOTS[bot]), 'acquired.jsonl');
+  let st; try { st = fs.statSync(p); } catch { return []; }
+  const c = acqCache.get(p);
+  if (c && c.m === st.mtimeMs && c.s === st.size) return c.v;
+  const v = [];
+  for (const line of (readText(p) || '').split('\n')) {
+    if (!line) continue;
+    try { const j = JSON.parse(line); if (j && typeof j.item === 'string' && j.n > 0 && Number.isFinite(j.t)) v.push({ t: j.t, item: j.item, n: j.n }); } catch {}
+  }
+  acqCache.set(p, { m: st.mtimeMs, s: st.size, v });
+  return v;
+}
+function acquired(windowKey) {
+  const key = Object.prototype.hasOwnProperty.call(ACQ_WINDOWS, windowKey) ? windowKey : '8h';
+  const now = Date.now(), since = ACQ_WINDOWS[key] === Infinity ? 0 : now - ACQ_WINDOWS[key];
+  const bots = {}; let trackingSince = null;
+  for (const id of Object.keys(BOTS)) {
+    const sum = {};
+    for (const e of acquiredEntries(id)) {
+      if (trackingSince === null || e.t < trackingSince) trackingSince = e.t;
+      if (e.t >= since) sum[e.item] = (sum[e.item] || 0) + e.n;
+    }
+    bots[id] = sum;
+  }
+  return { window: key, since, now, trackingSince, bots };
+}
+
 // Item icons: the prismarine-viewer texture pack for 1.21.6 already on disk (read-only), items first, then block faces.
 const TEX = path.join(CODE, "node_modules", "prismarine-viewer", "public", "textures", "1.21.6");
 const texCache = new Map();
@@ -400,6 +432,7 @@ http.createServer((req, res) => {
   // spectator reviewer (reviewer/): latest findings per bot, and the in-bot telemetry summary they are based on
   if (p === '/api/findings') return send(res, 200, JSON.stringify(Object.fromEntries(Object.values(BOTS).map(b => [b.id, readJson(path.join(stateDirOf(b), 'review', 'findings.json'))]))), 'application/json');
   if ((sm = p.match(/^\/api\/telemetry\/(ozo|smeo)$/))) return send(res, 200, JSON.stringify(readJson(path.join(stateDirOf(BOTS[sm[1]]), 'telemetry', 'summary.json'))), 'application/json');
+  if (p === '/api/acquired') return send(res, 200, JSON.stringify(acquired(u.searchParams.get('window'))), 'application/json');
   if (p === '/api/snapshot') return send(res, 200, JSON.stringify(snapshot()), 'application/json');
   let m;
   if ((m = p.match(/^\/img\/(ozo|smeo)\/(top|pov|slice)$/))) {

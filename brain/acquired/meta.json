@@ -1,0 +1,9 @@
+{
+  "name": "acquired",
+  "version": 1,
+  "kind": "observer",
+  "summary": "Logs every dropped item the bot picks up (mining, mobs, farms) to brain/state/acquired.jsonl for the dashboard's items-acquired table; chest withdrawals, crafts and items the bot dropped itself are not counted.",
+  "requires": [],
+  "provides": [],
+  "claims": []
+}
