@@ -105,14 +105,7 @@ module.exports = function storage(G, S, M, api, log) {
     // off: a walk-only path failed from 40 blocks out, Smeo444 04:28)
     if (!LD().inColumn(sh)) {
       if (me.y < sh.entry[1] - 2 && S.dist(v(cell.x, me.y, cell.z)) < 12) await LD().enterColumn(sh)
-      else {
-        // from the surface: to a floored cell beside the shaft top, then step into the column (the entry cell has no floor of its own)
-        const ex = LD().exits(sh)[0]
-        if (ex) await S.goto(new goals.GoalBlock(ex.x, ex.y, ex.z), { dig: false, ms: 90000, escalate: S.dist(v(...sh.entry)) > 6 }).catch(() => {})
-        else await S.goto(new goals.GoalNear(sh.entry[0], sh.entry[1], sh.entry[2], 1), { dig: false, ms: 90000, escalate: S.dist(v(...sh.entry)) > 6 }).catch(() => {})
-        const c = v(sh.entry[0], sh.entry[1], sh.entry[2]), t0 = Date.now()
-        try { while (Date.now() - t0 < 2500 && !LD().inColumn(sh)) { await bot.lookAt(c.offset(0.5, 0.5, 0.5), true); bot.setControlState('forward', true); await new Promise(r => setTimeout(r, 50)) } } catch {} finally { bot.setControlState('forward', false) }
-      }
+      else await LD().enterTop(sh)
     }
     // then the ladder by hand to the room's level, and off into the corridor
     await LD().rideTo(sh, P.y)

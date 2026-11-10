@@ -96,6 +96,24 @@ module.exports = function plan(G, S, M, api, log) {
     const innerGoto = S.goto
     let riding = false
     S.goto = async (goal, o = {}) => {
+      // Down by the shaft too: a go-to from the surface to a goal deep below made nav escalate and tunnel down and across into lava
+      // (OzoGo444 died 06:05 at -6018,46,-2346 heading for the shaft foot). When the goal is more than 6 blocks down and a recorded shaft
+      // within 48 blocks of the goal reaches its level, the bot goes in at the top and rides the ladder down to that level first.
+      try {
+        const gy0 = goal ? (goal.y != null ? goal.y : (goal.pos && goal.pos.y)) : null, me0 = bot.entity.position, gx = goal && (goal.x != null ? goal.x : goal.pos && goal.pos.x), gz = goal && (goal.z != null ? goal.z : goal.pos && goal.pos.z)
+        if (!riding && gy0 != null && gx != null && me0.y - gy0 > 6) {
+          const sh = LD.nearestShaft({ x: gx, z: gz }, 48)
+          const failedAt = (bot._shaftFail || {})[sh ? sh.id : ''] || 0
+          if (sh && sh.bottom && sh.bottom[1] <= gy0 + 1 && sh.entry[1] - 3 <= me0.y && Date.now() - failedAt > 180000) {
+            riding = true
+            try {
+              const ok = (await LD.enterTop(sh)) && (await LD.rideTo(sh, Math.max(sh.bottom[1], Math.floor(gy0))))
+              log('PLAN', 'down the laddered shaft before a go-to ' + Math.round(me0.y - gy0) + ' blocks down: ' + ok)
+              if (!ok) { bot._shaftFail = bot._shaftFail || {}; bot._shaftFail[sh.id] = Date.now() }
+            } finally { riding = false }
+          }
+        }
+      } catch (e) { log('PLAN', 'shaft-first go-to (down): ' + e.message) }
       try {
         const gy = goal ? (goal.y != null ? goal.y : (goal.pos && goal.pos.y)) : null, me = bot.entity.position
         if (!riding && gy != null && gy - me.y > 6 && !S.skyVisible()) {
