@@ -277,8 +277,11 @@ module.exports = function plan(G, S, M, api, log) {
       const torchNear = (p, r) => bot.findBlocks({ matching: torchIds, point: p, maxDistance: r + 1, count: 6 }).some(t => Math.abs(t.x - p.x) <= r && Math.abs(t.z - p.z) <= r && Math.abs(t.y - p.y) <= 4)
       // 1. grid points: x and z on the home lattice; a point on water, a tree, the farm or the house shifts to the nearest usable cell within 2
       const grid = []
-      for (let dx = -R; dx <= R; dx += GRID) for (let dz = -R; dz <= R; dz += GRID) {
-        if (Math.hypot(dx, dz) > R || (Math.abs(dx) < 4 && Math.abs(dz) < 4)) continue
+      // the torch grid reaches 48 by day (Walter 2026-11-10: 32 looked short; mobs spawn 24-128 out). Only the grid goes that far, a
+      // surface lookup per 10-block point, so the pass stays cheap; the light computation and fill-in stay within R
+      const RG = st._lightCenter ? R : (daylightLeft() > 2500 ? 48 : R)
+      for (let dx = -RG; dx <= RG; dx += GRID) for (let dz = -RG; dz <= RG; dz += GRID) {
+        if (Math.hypot(dx, dz) > RG || (Math.abs(dx) < 4 && Math.abs(dz) < 4)) continue
         let spot = null
         for (const [ox, oz] of [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1], [2, 0], [0, 2], [-2, 0], [0, -2]]) {
           const p = surface(h.x + dx + ox, h.z + dz + oz); if (p && !avoid(p)) { spot = p; break } }
