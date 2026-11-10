@@ -117,6 +117,16 @@ module.exports = function ladder(bot, S, goals, v, log) {
     }
     return L.inColumn(sh)
   }
+  // Into the column from the surface: to a floored cell beside the shaft top, then step in (the entry cell has no floor of its own)
+  L.enterTop = async (sh) => {
+    if (L.inColumn(sh)) return true
+    const ex = L.exits(sh)[0], far = S.dist(v(...sh.entry)) > 6
+    if (ex) await S.goto(new goals.GoalBlock(ex.x, ex.y, ex.z), { dig: false, ms: 90000, escalate: far }).catch(() => {})
+    else await S.goto(new goals.GoalNear(sh.entry[0], sh.entry[1], sh.entry[2], 1), { dig: false, ms: 90000, escalate: far }).catch(() => {})
+    const c = v(...sh.entry), t0 = Date.now()
+    try { while (Date.now() - t0 < 2500 && !L.inColumn(sh)) { await bot.lookAt(c.offset(0.5, 0.5, 0.5), true); bot.setControlState('forward', true); await sleep(50) } } catch {} finally { bot.setControlState('forward', false) }
+    return L.inColumn(sh)
+  }
   L.rideTo = async (sh, y, ms = 40000) => {
     if (!L.inColumn(sh)) return false
     const w = sh.wall || [1, 0], t0 = Date.now(), at = () => bot.entity.position.y
