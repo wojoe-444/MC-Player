@@ -345,7 +345,10 @@ module.exports = function plan(G, S, M, api, log) {
       const surface = (x, z) => { for (let y = h.y + 20; y >= h.y - 16; y--) { const g = S.block(v(x, y - 1, z)); if (!g) return null
           if (S.isLiquid(g)) return null; if (/leaves/.test(g.name)) continue
           if (outdoorCell(v(x, y, z))) return v(x, y, z) } return null }
-      const avoid = (p) => nearList(p, st.grove, 1) || nearList(p, st.farm, 1) || inBox(p, homeBox())
+      // an animal pen (brain/husbandry) and 2 blocks around it: fenced, lit by its own post torches, and a go-to onto its grass has no path
+      // (Smeo444 paced 77 noPath a minute around his new pen at 08:10, the reviewer's HIGH finding)
+      const inPen = (p) => { try { const H = bot._husbandry; if (!H || !H.state) return false; const { boxOf } = require('../husbandry/blueprint'); return H.state.pens.some(pn => { const b = boxOf(pn); return p.x >= b.x0 - 2 && p.x <= b.x1 + 2 && p.z >= b.z0 - 2 && p.z <= b.z1 + 2 }) } catch { return false } }
+      const avoid = (p) => nearList(p, st.grove, 1) || nearList(p, st.farm, 1) || inBox(p, homeBox()) || inPen(p)
       const torchNear = (p, r) => bot.findBlocks({ matching: torchIds, point: p, maxDistance: r + 1, count: 6 }).some(t => Math.abs(t.x - p.x) <= r && Math.abs(t.z - p.z) <= r && Math.abs(t.y - p.y) <= 4)
       // 1. grid points: x and z on the home lattice; a point on water, a tree, the farm or the house shifts to the nearest usable cell within 2
       const grid = []
@@ -399,7 +402,7 @@ module.exports = function plan(G, S, M, api, log) {
       if (R > 24) {      // safe before the grid is complete too: a torch is only taken if the light without it still leaves no spawnable cell
         const onGrid = (t) => grid.some(g => Math.abs(g.x - t.x) <= 2 && Math.abs(g.z - t.z) <= 2 && Math.abs(g.y - t.y) <= 4)
         const off = bot.findBlocks({ matching: torchIds, point: h, maxDistance: R, count: 3000 }).filter(t => {
-          if (onGrid(t) || inBox(t, homeBox()) || nearList(t, st.farm, 2) || nearList(t, st.grove, 2)) return false
+          if (onGrid(t) || inBox(t, homeBox()) || nearList(t, st.farm, 2) || nearList(t, st.grove, 2) || inPen(t)) return false
           // on the surface: open sky above the torch (the column scan skips the torch cell itself, so it cannot be used here)
           for (let y = t.y + 1; y <= t.y + 24; y++) { const a = S.block(v(t.x, y, t.z)); if (a && a.boundingBox === 'block' && !/leaves/.test(a.name)) return false }
           return true })
@@ -485,7 +488,7 @@ module.exports = function plan(G, S, M, api, log) {
         const r = await S.goto(new goals.GoalLookAtBlock(pos, bot.world, { reach: 3.5 }), { dig: false, ms: 60000 }); if (!r.ok) continue
         let c; S.closeWindows(); try { c = await bot.openContainer(bot.blockAt(pos)) } catch { continue }
         try { st.chestFree = st.chestFree || {}; st.chestFree[pos.toString()] = (c.inventoryStart || 27) - c.containerItems().length } catch {}
-        try { for (const { it, n } of plan()) { try { await c.deposit(it.type, null, n); moved += n } catch { break } } } finally { try { st.chestFree[pos.toString()] = (c.inventoryStart || 27) - c.containerItems().length } catch {} try { c.close() } catch {} }
+        try { for (const { it, n } of plan()) { try { await c.deposit(it.type, null, n); moved += n } catch { break } } } finally { try { st.chestFree[pos.toString()] = (c.inventoryStart || 27) - c.containerItems().length } catch {} try { if (room && G.storageObserve) G.storageObserve(pos, c.containerItems()) } catch {} try { c.close() } catch {} }
       }
       // safety valve: chests full and no wood for another chest, bag still jammed with stone rubble -> drop the rubble (it despawns) so tools, logs and food fit again
       if (S.freeSlots() <= 4) { let dropped = 0; for (const it of S.items()) { if (!/^(cobblestone|cobbled_deepslate|andesite|diorite|granite|tuff|gravel|dirt|deepslate|netherrack|leaf_litter)$/.test(it.name)) continue; const keepN = /cobble/.test(it.name) ? 64 : 0; const have = S.count(it.name); if (have - it.count < keepN) continue; try { await bot.toss(it.type, null, it.count); dropped += it.count } catch {} if (S.freeSlots() > 10) break } if (dropped) note('stash: chests full, dropped ' + dropped + ' rubble to free the bag') }
@@ -1592,6 +1595,13 @@ module.exports = function plan(G, S, M, api, log) {
   try { delete require.cache[require.resolve('./mobfarm')]; insertAfter('tool-kit', [require('./mobfarm')(G, S, M, api, log)]) } catch (e) { log('PLAN', 'mobfarm not loaded: ' + e.message) }
   // long goals from brain/state/goals.json, expanded through the recipe tree (pursue.js)
   try { delete require.cache[require.resolve('./discard')]; const dc = require('./discard')(G, S, M, api, log); const ii = G.steps.findIndex(x => x.id === 'stash'); G.steps.splice(ii >= 0 ? ii : G.steps.length, 0, dc) } catch (e) { log('PLAN', 'discard not loaded: ' + e.message) }
+  // the reset-gear chest and the lean kit (resetgear.js): restock from it after a death, stock it from the bag's surplus
+  try {
+    delete require.cache[require.resolve('./resetgear')]; delete require.cache[require.resolve('../storage-model')]
+    const rg = require('./resetgear')(G, S, M, api, log)
+    const ri = G.steps.findIndex(x => x.id === 'restock'); G.steps.splice(ri >= 0 ? ri + 1 : G.steps.length, 0, rg.restockStep)
+    const si = G.steps.findIndex(x => x.id === 'stash'); G.steps.splice(si >= 0 ? si : G.steps.length, 0, rg.resetChestStep)
+  } catch (e) { log('PLAN', 'resetgear not loaded: ' + e.message) }
   try { delete require.cache[require.resolve('./storage')]; const sr = require('./storage')(G, S, M, api, log); const ii = G.steps.findIndex(x => x.id === 'iron'); G.steps.splice(ii >= 0 ? ii + 1 : G.steps.length, 0, sr) } catch (e) { log('PLAN', 'storage not loaded: ' + e.message) }
   // the underground mob farm (ROADMAP Phase 2 item 8): fallback routine only; the think-brain starts it with the `mob_farm` skill
   try { delete require.cache[require.resolve('./mobfarmbuild')]; delete require.cache[require.resolve('../mobfarm/geometry')]; const mb = require('./mobfarmbuild')(G, S, M, api, log); const si = G.steps.findIndex(x => x.id === 'storage-room'); G.steps.splice(si >= 0 ? si + 1 : G.steps.length, 0, mb) } catch (e) { log('PLAN', 'mobfarmbuild not loaded: ' + e.message) }

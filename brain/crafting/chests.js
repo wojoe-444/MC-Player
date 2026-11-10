@@ -24,9 +24,11 @@ function create({ dir, overlayFile, indexFile = 'chest-index.json', furnaceConfi
     }
     return null
   }
+  // chests that belong to nobody's recipe: the storage room's reset-gear chest and junk chest (brain/storage-model.js). `rules.reserved()` gives a Set of "x,y,z".
+  const isReserved = (pos) => { try { return !!rules.reserved && rules.reserved().has(pos.x + ',' + pos.y + ',' + pos.z) } catch { return false } }
   // may `item` be taken out of the chest at pos?
   function allowed(pos, item) {
-    if (never.has(item)) return false
+    if (never.has(item) || isReserved(pos)) return false
     const role = roleOf(pos)
     if (!role) return true
     const r = roleRules[role]

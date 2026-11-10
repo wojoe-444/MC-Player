@@ -9,8 +9,10 @@ const SEED = { anchor: { x: 0, y: 64, z: 0 }, boxes: [], allow: [], keep: [], pl
 
 const num = (x) => typeof x === 'number' && Number.isFinite(x)
 
-function createMemory({ file, dir, log = () => {} }) {
+function createMemory({ file, dir, log = () => {}, reserved = null }) {
   let M = null
+  // the reset-gear and junk chests of the storage room (brain/storage-model.js): never offered as a source to fetch from
+  const reservedSet = reserved || require('../storage-model').makeReserved(process.env.BOT_REGISTRY || path.join(__dirname, '..', '..', '..', 'bot-shared', 'registry.json'))
   const load = () => { try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch { return null } }
   M = load() || {}
   const merge = (k, def) => { if (M[k] == null) M[k] = JSON.parse(JSON.stringify(def)); }
@@ -69,8 +71,9 @@ function createMemory({ file, dir, log = () => {} }) {
   // chests grouped so that the two halves of a double chest count once
   function chestList(from) {
     const out = [], seen = new Set()
+    const res = reservedSet()
     for (const [k, c] of Object.entries(M.chests)) {
-      if (seen.has(k)) continue
+      if (seen.has(k) || res.has(k)) continue
       const p = parse(k); seen.add(k)
       const sig = JSON.stringify(c.items || {})
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nk = `${p[0] + dx},${p[1]},${p[2] + dz}`; const n = M.chests[nk]; if (n && !seen.has(nk) && JSON.stringify(n.items || {}) === sig) seen.add(nk) }

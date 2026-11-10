@@ -37,6 +37,18 @@ function thinkSummary(lines) {
   return { steps: steps.length, byAction, repeatedFailures: repeated, otherEvents: other, lastThoughts: steps.slice(-3).map(s => String(s.thought || '').slice(0, 160)) }
 }
 
+// The planner log only says something about NOW if the planner is on and the log is being written. On 2026-11-10 the reviewer reported "380 model errors,
+// steps 0" for 16 runs in a row from a log last written on 2026-11-04 by a planner that is switched off (think-off file). Counts from a dead log are
+// replaced by a plain statement, so the model cannot mistake history for a live fault.
+const PLANNER_LIVE_MS = 30 * 60000
+function plannerEvidence({ summary, logMtime, switchedOff, now }) {
+  const ageMin = logMtime ? Math.round((now - logMtime) / 60000) : null
+  if (switchedOff || ageMin === null || now - logMtime > PLANNER_LIVE_MS) {
+    return { plannerRunning: false, switchedOff: !!switchedOff, logLastWritten: logMtime ? new Date(logMtime).toISOString() : null, note: switchedOff ? 'The planner is switched off on this bot (think-off file), so no planner activity is expected. Not a fault, and the old log says nothing about now.' : (ageMin === null ? 'There is no planner log on this bot.' : 'The planner log has not been written for ' + ageMin + ' min, so its old counts say nothing about now.') }
+  }
+  return { plannerRunning: true, logAgeMin: ageMin, ...summary }
+}
+
 function collectBot(bot, { now = Date.now(), staleMin = 5, since = 0, maxFlags = 6 } = {}) {
   const sd = stateDir(bot)
   const exists = fs.existsSync(bot.dir)
@@ -49,7 +61,8 @@ function collectBot(bot, { now = Date.now(), staleMin = 5, since = 0, maxFlags =
 
   const flagsAll = readJsonl(tailText(path.join(sd, 'telemetry', 'flags.jsonl'), 200 * 1024))
   const newFlags = flagsAll.filter(f => Date.parse(f.at) > since).slice(-maxFlags).map(f => ({ ...f, excerpt: (f.excerpt || []).slice(0, 45) }))
-  const think = thinkSummary(readJsonl(tailText(path.join(sd, 'think-log.jsonl'), 60 * 1024)))
+  const thinkFile = path.join(sd, 'think-log.jsonl')
+  const think = plannerEvidence({ summary: thinkSummary(readJsonl(tailText(thinkFile, 60 * 1024))), logMtime: mtimeMs(thinkFile), switchedOff: fs.existsSync(path.join(sd, 'think-off')), now })
   const ev = {
     exists, telemetry, active,
     signature: [summary && summary.updatedAt, flagsAll.length ? flagsAll[flagsAll.length - 1].id : '', mtimeMs(path.join(bot.dir, 'idle.log'))].join('|'),
@@ -75,4 +88,4 @@ function forModel(ev) {
   return o
 }
 
-module.exports = { collectBot, forModel, thinkSummary, tailText, readJsonl, stateDir }
+module.exports = { collectBot, forModel, thinkSummary, plannerEvidence, tailText, readJsonl, stateDir }

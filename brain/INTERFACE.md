@@ -26,7 +26,7 @@ Words in this repo mean one thing each. The same list, as data, is in `brain/tax
 | `observer` | watches and records; never moves the bot or touches the world | `lag`, `hurt`, `survival`, `senses`, `dashboard` |
 | `interface` | turns Walter's words into commands (exact commands, fuzzy match, decision router) | `chat`, `router` |
 | `planner` | chooses what to do next | `autopilot` (think-first), `pilot` (fast-tier director, manual driver) |
-| `job` | a bounded piece of work with a start and an end, run as a scheduler task or routine | `mining`, `excavation`, `build`, `treefarm`, `routines`, `lighting`, `villagers`, `clearbox` |
+| `job` | a bounded piece of work with a start and an end, run as a scheduler task or routine | `mining`, `excavation`, `build`, `treefarm`, `routines`, `lighting`, `villagers`, `husbandry`, `clearbox` |
 | `service` | a capability other modules call through `api.<name>` | `nav`, `crafting`, `plugins` |
 | `policy` | decides what is allowed or on | `mode` (the stance switch) |
 

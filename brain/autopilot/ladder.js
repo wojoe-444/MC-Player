@@ -28,6 +28,14 @@ module.exports = function ladder(bot, S, goals, v, log) {
   const solid = (p) => { const b = S.block(p); return !!b && b.boundingBox === 'block' && !S.isLiquid(b) && !/leaves|glass|ice|slab|stairs|fence|wall$|_log$|_wood$/.test(b.name) }
   const liquidNear = (p) => { for (const [dx, dy, dz] of [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, -1, 0], [0, 1, 0]]) { const b = S.block(p.offset(dx, dy, dz)); if (b && (S.isLiquid(b) || S.isWaterish(b) || /lava/.test(b.name))) return true } return false }
   const ladders = () => S.count('ladder')
+  // fill the missing wall cell `wb` from a solid neighbour: the cell below it (placing on its top face), else the cell above it (placing on its bottom face). The old code
+  // took whichever block object existed (an air block is an object too) and always used the top face (docs/BUG-HUNT-2026-11-10.md, finding 16).
+  const wallFill = async (wb, name) => {
+    const below = S.block(wb.offset(0, -1, 0)), above = S.block(wb.offset(0, 1, 0))
+    const ref = below && below.boundingBox === 'block' ? { b: below, face: v(0, 1, 0) } : above && above.boundingBox === 'block' ? { b: above, face: v(0, -1, 0) } : null
+    if (!ref) return false
+    return await S.placeAgainst(ref.b, ref.face, name).catch(() => false)
+  }
   const passable = (c) => { const b = S.block(c); return !!b && b.boundingBox === 'empty' && !S.isLiquid(b) }
   // 7 sticks -> 3 ladders; sticks from planks from logs (S.craft fills in the intermediates)
   L.ensureLadders = async (n) => {
@@ -162,6 +170,24 @@ module.exports = function ladder(bot, S, goals, v, log) {
     return Math.abs(at() - y) < 0.8
   }
 
+  // Blocks that ended up IN the shaft column (a pillar or seal placed there: dirt at y40-41 of OzoGo444's shaft, 08:47) are dug out again from above,
+  // topmost first, and the rungs hung back. Returns how many were removed.
+  L.clearPlug = async (sh) => {
+    if (!sh || !sh.bottom) return 0
+    let n = 0
+    for (let pass = 0; pass < 8; pass++) {
+      let plug = null
+      for (let y = sh.entry[1] - 1; y >= sh.bottom[1]; y--) { const b = S.block(v(sh.entry[0], y, sh.entry[2])); if (b && b.boundingBox === 'block' && b.name !== 'ladder' && !/chest|barrel|furnace|table|bed/.test(b.name)) { plug = y; break } }
+      if (plug == null) return n
+      if (!L.inColumn(sh)) { if (!(await L.enterTop(sh)) && !(await L.enterColumn(sh))) return n }
+      if (!(await L.rideTo(sh, plug + 1, 40000))) return n
+      const b = S.block(v(sh.entry[0], plug, sh.entry[2]))
+      if (b && b.boundingBox === 'block' && await S.digBlock(b, { force: true }).catch(() => false)) { n++; log('LADDER', 'cleared a ' + b.name + ' plug at y' + plug + ' in ' + sh.id) } else return n
+      await L.repair(sh).catch(() => 0)
+    }
+    return n
+  }
+
   // dig a new laddered shaft down from entry (the bot's feet cell at the top) to targetY. Returns the shaft record (also saved).
   L.dig = async (entry, targetY, { wall = null, by = bot.username, into = null } = {}) => {
     // the ladder wall: a solid side all the way is checked as we go; start with the first solid side of the entry's column
@@ -182,7 +208,7 @@ module.exports = function ladder(bot, S, goals, v, log) {
       // a cave right under the next step: the shaft ends here (falling into it is how bots died)
       const b2 = S.block(below2); if (!b2 || (b2.boundingBox === 'empty' && !solid(below2.offset(0, -1, 0)))) { why = 'open below'; break }
       // the ladder wall must be solid at the next level; if not, set a block there (its own cobblestone)
-      const wb = below.offset(wall[0], 0, wall[1]); if (!solid(wb)) { const f = S.items().find(i => /^(cobblestone|cobbled_deepslate|dirt|stone)$/.test(i.name)); if (!f || !(await S.placeAgainst(S.block(wb.offset(0, -1, 0)) || S.block(wb.offset(0, 1, 0)), v(0, 1, 0), f.name).catch(() => false))) { why = 'no ladder wall'; break } }
+      const wb = below.offset(wall[0], 0, wall[1]); if (!solid(wb)) { const f = S.items().find(i => /^(cobblestone|cobbled_deepslate|dirt|stone)$/.test(i.name)); if (!f || !(await wallFill(wb, f.name))) { why = 'no ladder wall'; break } }
       // dig the block under the feet, drop one block into it, then hang the ladder in that cell on the wall (the top cell is the
       // surface the bot stands on: no wall there, the ladders start one below)
       const bb = S.block(below)
@@ -213,9 +239,13 @@ module.exports = function ladder(bot, S, goals, v, log) {
   L.exits = (sh) => {
     const e = v(...sh.entry), w = sh.wall || [1, 0]
     // the wall side first: holding forward against the wall at the top walks the bot straight onto it
-    return [w, [-w[1], w[0]], [w[1], -w[0]], [-w[0], -w[1]]].map(([dx, dz]) => e.offset(dx, 0, dz)).filter(c => passable(c) && passable(c.offset(0, 1, 0)) && solid(c.offset(0, -1, 0)))
+    // at the entry's level or up to two above it: the ground beside the shaft can be higher than the entry cell (OzoGo444's shaft top at y65 has grass
+    // at y65 beside it, so the way out is the cell at y66, and "exits 0" looped the climb 3 times a second)
+    const out = []
+    for (let dy = 0; dy <= 2; dy++) for (const [dx, dz] of [w, [-w[1], w[0]], [w[1], -w[0]], [-w[0], -w[1]]]) { const c = e.offset(dx, dy, dz); if (passable(c) && passable(c.offset(0, 1, 0)) && solid(c.offset(0, -1, 0))) out.push(c) }
+    return out
   }
-  const outAt = (sh) => bot.entity.onGround && bot.entity.position.y >= sh.entry[1] - 0.01 && !L.inColumn(sh)
+  const outAt = (sh) => bot.entity.onGround && bot.entity.position.y >= sh.entry[1] - 0.01 && !L.inColumn(sh) && !/ladder/.test((S.block(bot.entity.position.floored()) || {}).name || '')
   L.up = async (sh) => {
     const e = v(...sh.entry), b = v(...sh.bottom)
     if (outAt(sh)) return true
@@ -224,7 +254,7 @@ module.exports = function ladder(bot, S, goals, v, log) {
     if (!L.inColumn(sh)) await L.enterColumn(sh)
     const exits = L.exits(sh)
     if (L.inColumn(sh)) {
-      await L.rideTo(sh, e.y + 0.4, 45000)
+      await L.rideTo(sh, Math.max(e.y, exits.length ? exits[0].y : e.y) + 0.4, 45000)
       // step off: face an exit and walk onto it, jumping (the last rung tops out a little under the floor level)
       for (const x of exits) {
         if (outAt(sh)) break

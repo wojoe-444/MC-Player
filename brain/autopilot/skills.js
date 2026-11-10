@@ -34,6 +34,10 @@ module.exports = function makeSkills({ bot, api, log }) {
   // ---------- abort plumbing ----------
   // time box: G.step sets S.stepDeadline; any skill that calls S.check() past it throws StepTimeout, so no single step can hold the bot for long
   S.check = () => { if (S.ctx) S.ctx.checkpoint(); if (S.stepDeadline && Date.now() > S.stepDeadline) { S.stepDeadline = 0; try { S.stopMoving() } catch {} const e = new Error('step time budget used up'); e.name = 'StepTimeout'; throw e } }
+  // S.ctx is the task context of the autopilot's run loop. A skill called from ANOTHER scheduler task (the husbandry pens crafting fences) used to check the autopilot's
+  // context, which that task had preempted: checkpoint() threw AbortError on the first S.check(), craft swallowed it and returned false, so the craft never ran.
+  // S.withCtx(ctx, fn) runs fn under the caller's own context (null = no task context: plain timers, no checkpoints) and puts the previous one back after.
+  S.withCtx = async (ctx, fn) => { const prev = S.ctx; S.ctx = ctx || null; try { return await fn() } finally { S.ctx = prev } }
   S.aborted = () => !!(S.ctx && S.ctx.aborted)
   S.wait = async (ms) => { if (S.ctx) await S.ctx.sleep(ms); else await sleepRaw(ms) }
   S.isAbort = (e) => !!e && (e.name === 'AbortError' || (S.ctx && S.ctx.aborted))
@@ -183,7 +187,7 @@ module.exports = function makeSkills({ bot, api, log }) {
     }
     if (r.ok) { // the library resolves on an empty path (noPath/timeout) too: check that we really arrived
       let end = true
-      try { end = goal.isEnd ? !!goal.isEnd(S.flo(bot.entity.position)) : true } catch {}
+      try { end = !goal.isEnd ? true : nav && nav.nav && nav.nav.satisfied ? nav.nav.satisfied(goal) : !!goal.isEnd(S.flo(bot.entity.position)) } catch {}     // one definition of "arrived": the navigator's
       if (!end) { r.ok = false; r.err = 'nopath' }
     }
     if (!r.ok) { S.stats.gotoFail++; S.stopMoving() }
@@ -264,20 +268,13 @@ module.exports = function makeSkills({ bot, api, log }) {
   // The minimum tool that does the job (Walter 2026-11-10, Act 2): of the tools that can harvest the block and beat the bare hand, the lowest
   // tier wins, stone first; wood and gold only when nothing else will do; never a sword on blocks. Until diamond gear with Mending is in hand
   // this keeps iron and diamond for the ores that need them (S.equipFor picked the fastest tool: 23 tool_tier flags in 5 minutes).
-  const TOOL_RANK = (n) => /^stone_/.test(n) ? 1 : /^iron_/.test(n) ? 2 : /^diamond_/.test(n) ? 3 : /^netherite_/.test(n) ? 4 : /^golden_/.test(n) ? 5 : /^wooden_/.test(n) ? 6 : 9
   S.toolFor = (block) => {
     let hand = Infinity
     try { hand = block.digTime(null, false, false, false, [], []) } catch {}
-    const cands = []
-    for (const it of bot.inventory.items()) {
-      if (!/_(pickaxe|axe|shovel|hoe)$/.test(it.name)) continue
-      if (block.harvestTools && !block.harvestTools[it.type]) continue
-      let t = Infinity
-      try { t = block.digTime(it.type, false, false, false, [], []) } catch {}
-      if (t < hand || (block.harvestTools && block.harvestTools[it.type])) cands.push({ it, t, r: TOOL_RANK(it.name) })
-    }
-    cands.sort((a, b) => a.r - b.r || a.t - b.t)
-    return { best: cands.length ? cands[0].it : null, bt: cands.length ? cands[0].t : Infinity, hand }
+    const best = require('../motor/tooltier').minimumTool(block, bot.inventory.items())      // the one definition of "minimum tool" (brain/motor/tooltier.js)
+    let bt = Infinity
+    if (best) { try { bt = block.digTime(best.type, false, false, false, [], []) } catch {} }
+    return { best, bt, hand }
   }
   // the pathfinder's own digging picks its tool here too
   try { if (bot.pathfinder && !bot.pathfinder._minTier) { bot.pathfinder._minTier = true; bot.pathfinder.bestHarvestTool = (b) => { try { return S.toolFor(b).best } catch { return null } } } } catch {}
@@ -639,19 +636,19 @@ module.exports = function makeSkills({ bot, api, log }) {
     if (!S.has('furnace')) { if (!(await S.craft('furnace', 1))) return null }
     return await S.placeWork('furnace')
   }
-  S.fuelPlan = (n = 1) => { // what to burn: junk wooden tools when they cover the job (that uses them up), then coal/charcoal, planks, logs
+  S.fuelPlan = (n = 1, { keepLogs = 0 } = {}) => { // what to burn: junk wooden tools when they cover the job (that uses them up), then coal/charcoal, planks, logs
     const inv = {}; for (const it of bot.inventory.items()) inv[it.name] = (inv[it.name] || 0) + it.count
     try { const j = (S.junk ? S.junk() : []).filter(i => /^wooden_/.test(i.name)); if (j.length && j.length >= n) return { name: j[0].name, per: 1, have: j.filter(i => i.name === j[0].name).length } } catch {}
     for (const n of ['coal', 'charcoal']) if (inv[n]) return { name: n, per: 8, have: inv[n] }
     for (const n of Object.keys(inv)) if (PLANK_RE.test(n)) return { name: n, per: 1.5, have: inv[n] }
-    for (const n of Object.keys(inv)) if (LOG_RE.test(n) && !/stripped/.test(n)) return { name: n, per: 1.5, have: inv[n] }
+    for (const n of Object.keys(inv)) if (LOG_RE.test(n) && !/stripped/.test(n) && inv[n] - keepLogs > 0) return { name: n, per: 1.5, have: inv[n] - keepLogs }     // keepLogs: logs the caller wants left in the bag
     return null
   }
   // Smelt `n` of `input` (item name). Blocks until done (abortable). Returns number produced.
   S.smelt = async (input, n, { keepFuelLogs = 0 } = {}) => {
     const have = S.count(input); n = Math.min(n, have)
     if (n <= 0) return 0
-    const fuel = S.fuelPlan(n); if (!fuel) return 0
+    const fuel = S.fuelPlan(n, { keepLogs: keepFuelLogs }); if (!fuel) return 0
     const furnaceBlock = await S.ensureFurnace(); if (!furnaceBlock) return 0
     S.closeWindows()
     let f
@@ -704,13 +701,21 @@ module.exports = function makeSkills({ bot, api, log }) {
   }
 
   // ---------- hunting ----------
+  // animals standing inside one of our built pens are livestock (brain/husbandry decides which of them are culled): the hunting skills leave them alone
+  S.penned = (e) => {
+    try {
+      const H = bot._husbandry; if (!H || !H.state || !H.state.pens.length) return false
+      const { inBox } = require('../husbandry/herd'), { boxOf } = require('../husbandry/blueprint')
+      return H.state.pens.some(p => p.built && inBox(e.position, boxOf(p)))
+    } catch { return false }
+  }
   S.animals = (kinds = Object.keys(PASSIVE_FOOD), radius = 40) => {
     const me = bot.entity.position, out = []
     for (const e of Object.values(bot.entities)) {
       if (!e || !e.position || e === bot.entity) continue
       if (!kinds.includes(e.name)) continue
       const d = e.position.distanceTo(me); if (d > radius) continue
-      if (e.metadata && e.metadata.some && false) continue
+      if (S.penned(e)) continue
       if (!S.canSee(e)) continue
       out.push({ e, d })
     }
@@ -788,7 +793,9 @@ module.exports = function makeSkills({ bot, api, log }) {
   S.underground = () => { const p = bot.entity.position; const top = bot.world.getColumn ? null : null; return p.y < 55 || !S.skyVisible() }
   S.skyVisible = () => {
     const p = flo(bot.entity.position)
-    for (let y = p.y + 2; y < Math.min(p.y + 40, 320); y++) { const b = S.block(v(p.x, y, p.z)); if (b && b.boundingBox === 'block') return false }
+    // the whole column up to the build limit: 38 blocks made a tall cavern look like the surface and goSurface answered "already up"
+    const top = bot.game && bot.game.height ? bot.game.height + (bot.game.minY || 0) : 320
+    for (let y = p.y + 2; y < top; y++) { const b = S.block(v(p.x, y, p.z)); if (b && b.boundingBox === 'block') return false }
     return true
   }
   S.dist = (p) => bot.entity.position.distanceTo(p)

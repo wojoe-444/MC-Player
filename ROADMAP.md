@@ -19,15 +19,17 @@ Food, stone tools, bed, shelter, torches. Done on the Earth map.
 
 1. Laddered mineshaft with registry and the 250-block reuse rule; close old staircases.
 2. Storage room off the shaft with themed double chests, overflow target, reset-gear chest, lean kit and fixed hotbar.
+   - **Built so far:** the storage room is a tracked registry entity (`brain/storage-model.js`): every chest has a role (`storage` rows, `reset`, `junk`), its last-seen contents and a theme derived from them; the planner sees a summary (`storage_room`). The **discard closet** is the junk chest (`brain/autopilot/discard.js`). The **reset-gear chest** (`brain/autopilot/resetgear.js`) holds the **lean kit**: stone pickaxe x2, stone sword, food x32, torches x32, cobblestone x64. The bot stocks it from surplus only (above 2 pickaxes, 1 sword, 32 food, 32 torches, 64 cobblestone in its own bag; missing stone tools are crafted from spare cobblestone and wood) and takes from it only when its bag is short of an essential, which is what happens after a death. Crafting, the planner's fetch and the stash never use the reset or junk chest. No armor is ever in the kit.
+   - **Not yet:** themed routing of the stash into chests by theme (the item sorter, Phase 3), the fixed hotbar, and the mini reset chests at the base, mine room and camps (item 5, which reuses the same kit and model with another place).
 3. Lit area and torch spacing; grass clearing; cave safety (light or fill caves next to built rooms).
 4. Tree farm by the base (saplings, lit grid, natural trees kept); later moved underground.
 5. **Respawn network:** a spare bed and a mini reset chest (stone pickaxe, sword, bread, torches) at the base, the mine room and each travel camp.
 6. **Hopper smelter** on charcoal from the tree farm; 3 or 4 furnaces first (5 iron per hopper). The bot takes furnace output by hand when it wants the XP.
 7. **Underground crop farm and composter** (wheat, carrots, potatoes, water, torches; surplus composts into bone meal). Check Serene Seasons behaviour underground.
 8. Mob farm. **XP rule:** keep the kill step bot-made so XP orbs drop; the farm gives string, bones, arrows, gunpowder and free armor. Built by `brain/autopilot/mobfarmbuild.js` (think-brain skill `mob_farm`); design, numbers and limits in `brain/mobfarm/README.md`.
-9. **Animal pens** (cows, sheep, pigs, chickens): shear sheep instead of killing, keep leather. Wool feeds beds and the travel kit.
+9. **Animal pens** (cows, sheep, pigs, chickens): shear sheep instead of killing, keep leather. Wool feeds beds and the travel kit. Primitives: `brain/husbandry` (fenced, lit pen; lure, breed, shear, cull; winter herd targets).
 10. **Sugarcane farm** (paper, books, bookshelves later).
-11. Glow lichen with shears and bone meal.
+11. Glow lichen with shears and bone meal. Primitives: `brain/husbandry` (seed a stone wall, bone-meal it, shear down to the seed).
 12. Late Phase 2: **pointed dripstone and safe lava farms** (design below).
 13. Late Phase 2: **camps and short trips** on the travel network (design below).
 14. Optional: cobblestone generator, only if cave-filling outruns the stone supply.

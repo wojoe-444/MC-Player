@@ -22,7 +22,7 @@ const moduleMeta = require('./meta')
 const { createProfile } = require('./profile')
 const { createReflexes } = require('./reflexes')
 
-const MODULES = ['lag', 'safety', 'chat', 'pilot', 'router', 'excavation', 'nav', 'treefarm', 'routines', 'crafting', 'build', 'lighting', 'mining', 'villagers', 'dashboard', 'autopilot', 'combat', 'survival', 'mode', 'clearbox', 'breath', 'senses', 'plugins', 'hurt', 'behavior', 'pilot-kit', 'telemetry', 'runlog', 'roadmap']
+const MODULES = ['lag', 'safety', 'chat', 'pilot', 'router', 'excavation', 'nav', 'treefarm', 'husbandry', 'routines', 'crafting', 'build', 'lighting', 'mining', 'villagers', 'dashboard', 'autopilot', 'combat', 'survival', 'mode', 'clearbox', 'breath', 'senses', 'plugins', 'hurt', 'behavior', 'pilot-kit', 'telemetry', 'runlog', 'roadmap']
 const NORMALIZE_FILLER = /\b(hey|yo|claude|bot|ozogo444|please|pls|plz|can you|could you|would you|will you|can u|go ahead and|just|now|for me)\b/g
 // same normalisation as handleCommand() in join.js
 const normalize = (text) => String(text).toLowerCase().replace(/[^\w\s',.-]/g, ' ').replace(NORMALIZE_FILLER, ' ').replace(/\s+/g, ' ').trim()
@@ -558,6 +558,9 @@ module.exports = function attach(deps) {
     loadModules()
     for (const h of handles) { try { h.start && h.start() } catch (e) { log('BRAIN_MODULE_ERROR', `${h.name}.start: ${e.stack || e.message}`) } }
     checkRequires()
+    // Hands, watch stage (brain/motor/hands.js): installed AFTER the modules started so it wraps the autopilot's equip wrapper too and sees the real caller.
+    // Records which call sites swap the held item against each other; changes nothing. HANDS=off disables it.
+    if (process.env.HANDS !== 'off') { try { require('./motor/hands').install(bot, { stateDir: path.dirname(statePath('x')), log: (m) => log('HANDS', m) }) } catch (e) { log('HANDS', 'not installed: ' + e.message) } }
     scheduler.start()
     log('BRAIN', `started; modules: ${handles.map(h => h.name).join(', ') || 'none'}; routines: ${scheduler.status().routines.map(r => r.name + (r.enabled ? '+' : '-')).join(' ')}`)
   }

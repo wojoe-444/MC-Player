@@ -11,6 +11,7 @@
 module.exports = function discard(G, S, M, api, log) {
   const bot = S.bot, { goals } = S, v = S.v, st = G.state
   const note = (m) => { try { G.note(m) } catch { log('DISCARD', m) } }
+  const SM = require('../storage-model')
   const KINDS = ['pickaxe', 'axe', 'shovel', 'sword', 'hoe']
   const TIER = (n) => /netherite/.test(n) ? 6 : /diamond/.test(n) ? 5 : /iron/.test(n) ? 4 : /stone/.test(n) ? 3 : /golden/.test(n) ? 2 : /wooden/.test(n) ? 1 : 0
   S.junk = () => {
@@ -23,27 +24,15 @@ module.exports = function discard(G, S, M, api, log) {
     return out
   }
   const LD = () => M.LD
-  // the junk chest's spot: a room cell open above (a covered chest does not open) on a solid floor, not a chest-row spot or a torch spot and
-  // not next to another chest (it would join it), nearest the entrance first; spots where opening failed are skipped (room.junkBad)
-  const openAir = (c) => { const b = S.block(c); return b && b.boundingBox === 'empty' && !S.isLiquid(b) }
-  function junkSpot(room, P) {
-    const bad = new Set((room.junkBad || []).map(q => q.join())), rows = new Set(P.chestSpots.flat().map(q => q.toString())), tor = new Set(P.torches.map(q => q.toString()))
-    for (let k = 3; k < 10; k++) for (const j of [2, -2, 1, -1]) {
-      const c = P.at(k, j); if (bad.has([c.x, c.y, c.z].join()) || rows.has(c.toString()) || tor.has(c.toString())) continue
-      const g = S.block(c.offset(0, -1, 0)); if (!g || g.boundingBox !== 'block' || !openAir(c) || !openAir(c.offset(0, 1, 0))) continue
-      if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => { const n = S.block(c.offset(dx, 0, dz)); return n && /chest/.test(n.name) })) continue
-      return c
-    }
-    return null
-  }
+  // the junk chest's spot: a single-chest spot of the room (brain/storage-model.js singleSpot), spots where opening failed are skipped (room.junkBad)
   async function junkChest(room, P) {
     if (room.junk) { const b = S.block(v(...room.junk)); if (b && b.name === 'chest') return b }
-    const c = junkSpot(room, P); if (!c) return null
+    const c = SM.singleSpot(P, (q) => S.block(q), (room.junkBad || []).concat(room.reset ? [room.reset] : [])); if (!c) return null
     if (!S.has('chest')) await S.craft('chest', 1).catch(() => false)
     if (!S.has('chest')) return null
     const g = S.block(c.offset(0, -1, 0))
     if (!(await S.placeAgainst(g, v(0, 1, 0), 'chest').catch(() => false))) return null
-    room.junk = [c.x, c.y, c.z]; LD().putRoom(room)
+    SM.setJunk(room, c); LD().putRoom(room)
     note('discard: junk chest set up at ' + c + ' by the storage room entrance (never taken from)')
     return S.block(c)
   }
@@ -63,7 +52,7 @@ module.exports = function discard(G, S, M, api, log) {
       } catch (e) {
         // it would not open (covered, or a ghost block): this spot is dropped and the next try sets up a junk chest elsewhere in the room
         note('discard: the junk chest at ' + ch.position + ' would not open (' + e.message.slice(0, 60) + '), a new spot next time')
-        room.junkBad = (room.junkBad || []).concat([[ch.position.x, ch.position.y, ch.position.z]]); room.junk = null; LD().putRoom(room)
+        room.junkBad = (room.junkBad || []).concat([[ch.position.x, ch.position.y, ch.position.z]]); SM.forget(room, ch.position); LD().putRoom(room)
         return false
       }
       note('discard: ' + n + ' junk item(s) put away in the junk chest')

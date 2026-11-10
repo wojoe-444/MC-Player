@@ -1,0 +1,25 @@
+{
+  "_note": "Walter's ROADMAP.md Phase 2 items 9 (animal pens) and 11 (glow lichen). Numbers are starting values: they have not been tuned against the live game yet.",
+  "pen": { "w": 7, "d": 7, "wood": "birch", "maxDy": 0, "minGrass": 0.6, "siteRadius": 40, "minAreaPerAnimal": 4 },
+  "herd": {
+    "targets": { "cow": 4, "sheep": 5, "pig": 4, "chicken": 6 },
+    "winterFactor": 1.5,
+    "minStock": 2,
+    "foodLowPoints": 30,
+    "maxPairsPerRun": 2,
+    "loveCooldownMs": 330000,
+    "babyGrowMs": 1200000,
+    "noBabyRunsBeforeBlocked": 3
+  },
+  "lure": { "sightRadius": 110, "hopBlocks": 4, "followWithin": 7, "hopWaitMs": 1500, "maxHops": 40, "ms": 300000 },
+  "breedWatch": { "tries": 10, "ms": 500 },
+  "reach": 4.5,
+  "entityReach": 3,
+  "minHealth": 12,
+  "dangerRadius": 10,
+  "swingMs": 700,
+  "cullMsPerAnimal": 30000,
+  "dayEnd": 11500,
+  "routineIntervalMs": 600000,
+  "lichen": { "target": 10, "keep": 3, "wallW": 3, "wallH": 2, "siteRadius": 30, "maxBoneMealPerRun": 12, "ms": 120000 }
+}

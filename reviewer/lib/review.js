@@ -47,14 +47,16 @@ async function runReview(cfg, { ask, now = Date.now(), force = false, dryRun = f
       }
     }
 
+    // detector proposals can only be validated with >= MIN_NORMAL_WINDOWS captured normal windows; without them the 1 Hz window digests (about a third of the prompt) are dead weight and invite proposals that are bound to be rejected
+    const canPropose = (b) => proposals.loadWindows(b).filter(w => w.kind === 'normal').length >= proposals.MIN_NORMAL_WINDOWS
     const payload = active.map(b => ({
       bot: b.name, folder: b.dir, telemetry: ev[b.id].telemetry === 'live' ? 'live' : 'missing (no telemetry module in this bot yet: judge from the logs only)',
       ...forModel(ev[b.id]),
-      windows: proposals.windowDigests(b),
+      ...(canPropose(b) ? { detectorProposals: 'open', windows: proposals.windowDigests(b) } : { detectorProposals: 'closed: fewer than ' + proposals.MIN_NORMAL_WINDOWS + ' normal windows captured so far, so a new detector cannot be validated; return proposedDetectors []' }),
       existingDetectors: [...BUILTIN_DETECTORS, ...proposals.customList(b)],
       detectorEvents: ((prevState[b.id] && prevState[b.id].detectorEvents) || []).slice(-5).map(e => ({ name: e.name, action: e.action, reason: e.reason })),
       previousReview: prevState[b.id] && prevState[b.id].status !== 'offline' ? { at: prevState[b.id].updatedAt, summary: prevState[b.id].summary, bag: prevState[b.id].bag } : null,
-      previousOpenFindings: ((prevState[b.id] && prevState[b.id].open) || []).map(f => ({ key: f.key, kind: f.kind, severity: f.severity, title: f.title, firstSeen: f.firstSeen, evidence: String(f.evidence || '').slice(0, 300), suggestion: String(f.suggestion || '').slice(0, 160) })),
+      previousOpenFindings: ((prevState[b.id] && prevState[b.id].open) || []).map(f => ({ key: f.key, kind: f.kind, severity: f.severity, title: f.title, firstSeen: f.firstSeen, seenRuns: f.seenRuns, evidence: String(f.evidence || '').slice(0, 300), suggestion: String(f.suggestion || '').slice(0, 160) })),
     }))
     const prompt = buildUserPrompt({ now: t, bots: payload })
     if (dryRun) return { ok: true, dryRun: true, system: SYSTEM_PROMPT, prompt, active: active.map(b => b.name) }

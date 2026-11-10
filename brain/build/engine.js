@@ -61,12 +61,7 @@ module.exports = function createEngine({ bot, say = () => {}, goals, tryGoto, sa
   const usable = () => bot.inventory.items().filter(i => /_(pickaxe|shovel|axe)$/.test(i.name) && durLeft(i) >= 3)
   const hasPickaxe = () => usable().some(i => /_pickaxe$/.test(i.name))
   async function equipBest(block) {          // placing leaves a block in the hand: the right tool before every dig (same idea as excavation/tools.js)
-    let best = null, bestT = Infinity
-    for (const it of usable()) {
-      let t = Infinity
-      try { t = block.digTime(it.type, false, false, false, [], {}) } catch { t = /_pickaxe$/.test(it.name) ? 1 : 2 }
-      if (t < bestT) { bestT = t; best = it }
-    }
+    const best = require('../motor/tooltier').minimumTool(block, usable(), { fallback: true })      // the lowest tier that does the job, not the fastest
     if (!best) return false
     if (!bot.heldItem || bot.heldItem.type !== best.type) await bot.equip(best, 'hand')
     return true

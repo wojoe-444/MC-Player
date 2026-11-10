@@ -15,12 +15,14 @@ function load(bot) { try { return JSON.parse(fs.readFileSync(fileOf(bot), 'utf8'
 // deterministic high-severity detector flags the model did not cover still reach the findings
 const DETECTOR_KIND = { jumping: 'excessive_jumping', pillar_failing: 'pillar_failing', ladder_bobbing: 'ladder_bobbing', oscillating: 'oscillating', stuck: 'stuck', idle: 'idle', wrong_tool: 'wrong_tool', cannot_harvest: 'wrong_tool', no_tool: 'wrong_tool', staircase: 'staircase', surface_blocks: 'surface_blocks', torch_spacing: 'torch_spacing', repeated_failure: 'repeated_failure', lava_in_hand: 'rule_violation', armor_equipped: 'rule_violation', armor_carried: 'rule_violation', tool_tier: 'rule_violation', chat_spam: 'rule_violation' }
 
+// A flag counts as covered when a model finding carries the same kind, or lists the flag's kind in explainsFlags (one root cause can explain flags of other kinds,
+// for example a code fault that shows up as repeated_failure). Without this the file gained an extra HIGH "Detector: ..." entry beside the model's own finding.
 function detectorFindings(bot, flags, covered) {
   const out = []
   for (const f of flags || []) {
     if (f.sev !== 'high') continue
     const kind = DETECTOR_KIND[f.kind] || 'other'
-    if (covered.some(c => c.kind === kind)) continue
+    if (covered.some(c => c.kind === kind || (Array.isArray(c.explainsFlags) && c.explainsFlags.includes(f.kind)))) continue
     out.push({ key: `${bot.id}-detector-${f.kind}`, kind, severity: 'high', confidence: 'med', title: `Detector: ${f.kind.replace(/_/g, ' ')}`.slice(0, 80), evidence: f.msg, suggestion: 'Raised by the in-bot detector; the model did not comment on it. Watch the bot and check the flagged window.', source: 'detector' })
   }
   return out
