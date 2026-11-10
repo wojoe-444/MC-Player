@@ -13,6 +13,7 @@ const D = require('./detectors')
 const SB = require('./sandbox')
 
 const SAMPLE_MS = 250, RING_MS = 15 * 60000, ANALYZE_MS = 15000, FLAG_REPEAT_MS = 5 * 60000
+const ARMOR_RE = /_(helmet|chestplate|leggings|boots)$/
 const LADDERISH = /^(ladder|vine|scaffolding|weeping_vines|twisting_vines|cave_vines)/
 const WINDOW_MS = 150000, WINDOW_EVERY_MS = 120000, KEEP_NORMAL = 8, KEEP_FLAGGED = 6      // raw slices kept for the reviewer to validate new detectors against
 
@@ -58,8 +59,10 @@ module.exports = function register(api) {
     const key = block.position.x + ',' + block.position.y + ',' + block.position.z
     if (t - (lastDigAt.get(key) || 0) < 5000) return
     lastDigAt.set(key, t); if (lastDigAt.size > 200) lastDigAt.delete(lastDigAt.keys().next().value)
-    const c = D.toolCheck(block, bot.heldItem, invNames())
-    addEvent({ k: 'dig', t, block: block.name, x: block.position.x, y: block.position.y, z: block.position.z, held: bot.heldItem ? bot.heldItem.name : '', need: c.need, have: c.have, ok: c.ok, harvestOk: c.harvestOk })
+    let hn = null
+    try { if (block.harvestTools && bot.registry && bot.registry.items) hn = Object.keys(block.harvestTools).map(id => bot.registry.items[id] && bot.registry.items[id].name).filter(Boolean) } catch {}
+    const c = D.toolCheck(block, bot.heldItem, invNames(), hn)
+    addEvent({ k: 'dig', t, block: block.name, x: block.position.x, y: block.position.y, z: block.position.z, held: bot.heldItem ? bot.heldItem.name : '', need: c.need, have: c.have, ok: c.ok, harvestOk: c.harvestOk, overTier: c.overTier })
   }
 
   // the column above a placement is empty up to the sky: that block sits in the open
@@ -111,6 +114,27 @@ module.exports = function register(api) {
     else if ((m.event === 'done' || m.event === 'parked' || m.event === 'failed') && curTask === m.task.name) curTask = null
     if (m.event === 'failed') addEvent({ k: 'fail', t: now(), what: 'taskFailed', note: m.task.name })
   }
+
+  // ---- rule state: what is worn (checked every pass and the moment an armor slot changes), own chat lines ----
+  const rulesFile = api.statePath('telemetry/rules.json')
+  function farmDrops() { try { return JSON.parse(fs.readFileSync(rulesFile, 'utf8')).armorFarmDrops || [] } catch { return [] } }   // optional {"armorFarmDrops":["leather_boots"]} once a mob farm exists
+  function gearState() {
+    const worn = []
+    try {
+      for (const slot of [5, 6, 7, 8]) {
+        const it = bot.inventory && bot.inventory.slots && bot.inventory.slots[slot]
+        if (!it) continue
+        let mending = false; try { mending = (it.enchants || []).some(e => e.name === 'mending') } catch {}
+        worn.push({ slot, name: it.name, mending })
+      }
+    } catch {}
+    return { worn, farmDrops: farmDrops() }
+  }
+  let armorSoon = null
+  const onSlot = (slot, _old, nw) => {      // an armor slot changed: do not wait for the next 15 s pass
+    try { if (slot >= 5 && slot <= 8 && nw && ARMOR_RE.test(nw.name || '')) { clearTimeout(armorSoon); armorSoon = setTimeout(() => { try { analyze() } catch {} }, 300) } } catch {}
+  }
+  const onOwnChat = (username, message) => { if (username === bot.username) addEvent({ k: 'chat', t: now(), text: String(message || '').slice(0, 120) }) }
 
   // ---- model-written detectors (brain/state/detectors/manifest.json, written by the reviewer after it validated them; see sandbox.js) ----
   const custom = new Map()          // name -> { det, sha, fails, recent:[0|1] }
@@ -173,7 +197,7 @@ module.exports = function register(api) {
   function analyze() {
     const t = now()
     events = events.filter(e => e.t >= t - RING_MS)
-    const flags = [...D.analyze(samples, events, t), ...runCustom(t)]
+    const flags = [...D.analyze(samples, events, t, undefined, gearState()), ...runCustom(t)]
     let newHigh = false
     const seen = new Set()
     for (const f of flags) {
@@ -239,7 +263,8 @@ module.exports = function register(api) {
     start() {
       started = now()
       bot.on('physicsTick', onPhysics); bot.on('entitySwingArm', onSwing); bot.on('blockPlaced', onPlaced)
-      bot.on('diggingCompleted', onDug); bot.on('diggingAborted', onDigAbort); bot.on('path_update', onPathUpdate); bot.on('playerCollect', onCollect); bot.on('windowOpen', onWindow)
+      bot.on('diggingCompleted', onDug); bot.on('diggingAborted', onDigAbort); bot.on('path_update', onPathUpdate); bot.on('playerCollect', onCollect); bot.on('windowOpen', onWindow); bot.on('chat', onOwnChat)
+      try { bot.inventory.on('updateSlot', onSlot) } catch {}
       if (api.events) api.events.on('task', onTask)
       timer = setInterval(() => { try { sample() } catch {} }, SAMPLE_MS)
       analyzeTimer = setInterval(() => { try { analyze() } catch (e) { api.log('telemetry', 'analyze error: ' + e.message) } }, ANALYZE_MS)
@@ -247,7 +272,8 @@ module.exports = function register(api) {
     stop() {
       clearInterval(timer); clearInterval(analyzeTimer)
       bot.removeListener('physicsTick', onPhysics); bot.removeListener('entitySwingArm', onSwing); bot.removeListener('blockPlaced', onPlaced)
-      bot.removeListener('diggingCompleted', onDug); bot.removeListener('diggingAborted', onDigAbort); bot.removeListener('path_update', onPathUpdate); bot.removeListener('playerCollect', onCollect); bot.removeListener('windowOpen', onWindow)
+      bot.removeListener('diggingCompleted', onDug); bot.removeListener('diggingAborted', onDigAbort); bot.removeListener('path_update', onPathUpdate); bot.removeListener('playerCollect', onCollect); bot.removeListener('windowOpen', onWindow); bot.removeListener('chat', onOwnChat)
+      try { bot.inventory.removeListener('updateSlot', onSlot) } catch {}; clearTimeout(armorSoon)
       if (api.events) api.events.removeListener('task', onTask)
       writeSummary(now())
     },

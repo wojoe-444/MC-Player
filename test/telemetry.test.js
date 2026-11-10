@@ -336,3 +336,58 @@ test('module: ladder cells and the autopilot step are sampled; pickups and opene
   assert.strictEqual(h._tick.samples()[1].ld, 0)
   h.stop()
 })
+
+test('armor_equipped: any worn armor is high unless diamond/netherite with Mending or an allowed farm drop; nothing worn is quiet', () => {
+  const ss = ring(10, () => ({}))
+  const f = (worn, farmDrops) => D.analyze(ss, [], now(ss), undefined, { worn, farmDrops }).find(x => x.kind === 'armor_equipped')
+  assert.ok(!f([]))
+  const hit = f([{ slot: 6, name: 'iron_chestplate' }, { slot: 8, name: 'iron_boots' }])
+  assert.ok(hit && hit.sev === 'high'); assert.match(hit.msg, /iron_chestplate on chest, iron_boots on feet/)
+  assert.ok(f([{ slot: 5, name: 'diamond_helmet', mending: false }]))
+  assert.ok(!f([{ slot: 5, name: 'diamond_helmet', mending: true }]))
+  assert.ok(f([{ slot: 5, name: 'iron_helmet', mending: true }]))               // Mending only excuses diamond and netherite
+  assert.ok(!f([{ slot: 8, name: 'leather_boots' }], ['leather_boots']))         // mob-farm drop listed in rules.json
+})
+
+test('module: equipping armor raises armor_equipped within the debounce, without waiting for the 15 s pass', () => {
+  const { bot, dir, h, advance } = rig()
+  bot.inventory = Object.assign(new EventEmitter(), { slots: {}, items: () => [] })
+  h.start()
+  advance(1000); h._tick.sample(); h._tick.analyze()
+  assert.ok(!h._tick.summary().flags.some(x => x.kind === 'armor_equipped'))
+  bot.inventory.slots[6] = { name: 'iron_chestplate', enchants: [] }
+  bot.inventory.emit('updateSlot', 6, null, bot.inventory.slots[6])
+  return new Promise(r => setTimeout(r, 450)).then(() => {
+    const f = h._tick.summary().flags.find(x => x.kind === 'armor_equipped')
+    assert.ok(f && f.sev === 'high')
+    assert.match(fs.readFileSync(path.join(dir, 'REVIEW-ALERTS.md'), 'utf8'), /armor_equipped/)
+    h.stop()
+  })
+})
+
+test('tool tier: iron in hand for stone-grade blocks with a stone tool in the bag is flagged; ores that need iron are fine', () => {
+  const stone = { name: 'stone', material: 'mineable/pickaxe', hardness: 1.5, harvestTools: { 1: true, 2: true, 3: true } }
+  const names = ['wooden_pickaxe', 'stone_pickaxe', 'iron_pickaxe']
+  const c = D.toolCheck(stone, { name: 'iron_pickaxe', type: 3 }, ['iron_pickaxe', 'stone_pickaxe'], names)
+  assert.strictEqual(c.overTier, true)
+  assert.strictEqual(D.toolCheck(stone, { name: 'stone_pickaxe', type: 2 }, ['iron_pickaxe', 'stone_pickaxe'], names).overTier, false)
+  assert.strictEqual(D.toolCheck(stone, { name: 'iron_pickaxe', type: 3 }, ['iron_pickaxe'], names).overTier, false)   // nothing lower in the bag
+  const diamondOre = { name: 'diamond_ore', material: 'mineable/pickaxe', hardness: 3, harvestTools: { 3: true } }
+  assert.strictEqual(D.toolCheck(diamondOre, { name: 'iron_pickaxe', type: 3 }, ['iron_pickaxe', 'stone_pickaxe'], ['iron_pickaxe']).overTier, false)
+  assert.strictEqual(D.toolCheck(diamondOre, { name: 'diamond_pickaxe', type: 4 }, ['iron_pickaxe', 'diamond_pickaxe'], ['iron_pickaxe']).overTier, true)
+  const ss = ring(10, () => ({}))
+  const ev = [0, 1, 2].map(i => ({ k: 'dig', t: T0 + i * 1000, block: 'stone', held: 'iron_pickaxe', need: 'pickaxe', ok: true, have: true, harvestOk: true, overTier: true }))
+  const f = D.analyze(ss, ev, now(ss)).find(x => x.kind === 'tool_tier')
+  assert.ok(f && f.sev === 'med'); assert.match(f.msg, /stone with iron_pickaxe x3/)
+  assert.ok(!D.analyze(ss, ev.slice(0, 2), now(ss)).some(x => x.kind === 'tool_tier'))
+})
+
+test('chat_spam: a repeated line is high, a burst under one second apart or 10+ lines a minute is medium, a few lines are fine', () => {
+  const ss = ring(60, () => ({}))
+  const say = (ts, text = 'hi') => ts.map((s, i) => ({ k: 'chat', t: T0 + s * 1000, text: typeof text === 'function' ? text(i) : text }))
+  const f = (ev) => D.analyze(ss, ev, now(ss)).find(x => x.kind === 'chat_spam')
+  assert.ok(!f(say([5, 20, 40], i => 'line ' + i)))
+  assert.strictEqual(f(say([5, 20, 40])).sev, 'high')
+  assert.strictEqual(f(say([5, 5.4, 5.8, 30], i => 'line ' + i)).sev, 'med')
+  assert.strictEqual(f(say([2, 8, 14, 20, 26, 32, 38, 44, 50, 56], i => 'line ' + i)).sev, 'med')
+})

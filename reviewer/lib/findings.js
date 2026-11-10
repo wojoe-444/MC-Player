@@ -13,7 +13,7 @@ const fileOf = (bot) => path.join(dirOf(bot), 'findings.json')
 function load(bot) { try { return JSON.parse(fs.readFileSync(fileOf(bot), 'utf8')) } catch { return null } }
 
 // deterministic high-severity detector flags the model did not cover still reach the findings
-const DETECTOR_KIND = { jumping: 'excessive_jumping', pillar_failing: 'pillar_failing', ladder_bobbing: 'ladder_bobbing', oscillating: 'oscillating', stuck: 'stuck', idle: 'idle', wrong_tool: 'wrong_tool', cannot_harvest: 'wrong_tool', no_tool: 'wrong_tool', staircase: 'staircase', surface_blocks: 'surface_blocks', torch_spacing: 'torch_spacing', repeated_failure: 'repeated_failure', lava_in_hand: 'rule_violation' }
+const DETECTOR_KIND = { jumping: 'excessive_jumping', pillar_failing: 'pillar_failing', ladder_bobbing: 'ladder_bobbing', oscillating: 'oscillating', stuck: 'stuck', idle: 'idle', wrong_tool: 'wrong_tool', cannot_harvest: 'wrong_tool', no_tool: 'wrong_tool', staircase: 'staircase', surface_blocks: 'surface_blocks', torch_spacing: 'torch_spacing', repeated_failure: 'repeated_failure', lava_in_hand: 'rule_violation', armor_equipped: 'rule_violation', tool_tier: 'rule_violation', chat_spam: 'rule_violation' }
 
 function detectorFindings(bot, flags, covered) {
   const out = []

@@ -18,6 +18,8 @@ const DEFAULTS = {
   fail: { windowS: 300, count: 5, high: 10 },
   lava: { minSamples: 3, minSpeed: 0.5 },
   torch: { windowS: 600 },
+  chat: { windowS: 60, tooFast: 2, perMin: 10, repeats: 3 },
+  tier: { minOver: 3 },
   pillar: { windowS: 20, minJumps: 4, maxExtent: 1.5, minGain: 1.0, lookDown: 0.9 },
 }
 const FILLER = new Set(['cobblestone', 'dirt', 'stone', 'netherrack', 'cobbled_deepslate', 'gravel', 'andesite', 'diorite', 'granite', 'tuff', 'sand', 'deepslate'])
@@ -75,7 +77,15 @@ function allowedClasses(block) {
 }
 // block: { name, material, hardness, harvestTools }; held: { name, type } | null; inventory: [item names]
 // -> { need (preferred class), allowed, ok (held item is whitelisted for this block), have (a whitelisted tool is in the bag), harvestOk (the block drops with this item) }
-function toolCheck(block, held, inventory) {
+// tool tiers (Walter 2026-11-10: use the minimum tier that gets the job done; stone is the default, wood only very early, higher only when the block needs it)
+const TIERS = { wooden: 0, golden: 0, stone: 1, iron: 2, diamond: 3, netherite: 4 }
+const tierOf = (name) => { const m = /^(wooden|golden|stone|iron|diamond|netherite)_(pickaxe|axe|shovel|hoe)$/.exec(name || ''); return m ? TIERS[m[1]] : null }
+// lowest tier whose tool still drops the block: from harvestTools item names when the block needs a tier (ores, obsidian), else stone
+function neededTier(harvestNames) {
+  const ts = (harvestNames || []).map(tierOf).filter(t => t !== null)
+  return ts.length ? Math.max(1, Math.min(...ts)) : 1
+}
+function toolCheck(block, held, inventory, harvestNames) {
   const allowed = allowedClasses(block)
   const instant = block && block.hardness === 0
   const heldClass = toolClass(held && held.name)
@@ -83,7 +93,11 @@ function toolCheck(block, held, inventory) {
   const have = !!allowed.length && (inventory || []).some(n => allowed.includes(toolClass(n)))
   let harvestOk = true
   if (block && block.harvestTools && Object.keys(block.harvestTools).length) harvestOk = !!(held && block.harvestTools[held.type])
-  return { need: instant ? null : (allowed[0] || null), allowed, ok, have, harvestOk }
+  // overTier: a stone-or-better-than-needed tool is held although a tool of the same class at or above the needed tier but lower than the held one is in the bag
+  const ht = tierOf(held && held.name), need = neededTier(harvestNames)
+  let overTier = false
+  if (!instant && ok && ht !== null && ht > need && heldClass) overTier = (inventory || []).some(n => n !== (held && held.name) && n.endsWith('_' + heldClass) && tierOf(n) !== null && tierOf(n) >= need && tierOf(n) < ht)
+  return { need: instant ? null : (allowed[0] || null), allowed, ok, have, harvestOk, overTier, tier: ht, needTier: need }
 }
 
 // ---- individual detectors: each returns a flag or null ----
@@ -318,11 +332,42 @@ function lavaFlag(samples, now, cfg) {
   return { kind: 'lava_in_hand', sev: 'high', t0, t1: now, msg: 'walking with a lava bucket selected (Walter\'s rule 2)', data: { samples: n } }
 }
 
-function analyze(samples, events, now, over) {
+// ---- rule flags (Walter's rules of play): state and event based, no model ----
+const ARMOR = /_(helmet|chestplate|leggings|boots)$/
+const ARMOR_SLOTS = { 5: 'head', 6: 'chest', 7: 'legs', 8: 'feet' }
+// state.worn: [{ slot, name, mending }]. No armor (Walter 2026-11-10) except diamond/netherite with Mending, or a mob-farm drop (state.farmDrops: names allowed by brain/state/telemetry/rules.json).
+function armorFlag(state, now) {
+  const bad = ((state && state.worn) || []).filter(a => ARMOR.test(a.name) && !(/^(diamond|netherite)_/.test(a.name) && a.mending) && !(state.farmDrops || []).includes(a.name))
+  if (!bad.length) return null
+  return { kind: 'armor_equipped', sev: 'high', t0: now - 60000, t1: now,
+    msg: `wearing armor, which is banned (${bad.map(a => `${a.name} on ${ARMOR_SLOTS[a.slot] || 'slot ' + a.slot}`).join(', ')}); only diamond with Mending or a mob-farm drop is allowed`, data: { worn: bad } }
+}
+function tierFlag(events, now, cfg) {
+  const t0 = now - 300000
+  const over = evSince(events, t0, 'dig').filter(d => d.overTier)
+  if (over.length < cfg.tier.minOver) return null
+  const m = {}; for (const d of over) { const k = `${d.block} with ${d.held}`; m[k] = (m[k] || 0) + 1 }
+  const top = Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => `${k} x${n}`).join(', ')
+  return { kind: 'tool_tier', sev: 'med', t0, t1: now, msg: `${over.length} digs in 5 min with a higher tool tier than the block needs although a lower suitable one was in the bag (stone is the default, iron only for diamond/gold/redstone/emerald, diamond only for obsidian): ${top}`, data: { n: over.length, example: over[over.length - 1] } }
+}
+// own chat lines: events { k:'chat', t, text }. Rule 5: at most one message per second, never spam
+function chatFlag(events, now, cfg) {
+  const t0 = now - cfg.chat.windowS * 1000
+  const ch = evSince(events, t0, 'chat')
+  if (ch.length < 3) return null
+  let fast = 0; for (let i = 1; i < ch.length; i++) if (ch[i].t - ch[i - 1].t < 1000) fast++
+  const rep = {}; for (const c of ch) rep[c.text] = (rep[c.text] || 0) + 1
+  const [txt, n] = Object.entries(rep).sort((a, b) => b[1] - a[1])[0]
+  if (n >= cfg.chat.repeats) return { kind: 'chat_spam', sev: 'high', t0, t1: now, msg: `said the same line ${n}x in ${cfg.chat.windowS}s: "${String(txt).slice(0, 60)}"`, data: { n, text: txt } }
+  if (fast >= cfg.chat.tooFast || ch.length >= cfg.chat.perMin) return { kind: 'chat_spam', sev: 'med', t0, t1: now, msg: `${ch.length} chat lines in ${cfg.chat.windowS}s, ${fast} of them less than 1 s after the previous one (rule: one message per second at most, short)`, data: { n: ch.length, fast } }
+  return null
+}
+
+function analyze(samples, events, now, over, state) {
   const cfg = merge(DEFAULTS, over)
   const flags = [
     ...jumpFlags(samples, events, now, cfg), pillarFlag(samples, events, now, cfg), ladderBobFlag(samples, events, now, cfg), oscillationFlag(samples, now, cfg), stuckFlag(samples, now, cfg), idleFlag(samples, events, now, cfg),
-    wrongToolFlag(events, now, cfg), stairsFlag(events, now, cfg), placementFlag(events, now, cfg), torchFlag(events, now, cfg), lavaFlag(samples, now, cfg),
+    wrongToolFlag(events, now, cfg), stairsFlag(events, now, cfg), placementFlag(events, now, cfg), torchFlag(events, now, cfg), lavaFlag(samples, now, cfg), armorFlag(state, now), tierFlag(events, now, cfg), chatFlag(events, now, cfg),
     ...toolFlags(events, now), ...failFlags(events, now, cfg),
   ].filter(Boolean)
   return flags
@@ -365,4 +410,4 @@ function excerpt(samples, t0, t1, maxPoints = 60) {
 }
 excerpt.columns = ['sec', 'x', 'y', 'z', 'onGround', 'held', 'task', 'digging']
 
-module.exports = { zigzag, torchTooClose, evSince, covers, isBlockItem, NON_BLOCK, DEFAULTS, FILLER, analyze, counters, excerpt, toolCheck, since, extent, hExtent, pathLength, merge }
+module.exports = { zigzag, torchTooClose, evSince, covers, isBlockItem, NON_BLOCK, DEFAULTS, FILLER, analyze, counters, excerpt, toolCheck, tierOf, neededTier, armorFlag, since, extent, hExtent, pathLength, merge }
