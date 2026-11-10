@@ -72,6 +72,31 @@ module.exports = function plan(G, S, M, api, log) {
   // the one laddered shaft per area, shared by both bots (brain/autopilot/ladder.js, Walter 2026-11-10)
   delete require.cache[require.resolve('./ladder')]
   const LD = require('./ladder')(bot, S, goals, v, log); M.LD = LD
+  // Up from underground by the laddered shaft, never by digging: a go-to from the mine to a target well above (stash heading home, Smeo444
+  // 04:29) made nav escalate and tunnel up through gravel into lava, and the bot died. When the goal is more than 6 blocks up, there is no
+  // sky, and a recorded shaft within 48 blocks spans the bot's level, the bot walks to the shaft at its own level and climbs it first.
+  if (!S._gotoNoShaft) {
+    const innerGoto = S.goto
+    let riding = false
+    S.goto = async (goal, o = {}) => {
+      try {
+        const gy = goal ? (goal.y != null ? goal.y : (goal.pos && goal.pos.y)) : null, me = bot.entity.position
+        if (!riding && gy != null && gy - me.y > 6 && !S.skyVisible()) {
+          const sh = LD.nearestShaft(me, 48)
+          if (sh && sh.bottom && sh.bottom[1] <= me.y + 1 && sh.entry[1] > me.y + 4 && sh.entry[1] >= gy - 12) {
+            riding = true
+            try {
+              const at = v(sh.entry[0], Math.floor(me.y), sh.entry[2])
+              if (Math.hypot(me.x - at.x - 0.5, me.z - at.z - 0.5) > 1) await innerGoto(new goals.GoalBlock(at.x, at.y, at.z), { dig: false, ms: 60000, escalate: false })
+              if (Math.hypot(bot.entity.position.x - at.x - 0.5, bot.entity.position.z - at.z - 0.5) < 1.5) { const up = await LD.up(sh); log('PLAN', 'up the laddered shaft before a go-to ' + Math.round(gy - me.y) + ' blocks up: ' + up) }
+            } finally { riding = false }
+          }
+        }
+      } catch (e) { log('PLAN', 'shaft-first go-to: ' + e.message) }
+      return innerGoto(goal, o)
+    }
+    S._gotoNoShaft = innerGoto
+  }
   const ladderShaft = () => st.mine && st.mine.ladder ? { id: st.mine.shaft, entry: st.mine.entry, bottom: st.mine.bottom, wall: st.mine.wall || [1, 0] } : null
   const farMine = () => { try { const h = home(); return !!(st.mine && st.mine.entry && h && Math.hypot(st.mine.entry[0] - h.x, st.mine.entry[2] - h.z) > 48) } catch { return false } }
   const daylightLeft = () => { const t = bot.time && bot.time.timeOfDay; return typeof t === 'number' && t < 11500 ? 11500 - t : 0 }
