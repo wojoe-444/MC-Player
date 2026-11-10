@@ -86,7 +86,7 @@ function register(api) {
   })
   // Idle routine: on by default (Walter wants it in the rotation), only after quiet time, and it only works the tree farm sites.
   scheduler.routine({
-    name: 'treefarm', priority: PRIORITY.FARM, idleOnly: true, defaultEnabled: true, intervalMs: 60000,
+    name: 'treefarm', priority: PRIORITY.FARM, idleOnly: true, defaultEnabled: false, intervalMs: 60000,   // off by default (Walter 2026-11-10: natural trees are kept; the autopilot's grove step builds the lit farm and wood-stock supplies wood). 'tree routine on' turns it back on
     due: () => engine.due(),
     make: () => { const followUp = engine.dueKind() === 'followup'; return { name: 'treefarm', abort: () => engine.abort(), run: (ctx) => { log(followUp ? 'idle tree follow-up' : 'idle tree run'); return engine.run(ctx, { manual: false, followUp }) } } }
   })
