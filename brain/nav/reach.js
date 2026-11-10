@@ -559,7 +559,13 @@ class Reach {
         if (bot.entity.position.y >= f.y + 1.1) {
           // one more tick first, so the server has the position packet that puts the feet above the cell before the place packet arrives
           await this.ticks(1, run)
-          try { if (!bot.heldItem || bot.heldItem.name !== it.name) await bot.equip(it, 'hand'); await bot.placeBlock(ref, new Vec3(0, 1, 0)); placed = true } catch (e) { this.log('pillar place: ' + e.message); break }
+          // every attempt is logged in full until the jump-and-place failures are understood (Walter 2026-11-10)
+          const at = { tick: i, dy: +(bot.entity.position.y - f.y).toFixed(3), vy: +bot.entity.velocity.y.toFixed(3), ground: bot.entity.onGround, held: bot.heldItem ? bot.heldItem.name : null, slot: bot.quickBarSlot, ref: ref.name + '@' + ref.position, dest: this.blk(f.x, f.y, f.z) ? this.blk(f.x, f.y, f.z).name : '?' }
+          try { if (!bot.heldItem || bot.heldItem.name !== it.name) await bot.equip(it, 'hand'); await bot.placeBlock(ref, new Vec3(0, 1, 0)); placed = true; this.log('pillar ok ' + JSON.stringify(at)) } catch (e) {
+            // what the server says the bag and hand are, right after the refusal
+            let srv = null
+            try { bot._client.write('window_click', { windowId: 0, stateId: -1, slot: -999, mouseButton: 0, mode: 0, changedSlots: [], cursorItem: null }); await new Promise(r => setTimeout(r, 300)); srv = { held: bot.heldItem ? bot.heldItem.name : null, slot: bot.quickBarSlot, have: bot.inventory.items().filter(x => x.name === it.name).reduce((n, x) => n + x.count, 0), dy: +(bot.entity.position.y - f.y).toFixed(3), destNow: this.blk(f.x, f.y, f.z) ? this.blk(f.x, f.y, f.z).name : '?' } } catch {}
+            this.log('pillar FAIL ' + JSON.stringify(at) + ' -> ' + e.message.slice(0, 90) + ' | server ' + JSON.stringify(srv)); break }
         }
       }
       bot.setControlState('jump', false)
