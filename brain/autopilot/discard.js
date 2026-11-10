@@ -44,8 +44,9 @@ module.exports = function discard(G, S, M, api, log) {
       if (!(await G.storageGo())) { note('discard: could not get into the storage room'); return false }
       const ch = await junkChest(room, P); if (!ch) { note('discard: no junk chest (no chest to place, or no spot)'); return false }
       let n = 0
+      if (G.storageClearAbove) await G.storageClearAbove(ch.position).catch(() => false)
       try {
-        const w = await bot.openContainer(ch)
+        const w = await bot.openContainer(S.block(ch.position) || ch)
         for (const it of S.junk()) { try { await w.deposit(it.type, null, it.count); n += it.count } catch {} }
         w.close()
       } catch (e) { note('discard: ' + e.message); return false }
