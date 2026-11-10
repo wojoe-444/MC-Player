@@ -95,8 +95,21 @@ module.exports = function storage(G, S, M, api, log) {
     }
     return n
   }
+  // into the room from wherever the bot is: by the shaft (the pathfinder climbs the ladder, up or down), then the corridor. A chest went
+  // unplaced with the bot 5 blocks under the room in the mine (Smeo444 04:24), where no walk-only path reached it
+  const inRoom = (P) => { const q = bot.entity.position.floored(), b = P.box; return q.x >= b.x0 - 1 && q.x <= b.x1 + 1 && q.z >= b.z0 - 1 && q.z <= b.z1 + 1 && Math.abs(q.y - P.y) <= 1 }
+  async function goRoom(sh, P) {
+    if (inRoom(P)) return true
+    const cell = v(sh.entry[0], P.y, sh.entry[2])
+    if (bot.entity.position.y < P.y - 1 && S.dist(cell) < 40) await S.goto(new goals.GoalBlock(cell.x, cell.y, cell.z), { dig: false, ms: 60000, escalate: false })
+    else await LD().down({ ...sh, bottom: [cell.x, cell.y, cell.z] })
+    for (const c of P.corridor) await walk(c, 8000)
+    await walk(P.at(3, 0), 8000)
+    return inRoom(P)
+  }
   // a double chest at the next free pair of spots
   async function addDouble(room, P) {
+    { const sh = LD().shafts().find(q => q.id === room.shaft); if (sh && !(await goRoom(sh, P))) { note('storage: could not get into the storage room (at ' + bot.entity.position.floored() + ')'); return false } }
     if (!S.has('chest') || cnt('chest') < 2) {
       const lg = (S.items().find(i => /_(log|wood)$/.test(i.name)) || {}).name
       if (S.planks() < 16 && lg) await S.craft(lg.replace(/^stripped_/, '').replace(/_(log|wood)$/, '_planks'), Math.min(16, S.planks() + S.logs() * 4)).catch(() => false)
@@ -120,6 +133,7 @@ module.exports = function storage(G, S, M, api, log) {
     room.at = Date.now(); LD().putRoom(room)
     return ok === 2
   }
+  G.storageGo = async () => { const room = G.storageRoom(); if (!room) return false; const sh = LD().shafts().find(q => q.id === room.shaft); return sh ? goRoom(sh, plan(sh)) : false }
   G.storageAddDouble = async () => { const room = G.storageRoom(); if (!room) return false; const sh = LD().shafts().find(s => s.id === room.shaft); return sh ? addDouble(room, plan(sh)) : false }
 
   return {
