@@ -14,8 +14,12 @@ module.exports = function storage(G, S, M, api, log) {
   const cnt = (n) => S.count(n)
 
   // the room's geometry for a shaft record
+  const ROT = [[1, 0], [0, 1], [-1, 0], [0, -1]]
+  const turnOf = (sh) => ((st.storageTurn || {})[sh.id] || 0) % 4
   function plan(sh) {
-    const wall = sh.wall || [1, 0], d = [-wall[0], -wall[1]], p = [d[1], -d[0]]
+    const wall = sh.wall || [1, 0], d0 = [-wall[0], -wall[1]], t = turnOf(sh)
+    // turn 0 = straight out from the ladder wall; then the two sides; never back into the ladder wall itself
+    const d = t === 0 ? d0 : t === 1 ? [d0[1], -d0[0]] : t === 2 ? [-d0[1], d0[0]] : d0, p = [d[1], -d[0]]
     const y = Math.max(sh.bottom[1] + 2, sh.entry[1] - 10)
     const s = v(sh.entry[0], y, sh.entry[2])
     const at = (k, j, h = 0) => s.offset(d[0] * k + p[0] * j, h, d[1] * k + p[1] * j)
@@ -34,19 +38,34 @@ module.exports = function storage(G, S, M, api, log) {
   G.storageRoom = () => { try { const sh = st.mine && st.mine.ladder ? LD().shafts().find(s => s.id === st.mine.shaft) : null; return sh ? roomOf(sh) : null } catch { return null } }
 
   const air = (c) => { const b = S.block(c); return b && b.boundingBox === 'empty' && !S.isLiquid(b) }
-  async function clear(c) { const r = await S.clearCell(c); return r === 'ok' }
-  async function walk(c, ms = 15000) { return (await S.goto(new goals.GoalBlock(c.x, c.y, c.z), { dig: false, ms, escalate: false })).ok }
+  let lastWhy = ''
+  async function clear(c) { const r = await S.clearCell(c); if (r !== 'ok') lastWhy = r; return r === 'ok' }
+  async function nudge(c, ms = 2500) {
+    const t0 = Date.now(), tgt = c.offset(0.5, 0, 0.5)
+    try {
+      while (Date.now() - t0 < ms) {
+        const e = bot.entity.position; if (Math.hypot(tgt.x - e.x, tgt.z - e.z) < 0.35) break
+        await bot.lookAt(tgt.offset(0, 1.6, 0), true); bot.setControlState('forward', true); await new Promise(r => setTimeout(r, 100))
+      }
+    } finally { bot.setControlState('forward', false) }
+    return bot.entity.position.floored().equals(c)
+  }
+  async function walk(c, ms = 15000) {
+    if (bot.entity.position.floored().equals(c)) return true
+    if ((await S.goto(new goals.GoalBlock(c.x, c.y, c.z), { dig: true, ms, escalate: false })).ok) return true
+    return nudge(c)
+  }
 
   async function digRoom(sh, P) {
     // down the ladder to the room's level (the shaft cell at that height has a ladder in it)
     await LD().down({ ...sh, bottom: [sh.entry[0], P.y, sh.entry[2]] })
     if (Math.abs(bot.entity.position.y - P.y) > 1.5) { note('storage: could not get down the ladder to y' + P.y); return false }
     // corridor, then the room cell by cell: the middle line first (walked along), each slice across and up
-    for (const c of P.corridor) { if (!(await clear(c)) || !(await clear(c.offset(0, 1, 0)))) { note('storage: corridor blocked at ' + c); return false } }
+    for (const c of P.corridor) { if (!(await clear(c)) || !(await clear(c.offset(0, 1, 0)))) { note('storage: corridor blocked at ' + c + ' (' + lastWhy + ')'); if (/water|lava/.test(lastWhy)) P.liquid = true; return false }; await walk(c) }
     await walk(P.corridor[1])
     for (let k = 3; k < 3 + LEN; k++) {
       S.check()
-      for (const j of [0, -1, 1, -2, 2]) for (let h = 0; h < H; h++) { const c = P.at(k, j, h); if (!air(c) && !(await clear(c))) { note('storage: could not clear ' + c + ' (water or lava?), the room stops at ' + (k - 3) + ' long'); return k - 3 >= 3 } }
+      for (const j of [0, -1, 1, -2, 2]) for (let h = 0; h < H; h++) { const c = P.at(k, j, h); if (!air(c) && !(await clear(c))) { note('storage: could not clear ' + c + ' (' + lastWhy + '), the room stops at ' + (k - 3) + ' long'); if (/water|lava/.test(lastWhy)) P.liquid = true; return k - 3 >= 3 } }
       await walk(P.at(k, 0))
     }
     return true
@@ -111,7 +130,10 @@ module.exports = function storage(G, S, M, api, log) {
       const P = plan(sh)
       note(`storage: digging the storage room off the shaft at y${P.y} (${W}x${LEN}x${H})`)
       const dug = await digRoom(sh, P)
-      if (!dug) { st.storageRestUntil = Date.now() + 30 * 60000; G.save(); await LD().up(sh); return false }
+      if (!dug) {
+        if (P.liquid) { st.storageTurn = st.storageTurn || {}; st.storageTurn[sh.id] = turnOf(sh) + 1; note('storage: liquid on this side, the next try turns the room') }
+        st.storageRestUntil = Date.now() + (P.liquid ? 5 : 30) * 60000; G.save(); await LD().up(sh); return false
+      }
       const sealed = await seal(P), lit = await light(P)
       const room = { id: 'storage-' + sh.id, type: 'storage', by: bot.username, shaft: sh.id, box: P.box, y: P.y, chests: [], at: Date.now() }
       LD().putRoom(room)
