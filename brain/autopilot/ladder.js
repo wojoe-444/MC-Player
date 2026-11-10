@@ -97,6 +97,12 @@ module.exports = function ladder(bot, S, goals, v, log) {
     const sides = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dz]) => dx !== w[0] || dz !== w[1]).map(([dx, dz]) => col.offset(dx, 0, dz))
       .sort((a, b) => a.distanceTo(me) - b.distanceTo(me))
     const open = (c) => passable(c) && passable(c.offset(0, 1, 0)) && solid(c.offset(0, -1, 0))
+    // too far from the shaft to work a side cell: tunnel across at this level to within reach of it first (a level walk is the safe way to
+    // the ladder; Smeo444 05:15 was 8 blocks off at y59 and the climb was skipped)
+    if (sides.every(c => S.dist(c.offset(0.5, 0.5, 0.5)) > 4.5) && S.dist(col.offset(0.5, 0.5, 0.5)) < 24) {
+      await S.goto(new goals.GoalNear(col.x, col.y, col.z, 2), { dig: true, ms: 45000, escalate: false }).catch(() => {})
+      if (Math.abs(bot.entity.position.y - y) > 1.5) return false
+    }
     for (const n of [...sides.filter(open), ...sides.filter(c => !open(c))]) {
       if (!open(n)) {
         if (S.dist(n.offset(0.5, 0.5, 0.5)) > 4.5 || !solid(n.offset(0, -1, 0))) continue
@@ -119,7 +125,20 @@ module.exports = function ladder(bot, S, goals, v, log) {
         await L.repair(sh).catch(() => 0)
         await bot.lookAt(v(sh.entry[0] + 0.5 + w[0], at() + 1.6, sh.entry[2] + 0.5 + w[1]), true)
         bot.setControlState('jump', true); bot.setControlState('forward', true)
-        while (Date.now() - t0 < ms && at() < y + 0.05) await sleep(50)
+        let lastLog = Date.now(), y0 = at()
+        while (Date.now() - t0 < ms && at() < y + 0.05) {
+          await sleep(50)
+          // a climb that does not rise: say what the body sees (feet block, collision, keys) every 5 s, and press the keys again
+          if (Date.now() - lastLog > 5000) {
+            lastLog = Date.now()
+            if (at() - y0 < 0.5) {
+              const fb = S.block(bot.entity.position.floored()), cs = bot.controlState || {}
+              log('LADDER', 'climb not rising at y' + at().toFixed(2) + ': feet ' + (fb && fb.name) + ', collidedH ' + !!bot.entity.isCollidedHorizontally + ', ground ' + bot.entity.onGround + ', keys ' + Object.keys(cs).filter(k => cs[k]).join('+') + ', yaw ' + bot.entity.yaw.toFixed(2))
+              try { await bot.lookAt(v(sh.entry[0] + 0.5 + w[0], at() + 1.6, sh.entry[2] + 0.5 + w[1]), true); bot.setControlState('sneak', false); bot.setControlState('jump', true); bot.setControlState('forward', true) } catch {}
+            }
+            y0 = at()
+          }
+        }
       } else if (at() > y + 0.2) {
         bot.clearControlStates()
         while (Date.now() - t0 < ms && at() > y + 0.1) await sleep(50)
