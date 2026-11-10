@@ -15,6 +15,8 @@ module.exports = function makeGoals(S, M, api, log) {
   st.heading = st.heading == null ? Math.floor(Math.random() * 8) : st.heading
   G.save = () => { try { fs.writeFileSync(file + '.tmp', JSON.stringify(st, null, 1)); fs.renameSync(file + '.tmp', file) } catch {} }
   const note = (m) => { G.log.push(`${new Date().toISOString().slice(11, 19)} ${m}`); if (G.log.length > 80) G.log.shift(); log('GOAL', m) }
+  // how a routine step ended, for observers (brain/journal sets G.onStepEnd). out: ok | explore | fail | timeout | error | aborted | parked. Never affects the step.
+  const stepEnd = (id, out, t0) => { try { if (typeof G.onStepEnd === 'function') G.onStepEnd({ step: id, out, ms: t0 ? Date.now() - t0 : 0 }) } catch { /* an observer must not break play */ } }
   G.note = note
   const milestone = (id, text) => { if (st.said[id]) return; st.said[id] = Date.now(); G.save(); S.say(text) }
   G.milestone = milestone
@@ -250,6 +252,7 @@ module.exports = function makeGoals(S, M, api, log) {
     if (!NOBAG.has(s.id) && G.picks.length === 4 && G.picks.every(p => p.id === s.id && p.sig === sig)) {
       G.cool[s.id] = Date.now() + 15 * 60000; G.picks = []
       note(`loop: ${s.id} ran 4 times with no change in the bag, parked for 15 min`)
+      stepEnd(s.id, 'parked')
       return
     }
     // provisional cooldown: a step that gets aborted halfway (preempted, watchdog kick, restart) must not be re-picked at once, or it loops forever
@@ -260,11 +263,13 @@ module.exports = function makeGoals(S, M, api, log) {
     if (SURFACE.has(s.id) && st.home && bot.entity.position.y < st.home[1] - 10 && !S.skyVisible()) {
       const up = await (M.goSurface ? M.goSurface() : M.surface()); note(`${s.id}: up from the mine first (${typeof up === 'string' ? up : JSON.stringify(up)})`)
     }
+    const t0 = Date.now(); let out = null
     try { r = await s.run() } catch (e) {
-      if (e && e.name === 'StepTimeout') { note(`${s.id}: time budget used up, moving on`); r = false }
-      else if (S.isAbort(e)) throw e
-      else { log('GOAL_ERR', `${s.id}: ${e.stack || e.message}`); r = false }
+      if (e && e.name === 'StepTimeout') { note(`${s.id}: time budget used up, moving on`); r = false; out = 'timeout' }
+      else if (S.isAbort(e)) { stepEnd(s.id, 'aborted', t0); throw e }
+      else { log('GOAL_ERR', `${s.id}: ${e.stack || e.message}`); r = false; out = 'error' }
     } finally { S.stepDeadline = 0 }
+    stepEnd(s.id, out || (r === 'explore' ? 'explore' : r ? 'ok' : 'fail'), t0)
     if (r === 'explore') { note(`${s.id}: nothing in sight, exploring`); await explore(); r = true; G.cool[s.id] = Date.now() + 2000 }
     else if (!r) { G.failedCount = (G.failedCount || 0) + 1; G.fails[s.id] = (G.fails[s.id] || 0) + 1; G.cool[s.id] = Date.now() + Math.min(300000, (s.cool || 15000) * G.fails[s.id]); note(`${s.id} failed x${G.fails[s.id]}`) }
     else { G.done = (G.done || 0) + 1; G.fails[s.id] = 0; if (s.cool) G.cool[s.id] = Date.now() + 1000 }
