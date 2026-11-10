@@ -4,6 +4,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const os = require('os'), path = require('path'), fs = require('fs')
 const { Vec3 } = require('vec3')
+process.env.BOT_MOBFARM_CLAIM = path.join(os.tmpdir(), 'mobfarm-claim-test-' + process.pid + '.json')   // never the real bot-shared claim
 
 function rig({ shaft, rooms = [], items = {} } = {}) {
   const notes = []
