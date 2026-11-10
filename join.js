@@ -16,6 +16,16 @@ const bot = mineflayer.createBot({
 const armorAllowed = () => process.env.ALLOW_ARMOR === '1' || !!require('./brain/safety/gear').allowArmor
 { const eq = bot.equip; bot.equip = async function (item, dest) { if (/^(head|torso|legs|feet)$/.test(String(dest)) && !armorAllowed()) throw new Error('no armor (Act 2 rule)'); return eq.apply(this, arguments) } }
 bot._armorAllowed = armorAllowed
+// Every placement looks at its target at once. mineflayer's placeBlock turns the head without forcing it (about 0.15 rad a tick), so
+// at the top of a pillar jump the place went out ticks later with the feet back in the cell: the server refused it. In the lab (PR #206) the
+// default waited 10.6 ticks and ended with the feet in the cell in 19 of 30 runs; forceLook waited 0 ticks, 0 of 30. One wrapper here covers
+// every caller (seven pillar copies, torches, farms, builds, entomb).
+function forcePlaceLook() {
+  if (bot._placeForced || typeof bot._placeBlockWithOptions !== 'function') return
+  bot._placeForced = true
+  bot.placeBlock = (ref, face) => bot._placeBlockWithOptions(ref, face, { forceLook: true, swingArm: 'right' })
+}
+forcePlaceLook(); bot.once('login', forcePlaceLook); bot.once('spawn', forcePlaceLook)
 // Keep the recipe book the server sends at login (before the crafting module loads; mineflayer drops it). Used for fast bulk crafting (brain/crafting).
 bot._recipeBook = new Map()
 // damage types arrive once, in the configuration phase: kept so each damage_event can be named (Walter: which hits come from berry bushes?)
