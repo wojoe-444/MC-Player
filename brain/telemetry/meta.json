@@ -1,0 +1,9 @@
+{
+  "name": "telemetry",
+  "version": 1,
+  "kind": "observer",
+  "summary": "Ring buffer of position, jumps, held item vs block dug and action outcomes, plus deterministic anomaly flags, for the external behavior reviewer.",
+  "requires": [],
+  "provides": [],
+  "claims": []
+}

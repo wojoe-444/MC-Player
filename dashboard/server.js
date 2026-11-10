@@ -397,6 +397,9 @@ http.createServer((req, res) => {
     const r = fileContent(sm[1], sm[2], sm[3]);
     return r ? send(res, 200, JSON.stringify(r), 'application/json') : send(res, 404, 'not found');
   }
+  // spectator reviewer (reviewer/): latest findings per bot, and the in-bot telemetry summary they are based on
+  if (p === '/api/findings') return send(res, 200, JSON.stringify(Object.fromEntries(Object.values(BOTS).map(b => [b.id, readJson(path.join(stateDirOf(b), 'review', 'findings.json'))]))), 'application/json');
+  if ((sm = p.match(/^\/api\/telemetry\/(ozo|smeo)$/))) return send(res, 200, JSON.stringify(readJson(path.join(stateDirOf(BOTS[sm[1]]), 'telemetry', 'summary.json'))), 'application/json');
   if (p === '/api/snapshot') return send(res, 200, JSON.stringify(snapshot()), 'application/json');
   let m;
   if ((m = p.match(/^\/img\/(ozo|smeo)\/(top|pov|slice)$/))) {
