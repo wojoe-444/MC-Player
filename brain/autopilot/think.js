@@ -177,6 +177,7 @@ module.exports = function think(G, S, M, api, log) {
       danger: { hostiles: hostiles(), ready_for_deep_mine: readyDeep },
       around: { visible: visibleKinds(), ores: visibleOres() },
       base_chests: { freshness: mem.chestFreshness(), stock: mem.stock(p) },
+      storage_room: (G.storageSummary && G.storageSummary()) || undefined,
       underground_walked: mem.trailSummary(),
       danger_zones: mem.dangerZones()
     }

@@ -26,7 +26,7 @@ function register(api) {
   const log = (m) => api.log('crafting', m)
 
   const furnaceCfg = readJson(path.join(__dirname, '..', 'furnace-config.json'), {})
-  const chests = makeChests({ dir: api.dir, overlayFile: api.statePath('crafting-chests.json'), indexFile: config.chestIndexFile, furnaceConfig: furnaceCfg, rules: config, now: api.now, log })
+  const chests = makeChests({ dir: api.dir, overlayFile: api.statePath('crafting-chests.json'), indexFile: config.chestIndexFile, furnaceConfig: furnaceCfg, rules: { ...config, reserved: require('../storage-model').makeReserved(process.env.BOT_REGISTRY || path.join(__dirname, '..', '..', '..', 'bot-shared', 'registry.json')) }, now: api.now, log })
   const Recipe = require('prismarine-recipe')(reg).Recipe
   const recipeCache = new Map()
   const recipesOf = (id) => { if (!recipeCache.has(id)) recipeCache.set(id, Recipe.find(id, null)); return recipeCache.get(id) }

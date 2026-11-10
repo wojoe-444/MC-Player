@@ -17,6 +17,13 @@ test('predicates: no records means unmeasured or open, never done; records flip 
   assert.deepStrictEqual(r.phases['1'], { total: 2, measured: 2, done: 2 })
 })
 
+test('the reset-gear chest predicate reads the shared registry: a room with a reset chest is done, rooms without are open', () => {
+  const by = (f) => Object.fromEntries(evaluate(f).items.map(i => [i.id, i.status]))
+  assert.strictEqual(by({ registry: { worlds: { w: { rooms: [{ type: 'storage', reset: [1, 2, 3] }] } } } })['2.2.resetchest'], 'done')
+  assert.strictEqual(by({ registry: { worlds: { w: { rooms: [{ type: 'storage', reset: null }] } } } })['2.2.resetchest'], 'open')
+  assert.strictEqual(by({})['2.2.resetchest'], 'unmeasured')
+})
+
 test('a predicate that throws is unmeasured, not a crash; loadFacts reads the real files', () => {
   assert.strictEqual(evaluate({}, [{ id: 'x', phase: '1', title: 't', check: () => { throw new Error('boom') }, needs: 'n' }]).items[0].status, 'unmeasured')
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-')); fs.mkdirSync(path.join(dir, 'state'))

@@ -15,6 +15,7 @@ function loadFacts(stateDir, dir) {
     autopilot: s('autopilot-state.json'), mining: s('mining-state.json'), treefarm: s('treefarm-state.json'), mobfarm: s('mobfarm.json'),
     furnace: s('furnace-state.json'), nether: s('nether-network.json'), crafting: s('crafting-chests.json'),
     waypoints: readJson(path.join(dir, 'waypoints.json'), {}), stations: readJson(path.join(dir, 'stations.json')), chestIndex: readJson(path.join(dir, 'chest-index.json')),
+    registry: readJson(process.env.BOT_REGISTRY || path.join(__dirname, '..', '..', '..', 'bot-shared', 'registry.json')),
     dayStats: (s('autopilot-state.json') || {}).dayStats || []
   }
 }
@@ -26,7 +27,13 @@ const PREDICATES = [
   { id: '2.1.shaft', phase: '2', title: 'A mine is recorded in the mining registry', check: (f) => (f.mining ? arr(f.mining.mines).length > 0 : null), needs: 'mining-state.json' },
   { id: '2.1.ladder', phase: '2', title: 'The recorded shaft is laddered, with old staircases sealed', check: () => null, needs: 'a "laddered" and "sealed" flag on each mining-state mine' },
   { id: '2.2.storage', phase: '2', title: 'A storage room waypoint exists', check: (f) => waypointNames(f).some(n => /storage/i.test(n || '')), needs: 'waypoints.json' },
-  { id: '2.2.resetchest', phase: '2', title: 'A reset-gear chest is registered', check: (f) => (f.crafting || f.chestIndex ? JSON.stringify(f.crafting || {}).concat(JSON.stringify(f.chestIndex || {})).toLowerCase().includes('reset') : null), needs: 'crafting-chests.json / chest-index.json' },
+  { id: '2.2.resetchest', phase: '2', title: 'A reset-gear chest is registered', check: (f) => {
+    // the storage room record (registry rooms[].reset, brain/storage-model.js) is the proof; a chest called "reset" in the chest records also counts
+    const rooms = []; for (const w of Object.values((f.registry && f.registry.worlds) || {})) for (const r of arr(w.rooms)) rooms.push(r)
+    if (rooms.some(r => r && Array.isArray(r.reset) && r.reset.length === 3)) return true
+    if (!f.registry && !f.crafting && !f.chestIndex) return null
+    return JSON.stringify(f.crafting || {}).concat(JSON.stringify(f.chestIndex || {})).toLowerCase().includes('reset')
+  }, needs: 'the shared registry (rooms[].reset) / crafting-chests.json / chest-index.json' },
   { id: '2.3.torches', phase: '2', title: 'Lit area and torch spacing around home', check: () => null, needs: 'a count of lit cells around home in lighting-state.json' },
   { id: '2.4.treefarm', phase: '2', title: 'Tree farm has sites and has planted saplings', check: (f) => (f.treefarm ? arr(f.treefarm.sites).length > 0 && ((f.treefarm.stats || {}).planted || 0) > 0 : null), needs: 'treefarm-state.json' },
   { id: '2.5.respawn', phase: '2', title: 'Spare beds and mini reset chests at base, mine and camps', check: () => null, needs: 'a registry of beds and reset chests by place' },
