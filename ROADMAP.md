@@ -25,9 +25,9 @@ Food, stone tools, bed, shelter, torches. Done on the Earth map.
 6. **Hopper smelter** on charcoal from the tree farm; 3 or 4 furnaces first (5 iron per hopper). The bot takes furnace output by hand when it wants the XP.
 7. **Underground crop farm and composter** (wheat, carrots, potatoes, water, torches; surplus composts into bone meal). Check Serene Seasons behaviour underground.
 8. Mob farm. **XP rule:** keep the kill step bot-made so XP orbs drop; the farm gives string, bones, arrows, gunpowder and free armor.
-9. **Animal pens** (cows, sheep, pigs, chickens): shear sheep instead of killing, keep leather. Wool feeds beds and the travel kit.
+9. **Animal pens** (cows, sheep, pigs, chickens): shear sheep instead of killing, keep leather. Wool feeds beds and the travel kit. Primitives: `brain/husbandry` (fenced, lit pen; lure, breed, shear, cull; winter herd targets).
 10. **Sugarcane farm** (paper, books, bookshelves later).
-11. Glow lichen with shears and bone meal.
+11. Glow lichen with shears and bone meal. Primitives: `brain/husbandry` (seed a stone wall, bone-meal it, shear down to the seed).
 12. Late Phase 2: **pointed dripstone and safe lava farms** (design below).
 13. Late Phase 2: **camps and short trips** on the travel network (design below).
 14. Optional: cobblestone generator, only if cave-filling outruns the stone supply.

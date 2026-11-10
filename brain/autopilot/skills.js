@@ -704,13 +704,21 @@ module.exports = function makeSkills({ bot, api, log }) {
   }
 
   // ---------- hunting ----------
+  // animals standing inside one of our built pens are livestock (brain/husbandry decides which of them are culled): the hunting skills leave them alone
+  S.penned = (e) => {
+    try {
+      const H = bot._husbandry; if (!H || !H.state || !H.state.pens.length) return false
+      const { inBox } = require('../husbandry/herd'), { boxOf } = require('../husbandry/blueprint')
+      return H.state.pens.some(p => p.built && inBox(e.position, boxOf(p)))
+    } catch { return false }
+  }
   S.animals = (kinds = Object.keys(PASSIVE_FOOD), radius = 40) => {
     const me = bot.entity.position, out = []
     for (const e of Object.values(bot.entities)) {
       if (!e || !e.position || e === bot.entity) continue
       if (!kinds.includes(e.name)) continue
       const d = e.position.distanceTo(me); if (d > radius) continue
-      if (e.metadata && e.metadata.some && false) continue
+      if (S.penned(e)) continue
       if (!S.canSee(e)) continue
       out.push({ e, d })
     }

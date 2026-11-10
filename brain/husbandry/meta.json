@@ -1,0 +1,13 @@
+{
+  "name": "husbandry",
+  "version": 1,
+  "kind": "job",
+  "summary": "Fenced, lit animal pens (lure, breed, shear, cull) and a glow lichen light farm: Phase 2 items 9 and 11.",
+  "requires": [
+    "nav"
+  ],
+  "provides": [
+    "husbandry"
+  ],
+  "claims": []
+}

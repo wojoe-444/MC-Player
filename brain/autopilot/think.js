@@ -483,6 +483,16 @@ module.exports = function think(G, S, M, api, log) {
     for (const e of an.slice(0, 4)) { S.check(); await S.kill(e, { ms: 20000 }); n++ }
     return { ok: n > 0, note: `hunted ${n}`, gained: top(diff(before, inv()).gained, 6) }
   })
+  def('pens', '{op: build|tend|lichen|status, another?} Phase 2 livestock and light. build: fence, gate and torches a lit pen on flat grass (bag needs the fence set: 31 fences, 1 gate, 7 torches of one wood; craft them first). tend: lure animals outside the pen in with their food (wheat: cows and sheep; carrots: pigs; seeds: chickens), breed pairs, shear sheep, cull the surplus but keep a breeding pair (bigger herds in winter). lichen: seed, bone-meal and shear a glow lichen wall (needs glow_lichen, bone_meal, shears).', async (a) => {
+    const h = bot._husbandry; if (!h) return fail('the husbandry module is not loaded')
+    const op = clean(a.op).toLowerCase() || 'status'
+    const E = h.engine
+    if (op === 'status') return { ok: true, note: clean(JSON.stringify(E.snapshot())).slice(0, 600) }
+    if (!['build', 'tend', 'lichen'].includes(op)) return fail('op must be build, tend, lichen or status')
+    const r = await (op === 'build' ? E.runBuild(S.ctx, { another: !!a.another }) : op === 'tend' ? E.runTend(S.ctx) : E.runLichen(S.ctx))
+    if (!r.ok) return fail(clean(r.why), r.needs ? 'bring: ' + Object.entries(r.needs).map(([k, n]) => n + ' ' + k).join(', ') : (r.danger ? 'wait for the danger to pass' : undefined))
+    return { ok: true, note: clean(JSON.stringify(r)).slice(0, 400) }
+  })
   def('pickup', '{} collect item drops nearby.', async () => { const n = await S.pickup(24, 20000); return { ok: true, note: `picked ${n}` } })
   def('recover_death', '{} walk to where you last died and collect the dropped gear (only worth it within 5 minutes of dying and if the spot is not the deadly cave).', async () => {
     const d = mem.lastDeath(); if (!d) return fail('no death recorded')
