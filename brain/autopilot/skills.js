@@ -780,8 +780,21 @@ module.exports = function makeSkills({ bot, api, log }) {
     if (!bot._equipWrapped) {
       const oe = bot.equip.bind(bot)
       bot.equip = async (item, dest) => {
-        if (Date.now() - (bot._lastResyncAt || 0) > 4000 && !bot.currentWindow) { light(); await new Promise(r => setTimeout(r, 350)); if (item && item.type != null) { const fresh = bot.inventory.items().find(i => i.type === item.type); if (fresh) item = fresh } }
-        return oe(item, dest)
+        if (Date.now() - (bot._lastResyncAt || 0) > 4000 && !bot.currentWindow) {
+          light(); await new Promise(r => setTimeout(r, 350))
+          if (item && item.type != null) {
+            const fresh = bot.inventory.items().find(i => i.type === item.type)
+            // gone once the server's view is in: the bot was about to pillar with dirt it no longer had and jumped in place holding a
+            // sword (Smeo444, 03:14). Say so instead of going on with a phantom item
+            if (!fresh) throw new Error('no ' + (item.name || 'item') + ' in the bag')
+            item = fresh
+          }
+        }
+        await oe(item, dest)
+        // the hand: check it took (one more resync and one retry when it did not)
+        if (dest === 'hand' || dest == null) {
+          if (!bot.heldItem || bot.heldItem.type !== item.type) { light(); await new Promise(r => setTimeout(r, 350)); const f2 = bot.inventory.items().find(i => i.type === item.type); if (!f2) throw new Error('no ' + (item.name || 'item') + ' in the bag'); if (!bot.heldItem || bot.heldItem.type !== item.type) await oe(f2, dest) }
+        }
       }
       bot._equipWrapped = true
     }

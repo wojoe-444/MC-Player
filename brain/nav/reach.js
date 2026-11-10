@@ -547,6 +547,8 @@ class Reach {
     try {
       markPlacing(bot, 4000)
       await bot.equip(it, 'hand')
+      // not holding the block after all (the bag drifted from the server's): no jumping in place with a sword
+      if (!bot.heldItem || bot.heldItem.name !== it.name) { this.log('pillar: not holding ' + it.name + ' (' + (bot.heldItem ? bot.heldItem.name : 'nothing') + ')'); return false }
       await bot.look(bot.entity.yaw, -Math.PI / 2, true)
       bot.setControlState('jump', true)
       let placed = false
