@@ -428,7 +428,7 @@ module.exports = function think(G, S, M, api, log) {
   def('equip_gear', '{} hold the best sword (and a shield in the off hand if you have one). Wears the best armor you have.', async () => {
     const worn = []
     const sh = bot.inventory.items().find(i => i.name === 'shield'); if (sh) { try { await bot.equip(sh, 'off-hand'); worn.push('shield') } catch {} }
-    for (const slot of ['head', 'torso', 'legs', 'feet']) {
+    for (const slot of (bot._armorAllowed && !bot._armorAllowed()) ? [] : ['head', 'torso', 'legs', 'feet']) {
       const want = ARMOR_SLOT_NAMES[slot]; const best = bot.inventory.items().filter(i => want.test(i.name)).sort((a, b) => ARMOR_RANK.findIndex(r => a.name.startsWith(r)) - ARMOR_RANK.findIndex(r => b.name.startsWith(r)))[0]
       if (best) { try { await bot.equip(best, slot); worn.push(best.name) } catch {} }
     }
