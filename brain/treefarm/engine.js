@@ -346,7 +346,7 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
       await equipShovel()
       try { await bot.dig(under, true) } catch (e) { log(`pillar dig: ${e.message}`); break }
       pl.placed = pl.placed.filter(k => k !== key(under.position))
-      for (let i = 0; i < 12 && bot.entity.position.y > y0 - 0.9; i++) await sleep(50)
+      for (let i = 0; i < 60 && bot.entity.position.y > y0 - 0.9 && Date.now() < until; i++) await sleep(50)      // the fall is ~0.3 s; a slow server or a loaded machine gets up to 3 s before the next block is dug
       save()
     }
     // forget placed blocks that are gone (picked up by someone, fell off) so a stale list never makes us dig natural ground
