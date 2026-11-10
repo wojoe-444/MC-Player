@@ -22,7 +22,13 @@ npm install
 npm run dist       # or double-click build-installer.bat
 ```
 
-This builds `dist/Bot Dashboard Setup <version>.exe` (build it on Windows: embedding the icon needs the Windows tooling). Running it installs per-user (no admin prompt), adds **Start menu** and desktop shortcuts named "Bot Dashboard" with the app icon, and launches the app. Pin it from the Start menu or the taskbar as usual. The installed app bundles the dashboard server, so it no longer needs this repo checkout; settings and reviews live in the app data folder under `%APPDATA%`. To update, pull, rebuild and run the new installer over the old one. The icon is `build/icon.ico` (regenerate with `python3 build/make-icon.py`).
+This builds `dist/Bot-Dashboard-Setup-<version>.exe` (build it on Windows: embedding the icon needs the Windows tooling). Running it installs per-user (no admin prompt), adds **Start menu** and desktop shortcuts named "Bot Dashboard" with the app icon, and launches the app. Pin it from the Start menu or the taskbar as usual. The installed app bundles the dashboard server, so it no longer needs this repo checkout; settings and reviews live in the app data folder under `%APPDATA%`. The icon is `build/icon.ico` (regenerate with `python3 build/make-icon.py`).
+
+## Updating the installed app
+
+**App > Settings** (Ctrl+,) has **Check for updates**. If a newer version exists, **Update and restart** downloads it, stops the dashboard server, runs the installer silently and relaunches the app. Nothing is downloaded or installed until you press it, and settings and reviews in `%APPDATA%` are kept.
+
+How it works: `.github/workflows/release-app.yml` builds the Windows installer on GitHub Actions and publishes it as a release (`v0.1.<run number>`, with `latest.yml`) whenever `app/`, `dashboard/` or `reviewer/` change on `main` (or run it by hand from the Actions tab). The installed app uses `electron-updater` (`lib/updater.js`) to compare its version with the latest release of `wojoe-444/MC-Player` (public repo, no token needed). So an update is available a few minutes after a merge to `main`, once the workflow finishes. Running from source (`npm start`) shows "updates only work in the installed app"; there, use `git pull`. A local `build-installer.bat` build is version 0.1.0 and never touches the releases.
 
 ## Settings
 
@@ -48,7 +54,7 @@ To add a "drive the bots" trigger: write `lib/<name>.js` returning a trigger, re
 
 ## Tests
 
-`npm test` (pure Node, no Electron needed): config merge, trigger scheduling, review prompt/skip logic, the claude runner.
+`npm test` (pure Node, no Electron needed): config merge, trigger scheduling, review prompt/skip logic, the claude runner, the update flow.
 
 ## Behavior reviewer
 

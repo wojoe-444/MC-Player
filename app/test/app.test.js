@@ -97,3 +97,67 @@ test('runClaude: parses json result, reports errors, handles missing CLI', async
   const missing = await runClaude({ prompt: 'hi', spawnFn: () => { const c = new EventEmitter(); c.stdout = new EventEmitter(); c.stderr = new EventEmitter(); c.stdin = Object.assign(new EventEmitter(), { end() {} }); setImmediate(() => c.emit('error', Object.assign(new Error('x'), { code: 'ENOENT' }))); return c } })
   assert.match(missing.error, /not found/)
 })
+
+// ---- updater ----
+const { UpdateManager, friendlyError } = require('../lib/updater')
+function fakeAutoUpdater(opts = {}) {
+  const au = new EventEmitter()
+  au.calls = []
+  au.checkForUpdates = async () => { au.calls.push('check'); if (opts.checkError) { const e = new Error(opts.checkError); au.emit('error', e); throw e } au.emit('checking-for-update'); au.emit(opts.latest ? 'update-available' : 'update-not-available', { version: opts.latest || '0.1.0', releaseNotes: opts.notes }) }
+  au.downloadUpdate = async () => { au.calls.push('download'); if (opts.downloadError) throw new Error(opts.downloadError); au.emit('download-progress', { percent: 42.4 }); au.emit('update-downloaded', {}) }
+  au.quitAndInstall = (...a) => au.calls.push('install:' + a.join(','))
+  return au
+}
+
+test('updater: not packaged reports unsupported and never touches electron-updater', async () => {
+  const au = fakeAutoUpdater({ latest: '0.2.0' })
+  const u = new UpdateManager({ autoUpdater: au, currentVersion: '0.1.0', isPackaged: false })
+  assert.strictEqual(u.state().status, 'unsupported')
+  await u.check(); await u.install()
+  assert.deepStrictEqual(au.calls, [])
+})
+
+test('updater: up to date', async () => {
+  const au = fakeAutoUpdater()
+  const u = new UpdateManager({ autoUpdater: au, currentVersion: '0.1.0', isPackaged: true })
+  assert.strictEqual(au.autoDownload, false); assert.strictEqual(au.autoInstallOnAppQuit, false)
+  const s = await u.check()
+  assert.strictEqual(s.status, 'up-to-date'); assert.ok(s.checkedAt)
+  await u.install() // nothing to install
+  assert.deepStrictEqual(au.calls, ['check'])
+})
+
+test('updater: newer version is offered, then downloaded, dashboard stopped, and quitAndInstall runs once', async () => {
+  const au = fakeAutoUpdater({ latest: '0.1.7', notes: '<p>Adds <b>Settings</b></p>' })
+  const order = []
+  const u = new UpdateManager({ autoUpdater: au, currentVersion: '0.1.0', isPackaged: true, beforeInstall: () => order.push('stop') })
+  const seen = []; u.on('update', s => seen.push(s.status))
+  let s = await u.check()
+  assert.deepStrictEqual([s.status, s.latest, s.notes], ['available', '0.1.7', 'Adds Settings'])
+  au.calls.length = 0
+  au.quitAndInstall = (...a) => order.push('install:' + a.join(','))
+  s = await u.install()
+  assert.deepStrictEqual(order, ['stop', 'install:true,true'])
+  assert.deepStrictEqual(au.calls, ['download'])
+  assert.ok(seen.includes('downloading') && seen.includes('ready'))
+  await u.install() // already ready: no second install
+  assert.strictEqual(order.length, 2)
+})
+
+test('updater: check and download errors are reported in plain words and can be retried', async () => {
+  const bad = new UpdateManager({ autoUpdater: fakeAutoUpdater({ checkError: 'HttpError: 404 Not Found\n{big json}' }), currentVersion: '0.1.0', isPackaged: true })
+  const s = await bad.check()
+  assert.strictEqual(s.status, 'error'); assert.match(s.error, /No published update/)
+  assert.match(friendlyError(new Error('getaddrinfo ENOTFOUND github.com')), /Could not reach GitHub/)
+
+  const o = { latest: '0.1.2', downloadError: 'disk full' }
+  const au = fakeAutoUpdater(o)
+  const u = new UpdateManager({ autoUpdater: au, currentVersion: '0.1.0', isPackaged: true, beforeInstall: () => assert.fail('must not stop the dashboard when the download failed') })
+  await u.check()
+  const r = await u.install()
+  assert.deepStrictEqual([r.status, r.error, r.latest], ['error', 'disk full', '0.1.2'])
+  assert.ok(!au.calls.some(c => c.startsWith('install')))
+  o.downloadError = null
+  await u.install() // retry from the error state
+  assert.ok(au.calls.includes('install:true,true'))
+})

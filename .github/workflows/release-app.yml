@@ -1,0 +1,44 @@
+# Builds the Windows installer for the Bot Dashboard app and publishes it as a GitHub release.
+# The installed app's Settings > "Check for updates" reads the latest release (electron-updater) and
+# "Update and restart" downloads and runs that installer. Version = 0.1.<run number>, always newer than a local 0.1.0 build.
+name: Release Bot Dashboard app
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'dashboard/**'
+      - 'reviewer/**'
+      - '.github/workflows/release-app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-app
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install app dependencies
+        working-directory: app
+        run: npm ci
+      - name: Install reviewer dependencies
+        working-directory: reviewer
+        run: npm ci --omit=dev
+      - name: App tests
+        working-directory: app
+        run: npm test
+      - name: Build and publish the installer
+        working-directory: app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win nsis --publish always -c.extraMetadata.version=0.1.${{ github.run_number }}
