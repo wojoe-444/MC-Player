@@ -604,7 +604,13 @@ module.exports = function makeSkills({ bot, api, log }) {
     if (S.count(name) >= count) return true
     let placed = null
     if (!o.noTable && !(o.depth > 0) && name !== 'crafting_table' && !S.tableNear(4.5) && S.has('crafting_table')) { try { placed = await S.placeWork('crafting_table') } catch {} }
-    try { return await craftInner(name, count, o) } finally { if (placed) { try { await S.reclaim() } catch {} } }
+    try {
+      let ok = await craftInner(name, count, o).catch(() => false)
+      // a craft at the table that did not come through (the table window drifts like the bag: 'updateSlot:0 did not fire' crafting
+      // ladders, 03:18): close it, resync, and try once more
+      if (!ok && !(o.depth > 0) && S.count(name) < count) { S.closeWindows(); await S.resyncInventory(); ok = await craftInner(name, count, o).catch(() => false) }
+      return ok
+    } finally { if (placed) { try { await S.reclaim() } catch {} } }
   }
 
   // ---------- furnace ----------
@@ -771,14 +777,15 @@ module.exports = function makeSkills({ bot, api, log }) {
   // the held item drifts the same way as the bag (Walter 2026-11-09 watched OzoGo444 chop a tree with a sword and its fist and then jump in
   // place: the nav pillar's 'Server refused to place dirt' - the bot thought it held dirt). A light resync every 12 s while nothing is being
   // clicked, dug or opened keeps the bot's view of its bag and hand close to the server's; equip asks for one first when the last is old.
-  if (!bot._resyncTimer) {
+  if (!bot._resyncTimer || bot._equipWrapped !== 2) {
+    if (bot._resyncTimer) clearInterval(bot._resyncTimer)
     bot._lastClickAt = 0
     if (!bot._clickStamped) { const oc = bot.clickWindow.bind(bot); bot.clickWindow = (...a) => { bot._lastClickAt = Date.now(); return oc(...a) }; bot._clickStamped = true }
     const light = () => { try { bot._client.write('window_click', { windowId: 0, stateId: -1, slot: -999, mouseButton: 0, mode: 0, changedSlots: [], cursorItem: null }); bot._lastResyncAt = Date.now() } catch {} }
     S.resyncLight = light
     bot._resyncTimer = setInterval(() => { try { if (!bot.entity || bot.currentWindow || bot.targetDigBlock || Date.now() - (bot._lastClickAt || 0) < 3000) return; light() } catch {} }, 12000)
-    if (!bot._equipWrapped) {
-      const oe = bot.equip.bind(bot)
+    if (bot._equipWrapped !== 2) {
+      const oe = (bot._equipOrig = bot._equipOrig || bot.equip.bind(bot))
       bot.equip = async (item, dest) => {
         if (Date.now() - (bot._lastResyncAt || 0) > 4000 && !bot.currentWindow) {
           light(); await new Promise(r => setTimeout(r, 350))
@@ -796,9 +803,10 @@ module.exports = function makeSkills({ bot, api, log }) {
           if (!bot.heldItem || bot.heldItem.type !== item.type) { light(); await new Promise(r => setTimeout(r, 350)); const f2 = bot.inventory.items().find(i => i.type === item.type); if (!f2) throw new Error('no ' + (item.name || 'item') + ' in the bag'); if (!bot.heldItem || bot.heldItem.type !== item.type) await oe(f2, dest) }
         }
       }
-      bot._equipWrapped = true
+      bot._equipWrapped = 2
     }
   }
+  if (!S.resyncLight) S.resyncLight = () => { try { bot._client.write('window_click', { windowId: 0, stateId: -1, slot: -999, mouseButton: 0, mode: 0, changedSlots: [], cursorItem: null }); bot._lastResyncAt = Date.now() } catch {} }
   return S
 }
 
