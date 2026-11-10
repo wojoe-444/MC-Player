@@ -175,14 +175,9 @@ module.exports = function createFarm({ bot, say, goals, tryGoto, safehand, stopN
 
   // Walter: use the right tool for what is being broken (a sword or axe for bamboo and cane, whichever the table says is fastest; hand when there is none).
   async function equipFor(block, prefer = null) {
-    let best = null, bt = Infinity
     const pool = bot.inventory.items().filter(i => /_(sword|axe|shovel|pickaxe|hoe)$/.test(i.name))
     const preferred = prefer ? pool.filter(i => new RegExp(prefer).test(i.name)) : []
-    for (const it of (preferred.length ? preferred : pool)) {
-      if (!/_(sword|axe|shovel|pickaxe|hoe)$/.test(it.name)) continue
-      let t = Infinity; try { t = block.digTime(it.type, false, false, false, [], {}) } catch {}
-      if (t < bt) { bt = t; best = it }
-    }
+    const best = require('../motor/tooltier').minimumTool(block, preferred.length ? preferred : pool, { allowSword: true, fallback: true })      // lowest tier that beats the hand; failing that the lowest tier of the preferred kind (an axe on bamboo is no faster than a fist in the data, but it is what was asked for)
     if (best && (!bot.heldItem || bot.heldItem.type !== best.type)) { try { await bot.equip(best, 'hand') } catch (e) { log(`equip ${best.name}: ${e.message}`) } }
   }
 

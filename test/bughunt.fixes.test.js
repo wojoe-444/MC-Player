@@ -44,3 +44,11 @@ test('the shared bot files are written through a per-bot temp name and renamed (
   assert.match(fs.readFileSync(path.join(root, 'plan.js'), 'utf8'), /SLEEP_FILE \+ '\.' \+ bot\.username \+ '\.tmp'[\s\S]{0,120}renameSync\(tmp, SLEEP_FILE\)/)
   assert.match(fs.readFileSync(path.join(root, 'mining.js'), 'utf8'), /GoalBlock\(b\.x, b\.y, b\.z\), \{ dig: false, ms: 12000, escalate: false \}/)
 })
+
+test('reach defaults carry no coordinates from the first world; the ladder wall fill picks a solid neighbour and the matching face (source check)', () => {
+  const { DEFAULTS } = require('../brain/nav/reach')
+  assert.strictEqual(DEFAULTS.baseCenter, null); assert.strictEqual(DEFAULTS.property, null)
+  const src = fs.readFileSync(path.join(__dirname, '..', 'brain', 'autopilot', 'ladder.js'), 'utf8')
+  assert.match(src, /below && below\.boundingBox === 'block' \? \{ b: below, face: v\(0, 1, 0\) \} : above && above\.boundingBox === 'block' \? \{ b: above, face: v\(0, -1, 0\) \}/)
+  assert.ok(!/S\.block\(wb\.offset\(0, -1, 0\)\) \|\| S\.block\(wb\.offset\(0, 1, 0\)\)/.test(src))
+})

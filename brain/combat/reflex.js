@@ -294,7 +294,10 @@ function create(bot, overrides = {}, hooks = {}) {
       beh = 'idle'
       // (not while the bot is eating or drinking something: the idle sword swap every tick cancelled every bite, and Smeo sat at 3.7 hp
       // with 26 berries in the bag, the eat step parked twice, 09:40)
-      if (P.yieldIdle) { shield(false); if (sword() && !bot.usingHeldItem) holdSlot(sword()); return }   // course mode: hand the controls back to navigation
+      // course mode: hand the controls back to navigation. The sword goes back into the hand only just after a fight, never on every quiet tick:
+      // the spy on the live bots (2026-11-10 07:19) caught this line swapping pickaxe or axe -> sword at 1-5 s intervals, which is why the
+      // alerts showed 100+ digs of stone and logs with a sword in hand and pillars that placed the sword
+      if (P.yieldIdle) { shield(false); if (sword() && !bot.usingHeldItem && tickN - lastEngagedTick < 40 && !bot.targetDigBlock) holdSlot(sword()); return }
       shield(false)
       // only right after a fight: forcing the sword into the hand on every quiet tick broke pickaxe use, torches and scaffold placement
       if (sword() && tickN - lastEngagedTick < 40) holdSlot(sword())

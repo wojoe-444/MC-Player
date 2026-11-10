@@ -124,12 +124,7 @@ function createManual({ api, talker, cfg = {}, now = Date.now, logFile }) {
   const protectedHit = (p) => inProtected(p) ? fail('protected area: nothing is dug or placed in the base', 'choose a spot outside the base') : null
 
   async function bestToolFor(block) {
-    let best = null, bestT = Infinity
-    for (const it of itemsOf()) {
-      let t = Infinity
-      try { t = block.digTime(it.type, false, false, false, [], {}) } catch { t = Infinity }
-      if (Number.isFinite(t) && t < bestT && !NO_ITEM.test(it.name)) { best = it; bestT = t }
-    }
+    const best = require('../motor/tooltier').minimumTool(block, itemsOf().filter(i => !NO_ITEM.test(i.name)))      // the lowest tier that does the job
     if (best && (!bot.heldItem || bot.heldItem.type !== best.type)) { try { await bot.equip(best, 'hand') } catch { /* dig with what is held */ } }
     return best
   }

@@ -13,6 +13,14 @@ const path = require('path')
 const FILE = process.env.BOT_PLACED || path.join(__dirname, '..', '..', 'bot-shared', 'placed-blocks.json')
 const SOFT = /^(air|cave_air|void_air|short_grass|tall_grass|grass|fern|large_fern|snow|dead_bush|vine|glow_lichen|seagrass|water|lava|fire)$/
 const NOT_BUILDS = /^(air|cave_air|void_air|water|lava|fire|soul_fire|bubble_column|snow|powder_snow|moving_piston|piston_head|frosted_ice)$/
+// Block changes that happen on their own near a working player (docs/BUG-HUNT-2026-11-10.md, finding 14): ice freezing out of water, obsidian/cobblestone/stone out of
+// a lava or water flow, leaves of a growing tree, and blocks that fall (sand, gravel, concrete powder, anvils). They are never credited to a player.
+const FLUID_RESULT = /^(ice|blue_ice|packed_ice|obsidian|cobblestone|stone|basalt)$/
+const GROWS_OR_FALLS = /(_leaves|_concrete_powder)$|^(sand|red_sand|gravel|anvil|chipped_anvil|damaged_anvil|dragon_egg|pointed_dripstone)$/
+function naturalChange(oldName, newName) {
+  if (/^(water|lava)$/.test(oldName) && FLUID_RESULT.test(newName)) return true
+  return GROWS_OR_FALLS.test(newName)
+}
 const k = (p) => `${p.x},${p.y},${p.z}`
 
 function attach(bot, log = () => {}) {
@@ -59,7 +67,7 @@ function attach(bot, log = () => {}) {
       if (!newB || !newB.position) return
       const key = k(newB.position), rec = map.get(key)
       if (rec && rec[0] !== newB.name) drop(key)
-      if (!oldB || !SOFT.test(oldB.name) || SOFT.test(newB.name) || NOT_BUILDS.test(newB.name)) return
+      if (!oldB || !SOFT.test(oldB.name) || SOFT.test(newB.name) || NOT_BUILDS.test(newB.name) || naturalChange(oldB.name, newB.name)) return
       if (map.has(key)) return
       const t = Date.now()
       for (const [name, s] of swings) {
@@ -87,4 +95,4 @@ function attach(bot, log = () => {}) {
   return api
 }
 
-module.exports = { attach, FILE }
+module.exports = { attach, FILE, naturalChange }

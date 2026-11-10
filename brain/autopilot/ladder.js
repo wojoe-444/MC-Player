@@ -28,6 +28,14 @@ module.exports = function ladder(bot, S, goals, v, log) {
   const solid = (p) => { const b = S.block(p); return !!b && b.boundingBox === 'block' && !S.isLiquid(b) && !/leaves|glass|ice|slab|stairs|fence|wall$|_log$|_wood$/.test(b.name) }
   const liquidNear = (p) => { for (const [dx, dy, dz] of [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, -1, 0], [0, 1, 0]]) { const b = S.block(p.offset(dx, dy, dz)); if (b && (S.isLiquid(b) || S.isWaterish(b) || /lava/.test(b.name))) return true } return false }
   const ladders = () => S.count('ladder')
+  // fill the missing wall cell `wb` from a solid neighbour: the cell below it (placing on its top face), else the cell above it (placing on its bottom face). The old code
+  // took whichever block object existed (an air block is an object too) and always used the top face (docs/BUG-HUNT-2026-11-10.md, finding 16).
+  const wallFill = async (wb, name) => {
+    const below = S.block(wb.offset(0, -1, 0)), above = S.block(wb.offset(0, 1, 0))
+    const ref = below && below.boundingBox === 'block' ? { b: below, face: v(0, 1, 0) } : above && above.boundingBox === 'block' ? { b: above, face: v(0, -1, 0) } : null
+    if (!ref) return false
+    return await S.placeAgainst(ref.b, ref.face, name).catch(() => false)
+  }
   const passable = (c) => { const b = S.block(c); return !!b && b.boundingBox === 'empty' && !S.isLiquid(b) }
   // 7 sticks -> 3 ladders; sticks from planks from logs (S.craft fills in the intermediates)
   L.ensureLadders = async (n) => {
@@ -182,7 +190,7 @@ module.exports = function ladder(bot, S, goals, v, log) {
       // a cave right under the next step: the shaft ends here (falling into it is how bots died)
       const b2 = S.block(below2); if (!b2 || (b2.boundingBox === 'empty' && !solid(below2.offset(0, -1, 0)))) { why = 'open below'; break }
       // the ladder wall must be solid at the next level; if not, set a block there (its own cobblestone)
-      const wb = below.offset(wall[0], 0, wall[1]); if (!solid(wb)) { const f = S.items().find(i => /^(cobblestone|cobbled_deepslate|dirt|stone)$/.test(i.name)); if (!f || !(await S.placeAgainst(S.block(wb.offset(0, -1, 0)) || S.block(wb.offset(0, 1, 0)), v(0, 1, 0), f.name).catch(() => false))) { why = 'no ladder wall'; break } }
+      const wb = below.offset(wall[0], 0, wall[1]); if (!solid(wb)) { const f = S.items().find(i => /^(cobblestone|cobbled_deepslate|dirt|stone)$/.test(i.name)); if (!f || !(await wallFill(wb, f.name))) { why = 'no ladder wall'; break } }
       // dig the block under the feet, drop one block into it, then hang the ladder in that cell on the wall (the top cell is the
       // surface the bot stands on: no wall there, the ladders start one below)
       const bb = S.block(below)
