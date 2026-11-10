@@ -97,6 +97,12 @@ module.exports = function ladder(bot, S, goals, v, log) {
     const sides = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dz]) => dx !== w[0] || dz !== w[1]).map(([dx, dz]) => col.offset(dx, 0, dz))
       .sort((a, b) => a.distanceTo(me) - b.distanceTo(me))
     const open = (c) => passable(c) && passable(c.offset(0, 1, 0)) && solid(c.offset(0, -1, 0))
+    // too far from the shaft to work a side cell: tunnel across at this level to within reach of it first (a level walk is the safe way to
+    // the ladder; Smeo444 05:15 was 8 blocks off at y59 and the climb was skipped)
+    if (sides.every(c => S.dist(c.offset(0.5, 0.5, 0.5)) > 4.5) && S.dist(col.offset(0.5, 0.5, 0.5)) < 24) {
+      await S.goto(new goals.GoalNear(col.x, col.y, col.z, 2), { dig: true, ms: 45000, escalate: false }).catch(() => {})
+      if (Math.abs(bot.entity.position.y - y) > 1.5) return false
+    }
     for (const n of [...sides.filter(open), ...sides.filter(c => !open(c))]) {
       if (!open(n)) {
         if (S.dist(n.offset(0.5, 0.5, 0.5)) > 4.5 || !solid(n.offset(0, -1, 0))) continue
