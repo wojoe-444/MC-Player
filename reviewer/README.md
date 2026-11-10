@@ -30,6 +30,9 @@ placements (and whether the sky was open above), pathfinder failures, aborted di
 | `torch_spacing` | a torch placed adjacent to, or on a line less than torch-air-air-torch from, another torch at the same height (Walter 2026-11-10). Flag only: when tidying, keep enough torches that the area stays lit |
 | `repeated_failure` | 5+ noPath/timeout/aborted dig/failed task in 5 min |
 | `lava_in_hand` | walking with a lava bucket selected |
+| `armor_equipped` | **high, immediate.** Any armor in a head/chest/legs/feet slot (armor is banned, Walter 2026-11-10), except diamond/netherite with Mending, or names listed under `armorFarmDrops` in `brain/state/telemetry/rules.json` (for mob-farm drops once a farm exists). Raised ~0.3 s after the slot changes, not at the next 15 s pass |
+| `tool_tier` | 3+ digs in 5 min with a higher tier than the block needs while a lower suitable tool is in the bag (stone is the default; iron only for diamond/gold/redstone/emerald; diamond only for obsidian) |
+| `chat_spam` | the same line 3x in a minute (high); 3 lines less than 1 s apart or 10+ lines a minute (med). Relies on the server echoing the bot's own chat |
 
 Output, all under the bot folder: `brain/state/telemetry/summary.json` (counters for 1 and 10 min, active flags, last 90 s of positions), `flags.jsonl` (one line per new flag with a 1 Hz excerpt), and `REVIEW-ALERTS.md` (active medium/high flags, readable, refreshed within 15 s).
 Tests: `node --test test/telemetry.test.js`.

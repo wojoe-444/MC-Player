@@ -118,6 +118,9 @@ const BUILTIN_DETECTORS = [
   { kind: 'repeated_failure', what: '5+ noPath/timeout/aborted dig/failed task in 5 min' },
   { kind: 'torch_spacing', what: 'a torch placed adjacent to, or less than torch-air-air-torch (3 blocks) from, another on a line at the same height' },
   { kind: 'lava_in_hand', what: 'walking with a lava bucket selected' },
+  { kind: 'armor_equipped', what: 'any armor worn (banned, Walter 2026-11-10) unless diamond/netherite with Mending or a listed mob-farm drop; raised within a second of the slot changing' },
+  { kind: 'tool_tier', what: '3+ digs in 5 min with a higher tool tier than the block needs while a lower suitable one is in the bag (stone is the default; iron only for diamond/gold/redstone/emerald; diamond only for obsidian)' },
+  { kind: 'chat_spam', what: 'the same chat line 3x in a minute (high), or 3 lines in quick succession (<1 s apart) / 10+ lines a minute (med)' },
 ]
 
 module.exports = { BUILTIN_DETECTORS, SYSTEM_PROMPT, SCHEMA, KINDS, buildUserPrompt }
