@@ -1,6 +1,8 @@
 // Electron entry: starts (or attaches to) the dashboard server, shows it in a window, and runs background triggers.
 const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron')
 const path = require('path')
+const fs = require('fs')
+const { spawn } = require('child_process')
 const { Config } = require('./lib/config')
 const { startDashboard } = require('./lib/dashboard-process')
 const { TriggerManager } = require('./lib/triggers')
@@ -8,6 +10,10 @@ const { createReviewTrigger, listReviews } = require('./lib/review')
 
 // Packaged: electron-builder copies dashboard/ into resources/. From source: the repo root is one level up.
 const REPO_ROOT = app.isPackaged ? process.resourcesPath : path.join(__dirname, '..')
+// The spectator reviewer (../reviewer) runs outside the app too, from Windows Task Scheduler; the app installs that task, runs it on demand and shows its findings.
+const REVIEWER_DIR = app.isPackaged ? path.join(process.resourcesPath, 'reviewer') : path.join(__dirname, '..', 'reviewer')
+let schedule = null
+try { schedule = require(path.join(REVIEWER_DIR, 'lib', 'schedule')) } catch (e) { console.log('reviewer not available:', e.message) }
 const ICON = path.join(__dirname, 'build', 'icon.ico')
 let config, dash, triggers, reviewsDir
 let mainWin = null, reviewsWin = null
@@ -49,6 +55,27 @@ function openReviews() {
   reviewsWin.on('closed', () => { reviewsWin = null })
 }
 
+const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) } catch { return null } }
+async function reviewerState() {
+  const d = config.data.dashboard
+  const bots = [['ozo', 'OzoGo444', d.ozoDir], ['smeo', 'Smeo444', d.smeoDir]].map(([id, name, dir]) => ({
+    id, name, findings: readJson(path.join(dir, 'brain', 'state', 'review', 'findings.json')), telemetry: readJson(path.join(dir, 'brain', 'state', 'telemetry', 'summary.json')),
+  }))
+  return { available: !!schedule, bots, task: schedule ? await schedule.status() : null, taskName: schedule && schedule.TASK_NAME }
+}
+let reviewerRunning = false
+function runReviewerNow() {
+  if (reviewerRunning || !schedule) return false
+  reviewerRunning = true
+  const d = config.data.dashboard
+  const child = spawn(process.execPath, [path.join(REVIEWER_DIR, 'run.js'), '--once', '--force'], {
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', BOT_OZO_DIR: d.ozoDir, BOT_SMEO_DIR: d.smeoDir }, windowsHide: true, stdio: 'ignore',
+  })
+  const done = () => { reviewerRunning = false; if (reviewsWin) reviewerState().then(r => reviewsWin && reviewsWin.webContents.send('reviewer', r)) }
+  child.once('exit', done); child.once('error', done)
+  return true
+}
+
 function snapshot() {
   return { triggers: triggers.list(), reviews: listReviews(reviewsDir), dashboard: { url: dash.url, attached: dash.attached }, claude: config.data.claude }
 }
@@ -87,6 +114,15 @@ app.whenReady().then(async () => {
     triggers.setSettings(String(id), clean)
     return snapshot()
   })
+
+  ipcMain.handle('reviewer:state', () => reviewerState())
+  ipcMain.handle('reviewer:run', () => runReviewerNow())
+  ipcMain.handle('reviewer:install', async (_e, minutes) => {
+    if (!schedule) return { ok: false, error: 'reviewer folder not found' }
+    const r = await schedule.install({ scriptPath: path.join(REVIEWER_DIR, 'run.js'), minutes: Math.min(120, Math.max(1, Math.round(Number(minutes) || 10))) })
+    return { ...r, state: await reviewerState() }
+  })
+  ipcMain.handle('reviewer:uninstall', async () => (schedule ? { ...(await schedule.uninstall()), state: await reviewerState() } : { ok: false }))
 
   buildMenu()
   openMain()

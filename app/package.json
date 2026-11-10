@@ -34,6 +34,16 @@
     ],
     "extraResources": [
       {
+        "from": "../reviewer",
+        "to": "reviewer",
+        "filter": [
+          "run.js",
+          "package.json",
+          "lib/**",
+          "node_modules/**"
+        ]
+      },
+      {
         "from": "../dashboard",
         "to": "dashboard",
         "filter": [

@@ -1,0 +1,15 @@
+{
+  "name": "mc-player-reviewer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Spectator reviewer for the Minecraft bots: reads brain/telemetry plus logs, asks a Claude Agent SDK Haiku session what looks wrong, writes findings for the driver and the Bot Dashboard.",
+  "main": "run.js",
+  "scripts": {
+    "start": "node run.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.322"
+  },
+  "engines": { "node": ">=18" }
+}

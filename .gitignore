@@ -29,6 +29,8 @@ idle.log
 join.log
 narration.log
 chat.log
+REVIEW-FINDINGS.md
+REVIEW-ALERTS.md
 chat-context.jsonl
 outbox.txt
 cmd.txt

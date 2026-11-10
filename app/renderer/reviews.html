@@ -12,10 +12,13 @@
   button{background:#2a3340;color:#d8dde3;border:1px solid #374253;border-radius:6px;padding:4px 12px;cursor:pointer}
   button:disabled{opacity:.5;cursor:default}
   input[type=number]{width:60px;background:#0b0d10;color:#d8dde3;border:1px solid #374253;border-radius:4px;padding:2px 4px}
+  .sev{display:inline-block;min-width:44px;text-align:center;border-radius:4px;padding:0 6px;font-size:11px;font-weight:600;margin-right:6px}
+  .high{background:#5c1f1f;color:#ffb4ab}.med{background:#5a4a14;color:#ffd97a}.low{background:#27323f;color:#9fb3c8}
   pre{white-space:pre-wrap;font:inherit;margin:6px 0 0}
 </style></head><body>
 <h1>Claude reviews</h1>
 <div class="sub" id="sub"></div>
+<h2>Behavior reviewer</h2><div id="reviewer"></div>
 <h2>Triggers</h2><div id="triggers"></div>
 <h2>Recent reviews</h2><div id="reviews"></div>
 <script src="reviews.js"></script>

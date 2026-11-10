@@ -49,3 +49,7 @@ To add a "drive the bots" trigger: write `lib/<name>.js` returning a trigger, re
 ## Tests
 
 `npm test` (pure Node, no Electron needed): config merge, trigger scheduling, review prompt/skip logic, the claude runner.
+
+## Behavior reviewer
+
+The same window has a **Behavior reviewer** section: findings per bot (from `../reviewer`, written by a Haiku 5.5 xhigh Claude Agent SDK pass over the in-bot telemetry), a **Review now** button, and **Install Task Scheduler job / Remove task** to run that review every N minutes even when this app is closed. See `../reviewer/README.md` for exactly what the task installs. Run `npm install` in `../reviewer` before `npm start` or building the installer (`build-installer.bat` does it).
