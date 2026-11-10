@@ -1,3 +1,4 @@
+process.env.ALLOW_ARMOR = '1'   // these tests cover the armor logic itself; the live bots run with armor off (Act 2)
 const test = require('node:test')
 const assert = require('node:assert')
 const { simulate, solvePitch, solveAim, bowItem, arrowCount, FULL_DRAW_MS } = require('../brain/safety/bow')

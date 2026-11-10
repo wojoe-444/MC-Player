@@ -25,7 +25,11 @@ function armorInfo(name) {
   return m ? { tier: TIER[m[1]], slot: SLOT_OF[m[2]] } : null
 }
 // worn: { head, torso, legs, feet } -> item|null. Returns [{ item, slot }] upgrades to put on.
+// Walter 2026-11-10 (Act 2): NO ARMOR until diamond gear with Mending is secured (free mob-farm drops aside). Every module that puts armor on
+// goes through this one helper (safety runtime, loadout, combat reflex, pilot options), so the rule lives here: no upgrades unless allowed.
+// ALLOW_ARMOR=1 in the environment, or gear.allowArmor = true at runtime, lifts it.
 function armorUpgrades(items, worn = {}) {
+  if (!module.exports.allowArmor && process.env.ALLOW_ARMOR !== '1') return []
   const best = {}
   for (const it of items) {
     const a = armorInfo(it.name); if (!a) continue
@@ -39,4 +43,4 @@ function armorUpgrades(items, worn = {}) {
   return out
 }
 
-module.exports = { SWORDS, AXES, bestWeapon, cooldownMs, armorInfo, armorUpgrades }
+module.exports = { SWORDS, AXES, bestWeapon, cooldownMs, armorInfo, armorUpgrades, allowArmor: false }

@@ -1,3 +1,4 @@
+process.env.ALLOW_ARMOR = '1'   // these tests cover the armor logic itself; the live bots run with armor off (Act 2)
 const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('fs'), os = require('os'), path = require('path')
