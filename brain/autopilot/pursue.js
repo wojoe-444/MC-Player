@@ -89,7 +89,18 @@ module.exports = function pursue(G, S, M, api, log, helpers) {
       if (!(st.mine && st.mine.bottom) && Math.floor(bot.entity.position.y) > src.y + 6) { note(`pursue ${goal.name}: waiting for the mine shaft`); G.cool.pursue = Date.now() + 10 * 60000; return false }
       // through the established shaft first (no new surface breach), then deeper from its bottom
       if (st.mine && st.mine.bottom && Math.floor(bot.entity.position.y) > 56) { const e = v(...st.mine.entry), b = v(...st.mine.bottom); await S.goto(new goals.GoalNear(e.x, e.y, e.z, 2), { dig: false, ms: 120000 }); await S.goto(new goals.GoalNear(b.x, b.y, b.z, 2), { dig: false, ms: 150000 }) }
-      if (Math.floor(bot.entity.position.y) > src.y + 6) { const r = await M.descend(src.y, { maxSteps: 200 }); note(`pursue: down to y${Math.floor(bot.entity.position.y)} for ${next.name} ${JSON.stringify(r)}`) }
+      if (Math.floor(bot.entity.position.y) > src.y + 6) {
+        // Walter's taste (2026-11-10): one laddered shaft per area, no staircases. With a laddered shaft the way down to the ore's depth is the shaft
+        // itself, extended with ladders from its bottom (the reviewer's HIGH finding: a 30-step stair from y46 to y14 at 07:55)
+        const sh = st.mine && st.mine.ladder && M.LD ? M.LD.shafts().find(q => q.id === st.mine.shaft) : null
+        if (sh && sh.bottom) {
+          const bottom = v(...sh.bottom)
+          if (Math.floor(bot.entity.position.y) > sh.bottom[1] + 1) await M.LD.down(sh).catch(() => false)
+          if (S.dist(bottom.offset(0.5, 0, 0.5)) < 4) { const d = await M.LD.dig(bottom, src.y, { into: sh }); note(`pursue: the shaft goes down to y${sh.bottom ? sh.bottom[1] : '?'} for ${next.name} (${d && d.end || 'done'})`) }
+          else { note(`pursue ${goal.name}: could not reach the shaft bottom, no stairs`); G.cool.pursue = Date.now() + 10 * 60000; return false }
+          if (Math.floor(bot.entity.position.y) > src.y + 6) { G.cool.pursue = Date.now() + 10 * 60000; return false }
+        } else { const r = await M.descend(src.y, { maxSteps: 200 }); note(`pursue: down to y${Math.floor(bot.entity.position.y)} for ${next.name} ${JSON.stringify(r)}`) }
+      }
       st.pursueDir = ((st.pursueDir || 0) + 1) % 4
       const t = await M.tunnel(st.pursueDir, 48, { targets: src.ore, torchEvery: 6, stop: () => S.freeSlots() <= 4 || S.count('torch') < 4 || bot.food <= 8 || cnt(next.name) >= before + next.n })
       note(`pursue: tunnel ${t.len} for ${next.name}, +${cnt(next.name) - before} (${t.reason})`)
