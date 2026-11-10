@@ -569,6 +569,15 @@ class Reach {
       bot.setControlState('jump', true)
       for (let i = 0; i < 40 && !placed && !this.stopped(run); i++) {
         await this.ticks(1, run)
+        // the block stays in hand through the jump: another layer swapped a sword in mid-pillar (all 10 pillar_failing flags of 2026-11-10 had
+        // a sword in hand), so take the block back the moment the hand changes, and stop if it will not come back
+        if (!bot.heldItem || bot.heldItem.name !== it.name) {
+          const f = bot.inventory.items().find(x => x.name === it.name)
+          if (!f) { this.log('pillar: out of ' + it.name); break }
+          await bot.equip(f, 'hand').catch(() => {})
+          if (!bot.heldItem || bot.heldItem.name !== it.name) { this.log('pillar: the hand will not hold ' + it.name + ' (holding ' + (bot.heldItem ? bot.heldItem.name : 'nothing') + ')'); break }
+          markPlacing(bot, 4000)
+        }
         // near the top of the jump, not the moment the feet clear the cell: the server checks the new block against where it last heard the
         // player was, a tick behind, and refused the block again and again at +1.0 (Smeo444 climbing its shaft, 22:52)
         // rising or at the top of the jump only (vy > -0.05), never on the way down
