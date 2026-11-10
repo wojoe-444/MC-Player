@@ -7,6 +7,7 @@ const { Config } = require('./lib/config')
 const { startDashboard } = require('./lib/dashboard-process')
 const { TriggerManager } = require('./lib/triggers')
 const { createReviewTrigger, listReviews } = require('./lib/review')
+const { UpdateManager } = require('./lib/updater')
 
 // Packaged: electron-builder copies dashboard/ into resources/. From source: the repo root is one level up.
 const REPO_ROOT = app.isPackaged ? process.resourcesPath : path.join(__dirname, '..')
@@ -16,7 +17,8 @@ let schedule = null
 try { schedule = require(path.join(REVIEWER_DIR, 'lib', 'schedule')) } catch (e) { console.log('reviewer not available:', e.message) }
 const ICON = path.join(__dirname, 'build', 'icon.ico')
 let config, dash, triggers, reviewsDir
-let mainWin = null, reviewsWin = null
+let mainWin = null, reviewsWin = null, settingsWin = null
+let updates
 
 const log = (...a) => console.log(new Date().toISOString(), ...a)
 
@@ -55,6 +57,17 @@ function openReviews() {
   reviewsWin.on('closed', () => { reviewsWin = null })
 }
 
+function openSettings() {
+  if (settingsWin) return settingsWin.focus()
+  settingsWin = new BrowserWindow({
+    width: 560, height: 520, title: 'Settings', icon: ICON, backgroundColor: '#0b0d10',
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: path.join(__dirname, 'preload.js') },
+  })
+  lockDown(settingsWin, 'file://')
+  settingsWin.loadFile(path.join(__dirname, 'renderer', 'settings.html'))
+  settingsWin.on('closed', () => { settingsWin = null })
+}
+
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) } catch { return null } }
 async function reviewerState() {
   const d = config.data.dashboard
@@ -85,6 +98,7 @@ function buildMenu() {
     { label: 'App', submenu: [
       { label: 'Dashboard', accelerator: 'CmdOrCtrl+1', click: openMain },
       { label: 'Claude reviews', accelerator: 'CmdOrCtrl+2', click: openReviews },
+      { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: openSettings },
       { label: 'Open dashboard in browser', click: () => shell.openExternal(dash.url) },
       { type: 'separator' }, { role: 'quit' },
     ] },
@@ -123,6 +137,16 @@ app.whenReady().then(async () => {
     return { ...r, state: await reviewerState() }
   })
   ipcMain.handle('reviewer:uninstall', async () => (schedule ? { ...(await schedule.uninstall()), state: await reviewerState() } : { ok: false }))
+
+  // Updates: only the installed (packaged) app can update itself; from source the page says to use git pull.
+  let autoUpdater = null
+  if (app.isPackaged) { try { ({ autoUpdater } = require('electron-updater')) } catch (e) { log('electron-updater not available:', e.message) } }
+  updates = new UpdateManager({ autoUpdater, currentVersion: app.getVersion(), isPackaged: app.isPackaged, log, beforeInstall: () => { if (dash) dash.stop(); if (triggers) triggers.stop() } })
+  updates.on('update', (s) => { if (settingsWin) settingsWin.webContents.send('update', s) })
+  ipcMain.handle('update:state', () => updates.state())
+  ipcMain.handle('update:check', () => updates.check())
+  ipcMain.handle('update:install', () => { updates.install().catch(() => {}); return updates.state() })
+  ipcMain.handle('app:info', () => ({ version: app.getVersion(), packaged: app.isPackaged, dataDir: userData, dashboardUrl: dash.url }))
 
   buildMenu()
   openMain()

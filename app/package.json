@@ -7,7 +7,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
-    "dist": "electron-builder --win nsis",
+    "dist": "electron-builder --win nsis --publish never",
     "pack": "electron-builder --win --dir"
   },
   "devDependencies": {
@@ -71,7 +71,19 @@
       "createDesktopShortcut": true,
       "shortcutName": "Bot Dashboard",
       "runAfterFinish": true,
-      "deleteAppDataOnUninstall": false
-    }
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Bot-Dashboard-Setup-${version}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "wojoe-444",
+        "repo": "MC-Player",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   }
 }
