@@ -37,8 +37,11 @@ jobs:
       - name: App tests
         working-directory: app
         run: npm test
+      - name: Set the release version
+        working-directory: app
+        run: npm pkg set version=0.1.${{ github.run_number }}
       - name: Build and publish the installer
         working-directory: app
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win nsis --publish always -c.extraMetadata.version=0.1.${{ github.run_number }}
+        run: npx electron-builder --win nsis --publish always
