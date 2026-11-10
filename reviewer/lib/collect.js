@@ -60,7 +60,7 @@ function collectBot(bot, { now = Date.now(), staleMin = 5, since = 0, maxFlags =
     plannerSummary: think,
     idleLogTail: tailText(path.join(bot.dir, 'idle.log'), 3500),
     lessonsTail: tailText(path.join(sd, 'lessons.md'), 1200),
-    hurt: readJson(path.join(sd, 'hurt.json')),
+    hurtLifetimeTotals: readJson(path.join(sd, 'hurt.json')),
     joinLogTail: tailText(path.join(bot.dir, 'join.log'), 1200),
   }
   return ev

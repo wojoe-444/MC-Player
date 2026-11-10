@@ -1,0 +1,155 @@
+{
+ "ok": true,
+ "data": {
+  "bots": [
+   {
+    "bot": "OzoGo444",
+    "status": "issues",
+    "summary": "Around the shaft bottom (-6018,50,-2355): repeated stalls and path timeouts, mining stone with a stone_sword, and the planner has run zero steps in 10 min.",
+    "findings": [
+     {
+      "key": "ozo-detector-stuck",
+      "kind": "stuck",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Stalls on the shaft-bottom tile (-6018,50,-2355), twice in 4 min",
+      "evidence": "Own STALL alarms at 04:40 (wood-stock) and 04:44 (stash) both idle 45 s on the same tile (-6018,50,-2355). At 04:47:55 it could not reach the storage room at (-6018,55,-2355), 5 blocks up; idle was 237 of the last 600 s.",
+      "suggestion": "Check the path from the shaft bottom to the storage room and why stash keeps re-targeting it; a level-1 kick does not clear the stall."
+     },
+     {
+      "key": "ozo-detector-cannot_harvest",
+      "kind": "wrong_tool",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Mines stone with stone_sword: 3 digs drop nothing in 10 min",
+      "evidence": "cannot_harvest flag active since 04:15 (88 sightings); stone_sword was held 492 of the last 600 s, and 15 digs in 10 min were wrong-tool. The bag holds a wooden_pickaxe (it can mine stone) and no stone pickaxe.",
+      "suggestion": "Choose the lowest tier in the bag that harvests the block (wooden pickaxe for stone), have tool-kit craft a stone pickaxe, and check why the sword stays in hand during digs."
+     },
+     {
+      "key": "ozo-wrong-tool-logs",
+      "kind": "wrong_tool",
+      "severity": "med",
+      "confidence": "med",
+      "title": "Chops oak logs with stone_sword: 12 of 14 digs wrong tool in 5 min",
+      "evidence": "wrong_tool flag o-41: oak_log x6 and oak_wood x6 dug with stone_sword. The flag says an axe was in the bag, but the 04:48 bag shows none, so the flag's bag check needs verifying.",
+      "suggestion": "Use an axe for wood when one is in the bag, and have tool-kit make a wooden or stone axe when none is."
+     },
+     {
+      "key": "ozo-tool-tier-iron-on-stone",
+      "kind": "rule_violation",
+      "severity": "med",
+      "confidence": "med",
+      "title": "Iron pickaxe digs stone and cobblestone, against the minimum-tool rule",
+      "evidence": "tool_tier flag o-18: cobblestone x2 and stone x1 dug with iron_pickaxe in 5 min (58 sightings since 04:25). Walter's rule: stone is the default, iron only for diamond, gold, redstone and emerald.",
+      "suggestion": "Make the dig-tool chooser pick the lowest suitable tier so an iron pickaxe is never chosen for stone."
+     },
+     {
+      "key": "ozo-timeouts-same-goal",
+      "kind": "repeated_failure",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Same goals time out again: 23 timeouts in 5 min, 27 in 10 min",
+      "evidence": "repeated_failure flag o-40 (23 timeouts, last autopilot); 27 timeouts and 2 noPath in 10 min. The identical harvest result ('4 wheat cut and replanted, bread 3') is logged at 04:44:58 and 04:47:14, each followed by wood-stock, which failed at 04:47:21 with +0 logs.",
+      "suggestion": "After a timeout, change the target or the step instead of re-running the same harvest and wood-stock pair."
+     },
+     {
+      "key": "ozo-planner-model-errors",
+      "kind": "other",
+      "severity": "med",
+      "confidence": "high",
+      "title": "Planner: 380 model errors, 369 no-plan events, zero steps in 10 min",
+      "evidence": "plannerSummary: steps 0, otherEvents model-error 380 and no-plan 369. The bot runs on routine fallback only (the process list was loaded at 04:44:57).",
+      "suggestion": "Check the planner model call and its error text; the think-first step picker is choosing nothing at the moment."
+     },
+     {
+      "key": "ozo-detector-jumping",
+      "kind": "excessive_jumping",
+      "severity": "med",
+      "confidence": "med",
+      "title": "229 jumps in 10 min, only 27 blocks placed; quiet in the last minute",
+      "evidence": "22.9 jumps/min over 595 blocks walked, with about 200 jumps that placed no block. No jumping flag is active and last1min shows only 2 jumps, so the hopping seems to have stopped for now.",
+      "suggestion": "Find which step produced the non-placing jumps and confirm they happen only during travel, not while pillar attempts fail."
+     }
+    ],
+    "resolved": [],
+    "proposedDetectors": [
+     {
+      "name": "step_churn_in_place",
+      "title": "Autopilot cycles steps inside one 3-block spot while steps fail",
+      "why": "The autopilot switches between steps (harvest, wood-stock, stash, tend) many times in one 3-block spot while path or dig steps fail. The idle detector counts every step change as work, so this stall is never flagged. Nominated on the 04:40 shaft-bottom stall in the 04:41 flagged window. A driver should look at the step picker's fallback after a failed step at the same spot.",
+      "severity": "med",
+      "source": "function detect(samples, events, now, H) {\n  var W = 180000;\n  if (!H.covers(samples, W)) return null;\n  var s = H.since(samples, now - W);\n  if (!s || s.length < 120) return null;\n  var minX = 1e9, maxX = -1e9, minZ = 1e9, maxZ = -1e9, changes = 0, prev = '';\n  for (var i = 0; i < s.length; i++) {\n    var p = s[i];\n    if (p.x < minX) minX = p.x;\n    if (p.x > maxX) maxX = p.x;\n    if (p.z < minZ) minZ = p.z;\n    if (p.z > maxZ) maxZ = p.z;\n    var st = p.st || '';\n    if (st && st !== prev) { if (prev) changes++; prev = st; }\n  }\n  var dx = maxX - minX, dz = maxZ - minZ;\n  if (dx > 3 || dz > 3) return null;\n  var fails = 0, works = 0;\n  var evs = H.evSince(events, now - W) || [];\n  for (var j = 0; j < evs.length; j++) {\n    if (evs[j].k === 'fail') fails++;\n    else if (evs[j].k === 'dig' || evs[j].k === 'place') works++;\n  }\n  if (changes < 4 || fails < 3 || works > 2) return null;\n  return { sev: 'med', msg: 'autopilot changed step ' + changes + 'x in 3 min inside a ' + dx.toFixed(1) + 'x' + dz.toFixed(1) + ' block spot with ' + fails + ' fails', data: { changes: changes, fails: fails, works: works } };\n}",
+      "badWindows": [
+       "w1794285661-flagged"
+      ]
+     }
+    ]
+   },
+   {
+    "bot": "Smeo444",
+    "status": "issues",
+    "summary": "On the surface near (-5976,66,-2339): path timeouts and nav stuck escalation, jumping in place with a stone_sword, and chopping and mining with the sword while axe and pickaxe sit in the bag.",
+    "findings": [
+     {
+      "key": "smeo-detector-repeated_failure",
+      "kind": "repeated_failure",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Path search keeps timing out near (-5976,66,-2339)",
+      "evidence": "repeated_failure flag s-37 (13 timeouts in 5 min); 19 timeouts and 13 noPath in 10 min, all 13 noPath in the last minute. Idle was 263 of the last 600 s. The last minute shows 58 blocks walked while the jump flag measured only 4.5 blocks covered, which looks like pacing; the earlier y 11 no longer matches (now y 66-67).",
+      "suggestion": "Stop re-sending the wood-stock path to (-5977,71,-2340) after repeated timeouts; pick a reachable log or a different target."
+     },
+     {
+      "key": "smeo-detector-stuck",
+      "kind": "stuck",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Nav stuck escalates to level 3 at (-5976,66,-2339); autopilot aborted",
+      "evidence": "Log: nav stuck level 1 at 04:46:54, level 2 at 04:46:56, level 3 at 04:47:00 at (-5976,66,-2339). Sidestep to (-5972,-2343) is logged 3 times between 04:45:56 and 04:46:21, and the autopilot aborted after 82 s at 04:48:01.",
+      "suggestion": "Make the stuck escalation change the plan (new target or a dug route) instead of repeating the same sidestep on the same tile."
+     },
+     {
+      "key": "smeo-detector-pillar_failing",
+      "kind": "pillar_failing",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Jumps in place holding stone_sword with 280 cobblestone in the bag",
+      "evidence": "s-36: 21 jumps looking down in 20 s, 1 placed, height +1.8, with stone_sword in hand. s-38: 39 jumps in a minute covering 4.5 blocks, 4 placed. The last minute shows 30 jumps. The one pillar that worked (04:47:37) held dirt from slot 6.",
+      "suggestion": "Swap to a placeable block (cobblestone or dirt) before the first jump in the pillar routine; the 04:47:37 run shows the swap path works."
+     },
+     {
+      "key": "smeo-wrong-tool-logs",
+      "kind": "wrong_tool",
+      "severity": "med",
+      "confidence": "high",
+      "title": "Chops oak logs with stone_sword while a stone_axe sits in the bag",
+      "evidence": "20 of 47 digs in 10 min used the wrong tool. wrong_tool flag s-34 shows 2 of 4 oak_log digs with stone_sword, and the bag holds stone_axe 1 and wooden_axe 1.",
+      "suggestion": "Switch to the axe for wood before digging; the same held-item selection fix applies as on OzoGo444."
+     },
+     {
+      "key": "smeo-detector-cannot_harvest",
+      "kind": "wrong_tool",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Digs cobblestone with stone_sword: 2 drop nothing, stone_pickaxe unused",
+      "evidence": "cannot_harvest flag s-39: 2 cobblestone digs with stone_sword drop nothing. The bag holds a stone_pickaxe 1 that was not used.",
+      "suggestion": "Hold the stone_pickaxe for stone and cobblestone digs."
+     },
+     {
+      "key": "smeo-xaero-module-missing",
+      "kind": "other",
+      "severity": "low",
+      "confidence": "high",
+      "title": "nav xaero.js fails to load: Cannot find module at 04:48:01",
+      "evidence": "Log at 04:48:01: nav xaero.js unavailable, Cannot find module (path under the Minecraft-Smeo xaero folder). The nav reload follows, and the autopilot then fails with no path at 04:48:03.",
+      "suggestion": "Restore xaero.js in the Smeo install or fix the module path so the nav helper loads."
+     }
+    ],
+    "resolved": [],
+    "proposedDetectors": []
+   }
+  ]
+ },
+ "costUsd": 0.025567889999999996,
+ "durationMs": 177881
+}
