@@ -72,6 +72,7 @@ module.exports = function plan(G, S, M, api, log) {
   // the one laddered shaft per area, shared by both bots (brain/autopilot/ladder.js, Walter 2026-11-10)
   delete require.cache[require.resolve('./ladder')]
   const LD = require('./ladder')(bot, S, goals, v, log); M.LD = LD
+  S.isShaftCell = (p) => { try { return LD.isShaftCell(p) } catch { return false } }
   // Up from underground by the laddered shaft, never by digging: a go-to from the mine to a target well above (stash heading home, Smeo444
   // 04:29) made nav escalate and tunnel up through gravel into lava, and the bot died. When the goal is more than 6 blocks up, there is no
   // sky, and a recorded shaft within 48 blocks spans the bot's level, the bot walks to the shaft at its own level and climbs it first.

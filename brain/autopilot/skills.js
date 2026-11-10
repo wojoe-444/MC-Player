@@ -434,6 +434,7 @@ module.exports = function makeSkills({ bot, api, log }) {
   S.torchCrowded = (p) => { try { return bot.findBlocks({ matching: (b) => b && /^(torch|wall_torch)$/.test(b.name), point: p, maxDistance: 4, count: 12 }).some(t => !t.equals(p) && Math.abs(t.x - p.x) <= 2 && Math.abs(t.y - p.y) <= 2 && Math.abs(t.z - p.z) <= 2) } catch { return false } }
   S.placeAgainst = async (ref, face, itemName) => {
     if (/^torch$/.test(itemName || '') && ref && ref.position && face && S.torchCrowded(ref.position.plus(face))) return false
+    if (/^torch$/.test(itemName || '') && ref && ref.position && face && S.isShaftCell && S.isShaftCell(ref.position.plus(face))) return false
     const it = bot.inventory.items().find(i => i.name === itemName)
     if (!it) return false
     if (bot._meleeClose && Date.now() - (bot._meleeCloseAt || 0) < 500) return false   // a mob in reach: no placing while combat holds the sword
