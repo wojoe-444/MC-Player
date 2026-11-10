@@ -110,7 +110,7 @@ test('lure: animals outside follow the bot holding wheat through the gate, the g
 test('lure: nothing is lured without the food, and animals out of sight are not chased', async () => {
   const r = penRig({ inv: {} }); r.bot.addAnimal('cow', 3, 22)
   await assert.rejects(() => r.engine.lure(fakeCtx(), { ...PEN }, 'cow'), (e) => e.name === 'Missing' && e.needs.wheat === 2)
-  const r2 = penRig({ inv: { wheat: 4 } }); r2.bot.addAnimal('cow', 60, 60)
+  const r2 = penRig({ inv: { wheat: 4 } }); r2.bot.addAnimal('cow', 200, 200)
   assert.deepStrictEqual(await r2.engine.lure(fakeCtx(), { ...PEN }, 'cow'), { lured: 0, why: 'no cow in sight outside the pen' })
 })
 

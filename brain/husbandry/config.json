@@ -11,7 +11,7 @@
     "babyGrowMs": 1200000,
     "noBabyRunsBeforeBlocked": 3
   },
-  "lure": { "sightRadius": 24, "hopBlocks": 4, "followWithin": 7, "hopWaitMs": 1500, "maxHops": 14, "ms": 120000 },
+  "lure": { "sightRadius": 110, "hopBlocks": 4, "followWithin": 7, "hopWaitMs": 1500, "maxHops": 40, "ms": 300000 },
   "breedWatch": { "tries": 10, "ms": 500 },
   "reach": 4.5,
   "entityReach": 3,
