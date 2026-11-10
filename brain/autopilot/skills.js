@@ -597,7 +597,7 @@ module.exports = function makeSkills({ bot, api, log }) {
   // with a stale state id makes the server resend the whole inventory; whatever sits in the 2x2 grid then goes back into the bag.
   S.resyncInventory = async () => {
     try {
-      bot._client.write('window_click', { windowId: 0, stateId: -1, slot: -999, mouseButton: 0, mode: 0, changedSlots: [], cursorItem: null })
+      (typeof bot._syncWindow === 'function' ? bot._syncWindow(bot.inventory).catch(() => {}) : null)
       await new Promise(r => setTimeout(r, 500))
       for (const sl of [1, 2, 3, 4]) { if (bot.inventory.slots[sl]) { try { await bot.clickWindow(sl, 0, 1) } catch {} await new Promise(r => setTimeout(r, 150)) } }
       if (bot.inventory.selectedItem) { const free = bot.inventory.firstEmptyInventorySlot(); if (free != null) { try { await bot.clickWindow(free, 0, 0) } catch {} } }
@@ -785,14 +785,14 @@ module.exports = function makeSkills({ bot, api, log }) {
   // the held item drifts the same way as the bag (Walter 2026-11-09 watched OzoGo444 chop a tree with a sword and its fist and then jump in
   // place: the nav pillar's 'Server refused to place dirt' - the bot thought it held dirt). A light resync every 12 s while nothing is being
   // clicked, dug or opened keeps the bot's view of its bag and hand close to the server's; equip asks for one first when the last is old.
-  if (!bot._resyncTimer || bot._equipWrapped !== 2) {
+  if (!bot._resyncTimer || bot._equipWrapped !== 3) {
     if (bot._resyncTimer) clearInterval(bot._resyncTimer)
     bot._lastClickAt = 0
     if (!bot._clickStamped) { const oc = bot.clickWindow.bind(bot); bot.clickWindow = (...a) => { bot._lastClickAt = Date.now(); return oc(...a) }; bot._clickStamped = true }
-    const light = () => { try { bot._client.write('window_click', { windowId: 0, stateId: -1, slot: -999, mouseButton: 0, mode: 0, changedSlots: [], cursorItem: null }); bot._lastResyncAt = Date.now() } catch {} }
+    const light = () => { try { (typeof bot._syncWindow === 'function' ? bot._syncWindow(bot.inventory).catch(() => {}) : null); bot._lastResyncAt = Date.now() } catch {} }
     S.resyncLight = light
     bot._resyncTimer = setInterval(() => { try { if (!bot.entity || bot.currentWindow || bot.targetDigBlock || Date.now() - (bot._lastClickAt || 0) < 3000) return; light() } catch {} }, 12000)
-    if (bot._equipWrapped !== 2) {
+    if (bot._equipWrapped !== 3) {
       const oe = (bot._equipOrig = bot._equipOrig || bot.equip.bind(bot))
       bot.equip = async (item, dest) => {
         if (Date.now() - (bot._lastResyncAt || 0) > 4000 && !bot.currentWindow) {
@@ -805,13 +805,16 @@ module.exports = function makeSkills({ bot, api, log }) {
             item = fresh
           }
         }
-        await oe(item, dest)
+        if ((dest === 'hand' || dest == null) && item && typeof item.slot === 'number' && (item.slot < 36 || item.slot > 44) && typeof bot.clickWindow === 'function' && !bot.currentWindow) {
+          try { await bot.clickWindow(item.slot, 8, 2); if (bot.quickBarSlot !== 8) bot.setQuickBarSlot(8); await new Promise(r => setTimeout(r, 60)) } catch {}
+          if (!bot.heldItem || bot.heldItem.type !== item.type) await oe(bot.inventory.items().find(i => i.type === item.type) || item, dest)
+        } else await oe(item, dest)
         // the hand: check it took (one more resync and one retry when it did not)
         if (dest === 'hand' || dest == null) {
           if (!bot.heldItem || bot.heldItem.type !== item.type) { light(); await new Promise(r => setTimeout(r, 350)); const f2 = bot.inventory.items().find(i => i.type === item.type); if (!f2) throw new Error('no ' + (item.name || 'item') + ' in the bag'); if (!bot.heldItem || bot.heldItem.type !== item.type) await oe(f2, dest) }
         }
       }
-      bot._equipWrapped = 2
+      bot._equipWrapped = 3
     }
   }
   // ---- a fixed hotbar (Walter 2026-11-10: "if I have a sword, it's always in slot 1"): 1 sword, 2 pickaxe, 3 axe, 4 shovel, 5 building
@@ -829,8 +832,10 @@ module.exports = function makeSkills({ bot, api, log }) {
     if (!bot.entity || bot.currentWindow || bot.targetDigBlock || bot.usingHeldItem || Date.now() < (bot._placingUntil || 0) || (bot._reflexes && bot._reflexes.heldByOther && bot._reflexes.heldByOther('hands', 'hotbar'))) return 0
     if (bot._combat && bot._combat.engaged && bot._combat.engaged()) return 0
     let moved = 0
-    for (let k = 0; k < 9; k++) {
+    for (let k = 0; k < 8; k++) {
+      if (k === bot.quickBarSlot) continue
       const want = LAYOUT[k](); if (!want) continue
+      if (want.slot === 36 + bot.quickBarSlot) continue
       const target = 36 + k, cur = bot.inventory.slots[target]
       if (cur && cur.type === want.type && cur.name === want.name) continue
       // already elsewhere in the hotbar at a slot the layout fills with something else: still swap it in
@@ -843,7 +848,7 @@ module.exports = function makeSkills({ bot, api, log }) {
   }
   if (bot._hotbarTimer) clearInterval(bot._hotbarTimer)
   bot._hotbarTimer = setInterval(() => { if (Date.now() - (bot._lastClickAt || 0) < 5000) return; S.sortHotbar().catch(() => {}) }, 30000)
-  if (!S.resyncLight) S.resyncLight = () => { try { bot._client.write('window_click', { windowId: 0, stateId: -1, slot: -999, mouseButton: 0, mode: 0, changedSlots: [], cursorItem: null }); bot._lastResyncAt = Date.now() } catch {} }
+  if (!S.resyncLight) S.resyncLight = () => { try { (typeof bot._syncWindow === 'function' ? bot._syncWindow(bot.inventory).catch(() => {}) : null); bot._lastResyncAt = Date.now() } catch {} }
   return S
 }
 
