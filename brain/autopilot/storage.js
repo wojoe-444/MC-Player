@@ -102,15 +102,20 @@ module.exports = function storage(G, S, M, api, log) {
       if (S.planks() < 16 && lg) await S.craft(lg.replace(/^stripped_/, '').replace(/_(log|wood)$/, '_planks'), Math.min(16, S.planks() + S.logs() * 4)).catch(() => false)
       await S.craft('chest', 2).catch(() => false)
     }
-    if (cnt('chest') < 2) return false
+    if (cnt('chest') < 2) { note('storage: no chests to add (' + cnt('chest') + ' in the bag)'); return false }
     const used = new Set((room.chests || []).map(c => c.join()))
-    const pair = P.chestSpots.find(pr => !used.has([pr[0].x, pr[0].y, pr[0].z].join()))
-    if (!pair) return false
+    // a spot counts only while its cell is open on a solid floor (the room may be shorter than planned)
+    const usable = (c) => { const g = S.block(c.offset(0, -1, 0)); return g && g.boundingBox === 'block' && air(c) }
+    const pair = P.chestSpots.find(pr => !used.has([pr[0].x, pr[0].y, pr[0].z].join()) && usable(pr[0]) && usable(pr[1]))
+    if (!pair) { note('storage: no open pair of chest spots left in the room'); return false }
     let ok = 0
     for (const c of pair) {
-      const g = S.block(c.offset(0, -1, 0)); if (!g || g.boundingBox !== 'block' || !air(c)) continue
-      if (S.dist(c) > 3.5) await S.goto(new goals.GoalNear(c.x, c.y, c.z, 2), { dig: false, ms: 15000, escalate: false })
+      if (!usable(c)) continue
+      // too far and no path: the room's middle line at the spot's slice (the floor face is in sight from there)
+      if (S.dist(c) > 3.5) { const r = await S.goto(new goals.GoalNear(c.x, c.y, c.z, 2), { dig: false, ms: 15000, escalate: false }); if (!r.ok) await walk(P.at(Math.round((c.x - P.s.x) * P.d[0] + (c.z - P.s.z) * P.d[1]), 0)).catch(() => false) }
+      const g = S.block(c.offset(0, -1, 0))
       if (await S.placeAgainst(g, v(0, 1, 0), 'chest').catch(() => false)) { ok++; room.chests = (room.chests || []).concat([[c.x, c.y, c.z]]) }
+      else note('storage: a chest would not go down at ' + c + ' (standing ' + bot.entity.position.floored() + ')')
     }
     room.at = Date.now(); LD().putRoom(room)
     return ok === 2
