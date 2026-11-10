@@ -39,9 +39,12 @@
         "filter": [
           "run.js",
           "package.json",
-          "lib/**",
-          "node_modules/**"
+          "lib/**"
         ]
+      },
+      {
+        "from": "../reviewer/node_modules",
+        "to": "reviewer/node_modules"
       },
       {
         "from": "../dashboard",
