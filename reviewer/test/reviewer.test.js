@@ -66,7 +66,7 @@ test('findings.merge: persists, counts runs, resolves, ages out unseen, adds unc
   st = findings.merge(st, bot, { findings: [f('k1')], resolved: [] }, { now: NOW + 1200e3 })
   assert.deepStrictEqual(st.open.map(x => x.key), ['k1']); assert.match(st.recentlyResolved[0].why, /not seen/)
   st = findings.merge(st, bot, { findings: [], resolved: ['k1'] }, { now: NOW + 1800e3 })
-  assert.strictEqual(st.status, 'ok'); assert.strictEqual(st.recentlyResolved[0].why, 'no longer happening')
+  assert.strictEqual(st.status, 'ok'); assert.strictEqual(st.recentlyResolved[0].why, 'closed by the reviewer: gone, or merged into another finding')
   // a model failure must not age findings out
   st = findings.merge(st, bot, { findings: [f('k3')], resolved: [] }, { now: NOW })
   st = findings.merge(st, bot, { findings: [], resolved: [] }, { now: NOW, age: false })
@@ -149,4 +149,11 @@ test('schedule: schtasks arguments, launcher script, query parsing', () => {
   assert.match(schedule.launcherVbs({ nodeExe: 'e.exe', scriptPath: 's.js', workDir: 'w', electronAsNode: true }), /ELECTRON_RUN_AS_NODE/)
   const q = schedule.parseQuery('Folder: \\\r\nTaskName: \\MC-Player Bot Reviewer\r\nNext Run Time: 11/10/2026 4:10:00 AM\r\nStatus: Ready\r\nLast Run Time: 11/10/2026 4:00:00 AM\r\nLast Result: 0\r\n')
   assert.deepStrictEqual([q.installed, q.status, q.nextRun, q.lastResult], [true, 'Ready', '11/10/2026 4:10:00 AM', '0'])
+})
+
+test('a failed pass keeps the detector events from earlier passes', () => {
+  const findings = require('../lib/findings')
+  const prev = { open: [], recentlyResolved: [], detectorEvents: [{ name: 'x', action: 'rejected', reason: 'r' }] }
+  const st = findings.merge(prev, { id: 'ozo', name: 'OzoGo444' }, { summary: 'failed', findings: [], resolved: [] }, { now: Date.now(), run: {}, evidence: {}, age: false })
+  assert.deepStrictEqual(st.detectorEvents, prev.detectorEvents)
 })
