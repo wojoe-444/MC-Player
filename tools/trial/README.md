@@ -42,3 +42,17 @@ offset are modelled. The vanilla half needs the `trial-server` skill (Mojang jar
 - packet-gate-lab.js (5 min, real join.js, iron/diamond tools and armor in the bag, log-only gate): 23 tool_tier events, 0 armor, 0 lava.
   All tool_tier events come from `S.equipFor` in brain/autopilot/skills.js (picks the fastest tool, i.e. the highest tier, not the minimum).
   The armor path in plan.js:267 is guarded by NO_ARMOR and did not fire; asking "put on your armor" in chat produced no armor packet.
+
+## mobfarm-lab.js and mobfarm-build-lab.js (mob farm, ROADMAP Phase 2 item 8; design in brain/mobfarm/README.md)
+
+Both need the vanilla trial server (`node .claude/skills/trial-server/scripts/server.js start --minutes 60`, op'd TrialA).
+
+* `mobfarm-lab.js` builds the farm shape from `brain/mobfarm/geometry.js` with `/fill` and checks it in vanilla physics: water settles (hole and column dry, last cell beside
+  the hole at level 1), zombies put on the pads wash into the hole, landing HP at the configured drop, the bot kills landed mobs through the slit, drops reach the chest.
+  `--drop N --zombies N --secs N`.
+* `mobfarm-build-lab.js` runs the real build routine (`brain/autopilot/mobfarmbuild.js`, with the real skills and ladder registry code) as a survival bot in solid stone
+  and then works the finished farm with zombies and the existing kill routine. About 10 minutes for the build. `--from chamber|platform|column|fit|water` resumes on the
+  world the last run left (same phase names as the routine), `--zombies N --secs N` for the test at the end.
+
+Result of the last full run (2026-11-10, flat world, stone block, shaft 40 deep): built in 630 s, 379 platform cells + 22 column + chamber, nothing dug outside the plan,
+trench fully wet, column dry, no crafting table left behind, health 20 all the way; zombies fell into the pocket and the kill routine hit them through the slit.

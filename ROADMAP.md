@@ -26,7 +26,7 @@ Food, stone tools, bed, shelter, torches. Done on the Earth map.
 5. **Respawn network:** a spare bed and a mini reset chest (stone pickaxe, sword, bread, torches) at the base, the mine room and each travel camp.
 6. **Hopper smelter** on charcoal from the tree farm; 3 or 4 furnaces first (5 iron per hopper). The bot takes furnace output by hand when it wants the XP.
 7. **Underground crop farm and composter** (wheat, carrots, potatoes, water, torches; surplus composts into bone meal). Check Serene Seasons behaviour underground.
-8. Mob farm. **XP rule:** keep the kill step bot-made so XP orbs drop; the farm gives string, bones, arrows, gunpowder and free armor.
+8. Mob farm. **XP rule:** keep the kill step bot-made so XP orbs drop; the farm gives string, bones, arrows, gunpowder and free armor. Built by `brain/autopilot/mobfarmbuild.js` (think-brain skill `mob_farm`); design, numbers and limits in `brain/mobfarm/README.md`.
 9. **Animal pens** (cows, sheep, pigs, chickens): shear sheep instead of killing, keep leather. Wool feeds beds and the travel kit. Primitives: `brain/husbandry` (fenced, lit pen; lure, breed, shear, cull; winter herd targets).
 10. **Sugarcane farm** (paper, books, bookshelves later).
 11. Glow lichen with shears and bone meal. Primitives: `brain/husbandry` (seed a stone wall, bone-meal it, shear down to the seed).

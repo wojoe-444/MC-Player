@@ -513,6 +513,15 @@ module.exports = function think(G, S, M, api, log) {
     const s = (G.steps || []).find(x => x.id === a.id); if (!s) return fail('unknown routine id')
     const r = await s.run(); return { ok: !!r, note: 'routine ' + a.id + (r ? ' ok' : ' failed') }
   })
+  def('mob_farm', '{action: build|work|status} the underground mob farm for bones, arrows, string, gunpowder and free armor (ROADMAP Phase 2 item 8). build = dig and fit it off the laddered shaft (resumable; needs a hopper, 2 water buckets, 4 torches, 24 stone; the storage room first). work = kill what has landed in the pocket through the slit and empty the chest. status = phase, what is missing. While it runs wait 25-30 blocks from the platform (the corridor by the shaft at the kill level): mobs spawn only farther than 24 from you.', async (a) => {
+    const act = clean(a.action).toLowerCase() || 'status'
+    const F = G.mobFarmBuild; if (!F) return fail('mob farm builder not loaded')
+    if (act === 'status') return { ok: true, note: JSON.stringify(F.status()).slice(0, 400) }
+    if (act === 'work') { const s = (G.steps || []).find(x => x.id === 'mob-farm'); if (!s) return fail('no mob farm routine'); const r = await s.run(); return { ok: !!r, note: r ? 'worked the farm' : 'nothing to do at the farm' } }
+    if (act !== 'build') return fail('action is build, work or status')
+    const r = await F.run(); const s = F.status()
+    return { ok: !!r || s.done, note: s.done ? 'mob farm built' : `phase ${s.phase}${s.why ? ' (' + s.why + ')' : ''}${Object.keys(s.needs).length ? '; missing ' + JSON.stringify(s.needs) : ''}` }
+  })
   def('revise_strategy', '{text, why} replace your persistent STRATEGY (max ~2400 chars) with improved standing policies. Use when PATTERNS show a repeated failure: name the missing capability, design a durable process (infrastructure included), add a CHECK.', async (a) => { const ok = reflect.revise(a.text, a.why); return ok ? { ok: true, note: 'strategy updated' } : fail('text too short') })
   def('say', '{text} one short chat line to Walter (rare; no questions about the game).', async (a) => { const t = clean(a.text).slice(0, 160); if (!t || Date.now() - (T.lastSay || 0) < 90000) return { ok: true, note: 'skipped' }; T.lastSay = Date.now(); S.say(t); return { ok: true } })
   def('wait', '{ms} stand still (max 5000). Only to let something finish; never as a plan.', async (a) => { await S.wait(clamp(num(a.ms) || 1000, 100, 5000)); return { ok: true } })
