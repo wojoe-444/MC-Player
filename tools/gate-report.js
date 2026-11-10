@@ -13,4 +13,4 @@ for (const [rule, r] of Object.entries(g.rules)) {
   for (const [site, n] of Object.entries(r.sites).sort((a, b) => b[1] - a[1])) console.log(`  ${String(n).padStart(6)}  ${site}${n / Math.max(hours, 0.01) > 60 ? '   <- more than a minute: this call site is itself a loop' : ''}`)
 }
 const last = (g.recent || []).slice(-5)
-if (last.length) { console.log('\nlast violations:'); for (const e of last) console.log(`  ${new Date(e.t).toISOString()} ${e.rule}: ${e.why} <- ${e.sites.join(' < ')}`) }
+if (last.length) { console.log('\nlast violations:'); for (const e of last) console.log(`  ${new Date(e.t).toISOString()} ${e.rule}${e.owner ? ` [task ${e.owner}]` : ""}: ${e.why} <- ${e.sites.join(' < ')}`) }

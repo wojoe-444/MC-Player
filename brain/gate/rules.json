@@ -1,9 +1,10 @@
 {
   "version": 1,
+  "enforced": "noArmor and chatRate are enforced (both are absolute, a dropped packet is harmless to the bot: armor is also refused at the equip action, a dropped chat line is only a line). The rest stay in log mode until gate-log.json is clean of stray call sites. GATE=log forces everything to log mode.",
   "note": "The rules of play as data. brain/gate reads this file; it is meant to become the one place a rule lives (docs/HILLCLIMB-INSIGHTS.md items 3 and 8). mode: off | log (record every violation with its call site, let the packet through) | enforce (drop the packet and record it).",
   "rules": {
     "noArmor": {
-      "mode": "log",
+      "mode": "enforce",
       "armorSlots": [5, 6, 7, 8],
       "liftedBy": "ALLOW_ARMOR=1 in the environment or brain/safety/gear.allowArmor = true (the flip happens when the bots have diamond gear with Mending)",
       "packets": ["window_click", "use_item"]
@@ -13,6 +14,13 @@
       "note": "stone is the default; a higher tier only when the block requires it (iron for diamond/gold/redstone/emerald, diamond for obsidian). Violation: the held pickaxe/axe/shovel outranks what the block needs AND a tool of a sufficient lower tier is in the bag.",
       "floor": "stone",
       "packets": ["block_dig"]
+    },
+    "permit": {
+      "mode": "log",
+      "note": "rule 3 of the shared world: no digging or placing unless asked or part of an agreed job. A dig/place with no job running and no explicit permit is a violation. LOG until gate-log.json shows which stray call sites need a permit (escapes from a buried head, lava, a flooded pit), then enforce.",
+      "allowedOwners": ["mining", "excavation", "build", "treefarm", "lighting", "clearbox", "villagers", "autopilot", "safety", "survival", "routines", "crafting", "furnace"],
+      "torchesFree": true,
+      "packets": ["block_dig", "block_place"]
     },
     "lavaWalk": {
       "mode": "log",
@@ -26,7 +34,7 @@
       "packets": ["block_place"]
     },
     "chatRate": {
-      "mode": "log",
+      "mode": "enforce",
       "minGapMs": 1000,
       "repeatWindowMs": 60000,
       "packets": ["chat_message"]
