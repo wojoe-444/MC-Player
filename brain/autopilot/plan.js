@@ -1568,6 +1568,7 @@ module.exports = function plan(G, S, M, api, log) {
   // and mobs waiting in the shaft hold the farm's mob cap (four skeletons waited 30 min behind back-to-back birch rounds, 04:00)
   try { delete require.cache[require.resolve('./mobfarm')]; insertAfter('tool-kit', [require('./mobfarm')(G, S, M, api, log)]) } catch (e) { log('PLAN', 'mobfarm not loaded: ' + e.message) }
   // long goals from brain/state/goals.json, expanded through the recipe tree (pursue.js)
+  try { delete require.cache[require.resolve('./discard')]; const dc = require('./discard')(G, S, M, api, log); const ii = G.steps.findIndex(x => x.id === 'stash'); G.steps.splice(ii >= 0 ? ii : G.steps.length, 0, dc) } catch (e) { log('PLAN', 'discard not loaded: ' + e.message) }
   try { delete require.cache[require.resolve('./storage')]; const sr = require('./storage')(G, S, M, api, log); const ii = G.steps.findIndex(x => x.id === 'iron'); G.steps.splice(ii >= 0 ? ii + 1 : G.steps.length, 0, sr) } catch (e) { log('PLAN', 'storage not loaded: ' + e.message) }
   try { delete require.cache[require.resolve('./pursue')]; G.steps.push(require('./pursue')(G, S, M, api, log, { daylightOk: () => true })) } catch (e) { log('PLAN', 'pursue not loaded: ' + e.message) }
   log('PLAN', 'survival processes loaded: ' + G.steps.map(s => s.id).join(' > '))
