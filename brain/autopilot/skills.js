@@ -183,7 +183,7 @@ module.exports = function makeSkills({ bot, api, log }) {
     }
     if (r.ok) { // the library resolves on an empty path (noPath/timeout) too: check that we really arrived
       let end = true
-      try { end = goal.isEnd ? !!goal.isEnd(S.flo(bot.entity.position)) : true } catch {}
+      try { end = !goal.isEnd ? true : nav && nav.nav && nav.nav.satisfied ? nav.nav.satisfied(goal) : !!goal.isEnd(S.flo(bot.entity.position)) } catch {}     // one definition of "arrived": the navigator's
       if (!end) { r.ok = false; r.err = 'nopath' }
     }
     if (!r.ok) { S.stats.gotoFail++; S.stopMoving() }
