@@ -85,7 +85,7 @@ test('idle: 2 minutes of nothing is medium, 5 minutes high; sleeping or digging 
   assert.ok(f && f.sev === 'med')
   const five = ring(305, () => ({}))
   assert.strictEqual(D.analyze(five, [], now(five)).find(x => x.kind === 'idle').sev, 'high')
-  const slept = ring(125, (i) => ({ act: i === 40 ? 1 : 0 }))
+  const slept = ring(125, (i) => ({ act: i === 400 ? 1 : 0 }))
   assert.ok(!D.analyze(slept, [], now(slept)).some(x => x.kind === 'idle'))
   const dug = ring(125, () => ({}))
   assert.ok(!D.analyze(dug, [{ k: 'dig', t: T0 + 100000, block: 'dirt', x: 0, y: 63, z: 0 }], now(dug)).some(x => x.kind === 'idle'))
@@ -280,5 +280,59 @@ test('module: a torch placed 2 blocks from another becomes a torch_spacing event
   const f = h._tick.summary().flags.find(x => x.kind === 'torch_spacing')
   assert.ok(f && f.sev === 'med'); assert.match(f.msg, /0,64,2 is 2 block\(s\) from another at 0,64,0/); assert.match(f.msg, /still keeps the area lit/)
   assert.match(fs.readFileSync(path.join(dir, 'REVIEW-ALERTS.md'), 'utf8'), /torch_spacing/)
+  h.stop()
+})
+
+test('ladder bobbing: repeated up-and-down on one ladder column is flagged; a shaft trip, mining at the bottom, or a pillar is not', () => {
+  const bob = ring(160, (i, s) => ({ x: 10.5, z: 5.5, y: 62 + 3 * (1 + Math.sin(s / 3)), ld: 1, mv: 1, tk: 'autopilot' }))     // 6 blocks up and down, a lap every ~19 s
+  const f = D.analyze(bob, [], now(bob)).find(x => x.kind === 'ladder_bobbing')
+  assert.ok(f && f.sev === 'high'); assert.ok(f.data.turns >= 4); assert.deepStrictEqual(f.data.column, [10, 5]); assert.match(f.msg, /same ladder/)
+  const trip = ring(160, (i, s) => ({ x: 10.5, z: 5.5, y: 80 - s * 0.2, ld: 1 }))                                         // down to y48 once
+  assert.ok(!D.analyze(trip, [], now(trip)).some(x => x.kind === 'ladder_bobbing'))
+  const tripBack = ring(160, (i, s) => ({ x: 10.5, z: 5.5, y: 80 - 30 * (s < 80 ? s / 80 : (160 - s) / 80), ld: 1 }))        // down and straight back up: one turn
+  assert.ok(!D.analyze(tripBack, [], now(tripBack)).some(x => x.kind === 'ladder_bobbing'))
+  const digging = [{ k: 'dig', t: T0 + 60000, block: 'stone', x: 10, y: 60, z: 5 }]
+  assert.ok(!D.analyze(bob, digging, now(bob)).some(x => x.kind === 'ladder_bobbing'))                                    // working at the shaft
+  const offLadder = ring(160, (i, s) => ({ x: 10.5, z: 5.5, y: 62 + 3 * (1 + Math.sin(s / 3)), ld: 0 }))
+  assert.ok(!D.analyze(offLadder, [], now(offLadder)).some(x => x.kind === 'ladder_bobbing'))
+  assert.strictEqual(D.zigzag([0, 1, 3, 1, -1, 1, 3, 1, -1], 2), 3)
+})
+
+test('idle stall: only with no sign of work; reseeding, pickups, windows, step changes and sleeping never count; an unnamed task is judged sooner', () => {
+  const kinds = (ss, ev = []) => D.analyze(ss, ev, now(ss)).filter(x => x.kind === 'idle')
+  // no task, no step, 80 s of nothing: flagged (75 s for an unidentifiable task)
+  let f = kinds(ring(82, () => ({})))
+  assert.strictEqual(f.length, 1); assert.strictEqual(f[0].sev, 'med'); assert.strictEqual(f[0].data.identified, false); assert.match(f[0].msg, /no identifiable task/)
+  assert.strictEqual(kinds(ring(185, () => ({})))[0].sev, 'high')
+  // a named task or step with nothing visible: not flagged at 80 s, flagged at 2 min, high at 5
+  assert.strictEqual(kinds(ring(82, () => ({ tk: 'autopilot', st: 'tend' }))).length, 0)
+  f = kinds(ring(125, () => ({ tk: 'autopilot', st: 'tend' }))); assert.strictEqual(f[0].sev, 'med'); assert.match(f[0].msg, /step "tend" gives no visible output/)
+  assert.strictEqual(kinds(ring(305, () => ({ tk: 'autopilot', st: 'tend' })))[0].sev, 'high')
+  // reseeding a farm: standing nearly still, seeds placed and crops dug
+  const farm = ring(200, () => ({ tk: 'autopilot', st: 'tend' }))
+  const work = Array.from({ length: 8 }, (_, i) => ({ k: i % 2 ? 'place' : 'dig', t: T0 + 20000 + i * 15000, block: 'wheat', x: i, y: 64, z: 3, sky: true }))
+  assert.strictEqual(kinds(farm, work).length, 0)
+  // picking items up, opening a chest, or the autopilot moving on to a new step
+  assert.strictEqual(kinds(ring(200, () => ({})), [{ k: 'work', t: T0 + 170000, what: 'pickup' }]).length, 0)
+  assert.strictEqual(kinds(ring(200, () => ({})), [{ k: 'work', t: T0 + 170000, what: 'window' }]).length, 0)
+  assert.strictEqual(kinds(ring(200, (i) => ({ st: i < 400 ? 'wood' : 'tend' }))).length, 0)
+  // moving around is not idle, and neither is sleeping
+  assert.strictEqual(kinds(ring(200, (i, s) => ({ x: s * 0.5 }))).length, 0)
+  assert.strictEqual(kinds(ring(200, () => ({ act: 1, tk: 'sleep' }))).length, 0)
+})
+
+test('module: ladder cells and the autopilot step are sampled; pickups and opened windows become work events (coalesced)', () => {
+  const { bot, h, advance } = rig()
+  bot.blockAt = () => ({ name: 'ladder', boundingBox: 'empty' })
+  bot._ap = { G: { lastStep: 'tend' } }
+  h.start()
+  h._tick.sample()
+  const s = h._tick.samples()[0]
+  assert.strictEqual(s.ld, 1); assert.strictEqual(s.st, 'tend')
+  bot.emit('playerCollect', bot.entity, {}); bot.emit('playerCollect', {}, {}); bot.emit('windowOpen', {})      // someone else's pickup is ignored; the window is within 5 s of the pickup
+  advance(6000); bot.emit('windowOpen', {})
+  assert.deepStrictEqual(h._tick.events().filter(e => e.k === 'work').map(e => e.what), ['pickup', 'window'])
+  bot.blockAt = () => ({ name: 'stone' }); h._tick.sample()
+  assert.strictEqual(h._tick.samples()[1].ld, 0)
   h.stop()
 })

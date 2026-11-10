@@ -13,6 +13,7 @@ const D = require('./detectors')
 const SB = require('./sandbox')
 
 const SAMPLE_MS = 250, RING_MS = 15 * 60000, ANALYZE_MS = 15000, FLAG_REPEAT_MS = 5 * 60000
+const LADDERISH = /^(ladder|vine|scaffolding|weeping_vines|twisting_vines|cave_vines)/
 const WINDOW_MS = 150000, WINDOW_EVERY_MS = 120000, KEEP_NORMAL = 8, KEEP_FLAGGED = 6      // raw slices kept for the reviewer to validate new detectors against
 
 module.exports = function register(api) {
@@ -39,10 +40,11 @@ module.exports = function register(api) {
     const cs = bot.controlState || {}
     const moving = (bot.pathfinder && bot.pathfinder.isMoving && bot.pathfinder.isMoving()) || cs.forward || cs.back || cs.left || cs.right
     const tb = bot.targetDigBlock
+    let ld = 0; try { const fb = bot.blockAt(e.position); ld = fb && LADDERISH.test(fb.name) ? 1 : 0 } catch {}
     const act = bot.isSleeping || bot.currentWindow || tb || bot.usingHeldItem || (t - lastSwing < 2000) || curTask === 'sleep'
     samples.push({
       t, x: e.position.x, y: e.position.y, z: e.position.z, g: e.onGround ? 1 : 0, vy: e.velocity ? +e.velocity.y.toFixed(2) : 0, yaw: +(e.yaw || 0).toFixed(2), pit: +(e.pitch || 0).toFixed(2),
-      h: bot.heldItem ? bot.heldItem.name : '', mv: moving ? 1 : 0, act: act ? 1 : 0, dg: tb ? tb.name : '', tk: curTask || '', hp: bot.health,
+      h: bot.heldItem ? bot.heldItem.name : '', mv: moving ? 1 : 0, act: act ? 1 : 0, dg: tb ? tb.name : '', tk: curTask || '', hp: bot.health, ld, st: (bot._ap && bot._ap.G && bot._ap.G.lastStep) || '',
     })
     if (samples.length > RING_MS / SAMPLE_MS) samples.splice(0, samples.length - RING_MS / SAMPLE_MS)
     // a dig started: record what was in hand against what the block needs
@@ -98,6 +100,11 @@ module.exports = function register(api) {
     if (!r) return
     if (r.status === 'noPath' || r.status === 'timeout') addEvent({ k: 'fail', t: now(), what: r.status, note: curTask || '' })
   }
+  // signs of work that are not digging or placing: picking items up, opening a chest/furnace/crafting table (coalesced, one per 5 s)
+  let lastWork = 0
+  const work = (what) => { const t = now(); if (t - lastWork > 5000) { lastWork = t; addEvent({ k: 'work', t, what }) } }
+  const onCollect = (collector) => { if (collector === bot.entity) work('pickup') }
+  const onWindow = () => work('window')
   const onTask = (m) => {
     if (!m || !m.task) return
     if (m.event === 'start') curTask = m.task.name
@@ -232,7 +239,7 @@ module.exports = function register(api) {
     start() {
       started = now()
       bot.on('physicsTick', onPhysics); bot.on('entitySwingArm', onSwing); bot.on('blockPlaced', onPlaced)
-      bot.on('diggingCompleted', onDug); bot.on('diggingAborted', onDigAbort); bot.on('path_update', onPathUpdate)
+      bot.on('diggingCompleted', onDug); bot.on('diggingAborted', onDigAbort); bot.on('path_update', onPathUpdate); bot.on('playerCollect', onCollect); bot.on('windowOpen', onWindow)
       if (api.events) api.events.on('task', onTask)
       timer = setInterval(() => { try { sample() } catch {} }, SAMPLE_MS)
       analyzeTimer = setInterval(() => { try { analyze() } catch (e) { api.log('telemetry', 'analyze error: ' + e.message) } }, ANALYZE_MS)
@@ -240,13 +247,13 @@ module.exports = function register(api) {
     stop() {
       clearInterval(timer); clearInterval(analyzeTimer)
       bot.removeListener('physicsTick', onPhysics); bot.removeListener('entitySwingArm', onSwing); bot.removeListener('blockPlaced', onPlaced)
-      bot.removeListener('diggingCompleted', onDug); bot.removeListener('diggingAborted', onDigAbort); bot.removeListener('path_update', onPathUpdate)
+      bot.removeListener('diggingCompleted', onDug); bot.removeListener('diggingAborted', onDigAbort); bot.removeListener('path_update', onPathUpdate); bot.removeListener('playerCollect', onCollect); bot.removeListener('windowOpen', onWindow)
       if (api.events) api.events.removeListener('task', onTask)
       writeSummary(now())
     },
     status() { const s = summary(); return { samples: s.samples, flags: s.flags.map(f => `${f.sev} ${f.kind}`), jumpsPerMin: s.last1min.jumpsPerMin } },
     // for tests and the dashboard's eval channel
-    _tick: { sample, analyze, summary },
+    _tick: { sample, analyze, summary, samples: () => samples, events: () => events },
   }
 }
 module.exports.meta = require('./meta.json')

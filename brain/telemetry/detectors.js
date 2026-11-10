@@ -10,7 +10,8 @@ const DEFAULTS = {
   jump: { perMin: 20, inPlaceBlocks: 8, spamPerMin: 40 },
   osc: { windowS: 30, minPath: 12, maxExtent: 3, reversals: 6, reversalExtent: 5 },
   stuck: { windowS: 20, maxExtent: 1.0, minMovingShare: 0.8 },
-  idle: { windowS: 120, highS: 300, maxExtent: 1.5 },
+  idle: { windowS: 120, highS: 300, maxExtent: 1.5, unidentifiedS: 75, unidentifiedHighS: 180 },
+  ladder: { windowS: 150, amplitude: 2, reversals: 4, maxExtent: 1.3, minLadderShare: 0.5 },
   tool: { minWrong: 2, minNoTool: 8 },
   stairs: { minLevels: 4, gapS: 60 },
   place: { windowS: 600, surfaceFiller: 4 },
@@ -158,18 +159,54 @@ function stuckFlag(samples, now, cfg) {
     msg: `trying to move (pathfinder/controls active ${Math.round(moving * 100)}% of ${cfg.stuck.windowS}s) but did not leave a ${extent(ss).toFixed(1)}-block spot`, data: { task: ss[ss.length - 1].tk || null } }
 }
 
+// Standing still with nothing productive going on. "Productive" is any sign of work in the window: busy bits (digging, swinging, eating, a container open, sleeping),
+// dig/place events (so reseeding a farm, planting saplings or tidying never counts as idle), picking items up, opening a container, or the autopilot moving to a new step.
+// A task that cannot be identified (no scheduler task, no autopilot step) is judged sooner than one that names itself but shows no sign of work at all.
+const UNNAMED = new Set(['', 'idle', '(none)'])
 function idleFlag(samples, events, now, cfg) {
-  for (const [sec, sev] of [[cfg.idle.highS, 'high'], [cfg.idle.windowS, 'med']]) {
+  const c = cfg.idle
+  const last = samples[samples.length - 1]
+  const named = !!last && (!UNNAMED.has(last.tk || '') || !!last.st)
+  const levels = named ? [[c.highS, 'high'], [c.windowS, 'med']] : [[c.unidentifiedHighS, 'high'], [c.unidentifiedS, 'med']]
+  for (const [sec, sev] of levels) {
     const w = sec * 1000, t0 = now - w
     const ss = since(samples, t0)
     if (!covers(ss, w)) continue
     if (ss.some(s => s.act)) continue
-    if (extent(ss) >= cfg.idle.maxExtent) continue
-    if (evSince(events, t0).some(e => e.k === 'dig' || e.k === 'place')) continue
-    const tk = ss[ss.length - 1].tk || null
-    return { kind: 'idle', sev, t0, t1: now, msg: `standing still for ${sec}s doing nothing (no digging, placing, eating, sleeping or container use)${tk ? `, task "${tk}"` : ', no task'}`, data: { seconds: sec, task: tk } }
+    if (extent(ss) >= c.maxExtent) continue
+    if (evSince(events, t0).some(e => e.k === 'dig' || e.k === 'place' || e.k === 'work')) continue
+    if (new Set(ss.map(s => s.st || '')).size > 1) continue              // the autopilot went from one step to another: it is deciding things
+    return { kind: 'idle', sev, t0, t1: now,
+      msg: `standing still for ${sec}s with no sign of work (no digging, placing, picking up, container, eating or sleeping; no step change); ${named ? `task "${last.tk || '-'}"${last.st ? `, step "${last.st}"` : ''} gives no visible output` : 'no identifiable task'}`,
+      data: { seconds: sec, task: last.tk || null, step: last.st || null, identified: named } }
   }
   return null
+}
+
+// Bobbing on a ladder: up and down the same ladder column again and again with nothing done there. A trip down a shaft (and back up) is one or two long legs;
+// bobbing is four or more turns of 2+ blocks inside 2.5 minutes, on a ladder, in one column, with no digging or placing.
+function zigzag(ys, thr) {
+  let hi = ys[0], lo = ys[0], dir = 0, rev = 0
+  for (const y of ys) {
+    if (y > hi) hi = y
+    if (y < lo) lo = y
+    if (dir <= 0 && y - lo >= thr) { if (dir === -1) rev++; dir = 1; hi = lo = y }
+    else if (dir >= 0 && hi - y >= thr) { if (dir === 1) rev++; dir = -1; hi = lo = y }
+  }
+  return rev
+}
+function ladderBobFlag(samples, events, now, cfg) {
+  const c = cfg.ladder, w = c.windowS * 1000, t0 = now - w
+  const ss = since(samples, t0)
+  if (!covers(ss, w) || hExtent(ss) > c.maxExtent) return null
+  if (ss.filter(s => s.ld).length / ss.length < c.minLadderShare) return null
+  if (evSince(events, t0).some(e => e.k === 'dig' || e.k === 'place')) return null
+  const rev = zigzag(ss.filter((_, i) => i % 4 === 0).map(s => s.y), c.amplitude)
+  if (rev < c.reversals) return null
+  const ys = ss.map(s => s.y), last = ss[ss.length - 1]
+  return { kind: 'ladder_bobbing', sev: 'high', t0, t1: now,
+    msg: `went up and down the same ladder ${rev + 1} times in ${c.windowS}s (y ${Math.min(...ys).toFixed(0)} to ${Math.max(...ys).toFixed(0)}, column ${Math.floor(last.x)},${Math.floor(last.z)}) with nothing dug or placed`,
+    data: { turns: rev, yRange: [+Math.min(...ys).toFixed(1), +Math.max(...ys).toFixed(1)], column: [Math.floor(last.x), Math.floor(last.z)], task: last.tk || null, step: last.st || null } }
 }
 
 function toolFlags(events, now) {
@@ -284,7 +321,7 @@ function lavaFlag(samples, now, cfg) {
 function analyze(samples, events, now, over) {
   const cfg = merge(DEFAULTS, over)
   const flags = [
-    ...jumpFlags(samples, events, now, cfg), pillarFlag(samples, events, now, cfg), oscillationFlag(samples, now, cfg), stuckFlag(samples, now, cfg), idleFlag(samples, events, now, cfg),
+    ...jumpFlags(samples, events, now, cfg), pillarFlag(samples, events, now, cfg), ladderBobFlag(samples, events, now, cfg), oscillationFlag(samples, now, cfg), stuckFlag(samples, now, cfg), idleFlag(samples, events, now, cfg),
     wrongToolFlag(events, now, cfg), stairsFlag(events, now, cfg), placementFlag(events, now, cfg), torchFlag(events, now, cfg), lavaFlag(samples, now, cfg),
     ...toolFlags(events, now), ...failFlags(events, now, cfg),
   ].filter(Boolean)
@@ -328,4 +365,4 @@ function excerpt(samples, t0, t1, maxPoints = 60) {
 }
 excerpt.columns = ['sec', 'x', 'y', 'z', 'onGround', 'held', 'task', 'digging']
 
-module.exports = { torchTooClose, evSince, covers, isBlockItem, NON_BLOCK, DEFAULTS, FILLER, analyze, counters, excerpt, toolCheck, since, extent, hExtent, pathLength, merge }
+module.exports = { zigzag, torchTooClose, evSince, covers, isBlockItem, NON_BLOCK, DEFAULTS, FILLER, analyze, counters, excerpt, toolCheck, since, extent, hExtent, pathLength, merge }

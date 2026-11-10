@@ -24,7 +24,8 @@ placements (and whether the sky was open above), pathfinder failures, aborted di
 | `pillar_failing` | jumping on the spot looking down: a held item that cannot be placed (sword, tool, empty hand), or several jumps with no height gained (Smeo444 2026-11-10) |
 | `wrong_tool` / `no_tool` / `cannot_harvest` | the held item is not whitelisted for the block being dug. The whitelist is derived from minecraft-data (`material`, `hardness`, `harvestTools`): axes for logs/planks, pickaxes for stone and ores, shovels for dirt/sand/gravel, hoes or shears for leaves, shears for wool, swords or shears for cobweb, anything for instant-break blocks. `cannot_harvest` = the block drops nothing with that item |
 | `oscillating`, `stuck` | pacing in a few blocks; pathfinder active with no progress |
-| `idle` | 2 min (med) / 5 min (high) of doing nothing at all |
+| `idle` | standing still with no sign of work: no dig/place, pickup, container, eating, sleeping or autopilot step change. 75 s (med) / 3 min (high) when no task or step can be identified, 2 / 5 min when one is named. Reseeding a farm, tidying or any low-movement work that digs, places or picks up never counts |
+| `ladder_bobbing` | 4+ turns of 2+ blocks up and down the same ladder column within 2.5 min with nothing dug or placed (a shaft trip down and back is not bobbing) |
 | `staircase`, `surface_blocks` | a new staircase dug; filler blocks placed in the open air |
 | `torch_spacing` | a torch placed adjacent to, or on a line less than torch-air-air-torch from, another torch at the same height (Walter 2026-11-10). Flag only: when tidying, keep enough torches that the area stays lit |
 | `repeated_failure` | 5+ noPath/timeout/aborted dig/failed task in 5 min |
