@@ -69,6 +69,10 @@ module.exports = function plan(G, S, M, api, log) {
   // It came up at the shaft at dusk and a zombie pack and a skeleton killed it on the walk home (13:44)
   // (and not straight after dawn either: the night's skeletons still stand in the forest shade on the way; two deaths at 226-229,87,-371,
   // 13:44 and 14:04, the second at time 0-1200)
+  // the one laddered shaft per area, shared by both bots (brain/autopilot/ladder.js, Walter 2026-11-10)
+  delete require.cache[require.resolve('./ladder')]
+  const LD = require('./ladder')(bot, S, goals, v, log); M.LD = LD
+  const ladderShaft = () => st.mine && st.mine.ladder ? { id: st.mine.shaft, entry: st.mine.entry, bottom: st.mine.bottom, wall: st.mine.wall || [1, 0] } : null
   const farMine = () => { try { const h = home(); return !!(st.mine && st.mine.entry && h && Math.hypot(st.mine.entry[0] - h.x, st.mine.entry[2] - h.z) > 48) } catch { return false } }
   const daylightLeft = () => { const t = bot.time && bot.time.timeOfDay; return typeof t === 'number' && t < 11500 ? 11500 - t : 0 }
   const ironUnits = () => cnt('iron_ingot') + cnt('raw_iron')
@@ -173,7 +177,8 @@ module.exports = function plan(G, S, M, api, log) {
       return tier('pickaxe') >= 1 } },
 
     // ---- wood stock: logs feed charcoal -> torches -> the mine. With no logs the whole chain stopped and the bot wandered (and drowned exploring). ----
-    { id: 'wood-stock', budget: 300000, need: () => !S.isNight() && S.logs() * 4 + S.planks() < 48, cool: 90000, run: async () => {
+    { id: 'wood-stock', budget: 300000, need: () => !S.isNight() && S.logs() * 4 + S.planks() < Math.max(48, (st.wantLogs || 0) * 4), cool: 90000,   // (more when the laddered shaft needs it)
+      run: async () => {
       // trees are a surface job: from the mine, walk home first (it kept failing from underground and marking every trunk unreachable)
       if (!S.skyVisible() && home()) { const h0 = home(); await S.goto(new goals.GoalNear(h0.x, h0.y, h0.z, 3), { dig: false, ms: 120000 }); st.badTrees = [] }
       let got = await S.chopTree(12, { ms: 150000 })
@@ -500,7 +505,7 @@ module.exports = function plan(G, S, M, api, log) {
       // Back to the surface; the shaft is given up and the next one starts at another spot around home.
       // first a level 8 further down the same shaft (twice at most): the aquifer at y20 under 150,-298 ended the only dry shaft in
       // reach at 03:37, and no other site was found for two hours after
-      if ((st.mineBlocked || 0) >= 3 && st.mine && st.mine.bottom && st.mine.bottom[1] - 8 >= 4 && (st.mine.wetDrops || 0) < 2) {
+      if ((st.mineBlocked || 0) >= 3 && st.mine && !st.mine.ladder && st.mine.bottom && st.mine.bottom[1] - 8 >= 4 && (st.mine.wetDrops || 0) < 2) {
         st.mine.wetDrops = (st.mine.wetDrops || 0) + 1; G.save()
         const bb = v(...st.mine.bottom); if (S.dist(bb) > 3) await S.goto(new goals.GoalNear(bb.x, bb.y, bb.z, 1), { dig: false, ms: 90000, escalate: false })
         if (S.dist(bb) <= 4) {
@@ -515,7 +520,39 @@ module.exports = function plan(G, S, M, api, log) {
         const up = await M.goSurface(); st.mineBlocked = 0; st.mine = null; st.mineSite = null; st.mineSpot = (st.mineSpot || 0) + 1; G.save()
         note('mine: blocked by water three times here, giving this shaft up (surfaced ' + up + '); next shaft at spot ' + st.mineSpot); return false
       }
-      if (y > 56) {
+      // ---- Walter 2026-11-10 (taste): one laddered mineshaft per area, shared by both bots and reused within 250 blocks; a staircase
+      // only when no shaft can be had. The registry is Downloads/bot-shared/registry.json. ----
+      if (y > 56 && !(st.mine && st.mine.ladder)) {
+        const h0 = home(), near = h0 && LD.nearestShaft(h0, 250)
+        if (near) { st.mine = { entry: near.entry, bottom: near.bottom, wall: near.wall, ladder: true, shaft: near.id, dir0: st.mineDir || 0, path: [] }; st.mineEmpty = 0; G.save(); note(`mine: the laddered shaft ${near.id} (y${near.entry[1]} to y${near.bottom[1]}) is the way down`) }
+        else if (h0) {
+          const depth = Math.max(10, h0.y - 14), woodLadders = Math.floor(S.logs() * 3.4 + S.planks() * 0.85 + S.count('stick') * 0.43)
+          if (S.count('ladder') + woodLadders < depth) { note(`mine: a laddered shaft needs ${depth} ladders; have ${S.count('ladder')} and wood for ${woodLadders}, getting wood first`); st.wantLogs = Math.ceil((depth - S.count('ladder')) / 3.4) + 4; G.cool.iron = Date.now() + 3 * 60000; return false }
+          // the entry: open flat ground 5-10 out from the bed, off the shelter, the farm and the grove, no water beside it
+          let entry = null
+          for (let r = 5; r <= 10 && !entry; r++) for (let a = 0; a < 16 && !entry; a++) {
+            const x = Math.round(h0.x + r * Math.cos(a * Math.PI / 8)), z = Math.round(h0.z + r * Math.sin(a * Math.PI / 8))
+            for (let yy = h0.y + 3; yy >= h0.y - 3; yy--) { const c = v(x, yy, z), g = S.block(c.offset(0, -1, 0)), a1 = S.block(c), a2 = S.block(c.offset(0, 1, 0))
+              if (!g || !a1 || !a2 || g.boundingBox !== 'block' || /leaves|log|wood|water|chest|bed|planks|farmland|torch/.test(g.name) || !S.isAir(a1) || !S.isAir(a2)) continue
+              if ((S.inShelter && S.inShelter(c)) || nearList(c, st.farm, 2) || nearList(c, st.grove, 2) || S.hazardNear(c.offset(0, -1, 0), 2).water) break
+              entry = c; break }
+          }
+          if (!entry) { note('mine: no spot for a laddered shaft near home, a staircase this once'); }
+          else {
+            await LD.ensureLadders(Math.min(64, depth))
+            note(`mine: digging the laddered shaft at ${entry} (${S.count('ladder')} ladders)`)
+            const sh = await LD.dig(entry, 14)
+            if (sh && sh.bottom && sh.bottom[1] <= entry.y - 10) { st.mine = { entry: sh.entry, bottom: sh.bottom, wall: sh.wall, ladder: true, shaft: sh.id, dir0: st.mineDir || 0, path: [] }; st.mineEmpty = 0; G.save(); note(`mine: laddered shaft dug from y${entry.y} to y${sh.bottom[1]} (${sh.end})`) }
+            else { note('mine: the laddered shaft stopped at y' + (sh && sh.bottom ? sh.bottom[1] : '?') + ' (' + (sh && sh.end) + '), climbing out'); await LD.up(sh || { entry: [entry.x, entry.y, entry.z], bottom: [entry.x, Math.floor(bot.entity.position.y), entry.z], wall: [1, 0] }); G.cool.iron = Date.now() + 10 * 60000; return false }
+          }
+        }
+      }
+      if (y > 56 && st.mine && st.mine.ladder) {
+        const sh = ladderShaft()
+        if (!(await LD.down(sh))) { st.mine.fails = (st.mine.fails || 0) + 1; G.save(); note('mine: could not ride the ladder down (' + st.mine.fails + ')'); await LD.up(sh); if (st.mine.fails >= 3) { st.mine = null; G.save() } return false }
+        st.mine.fails = 0; note('mine: down the ladder to y' + Math.floor(bot.entity.position.y))
+      }
+      if (y > 56 && !(st.mine && st.mine.ladder)) {
         if (st.mine && st.mine.bottom) {
           const e = v(...st.mine.entry), b = v(...st.mine.bottom)
           await S.goto(new goals.GoalNear(e.x, e.y, e.z, 2), { dig: false, ms: 120000 })
@@ -640,7 +677,7 @@ module.exports = function plan(G, S, M, api, log) {
       }
       // a shaft cut short by the time budget (#114) is dug on down to y20 from where it stopped, before any tunnel (06:25: it tunnelled at
       // y50 instead, under the new site at 213,-388)
-      if (st.mine && st.mine.partial && st.mine.bottom && bot.entity.position.y < 57 && Math.floor(bot.entity.position.y) > 22 && S.dist(v(...st.mine.bottom)) < 4) {
+      if (st.mine && !st.mine.ladder && st.mine.partial && st.mine.bottom && bot.entity.position.y < 57 && Math.floor(bot.entity.position.y) > 22 && S.dist(v(...st.mine.bottom)) < 4) {
         try { const r = await M.descend(20, { maxSteps: 120, dir0: st.mine.dir0 }); note('mine: carried the shaft on down to y' + Math.floor(bot.entity.position.y) + ' ' + JSON.stringify(r)) }
         finally { const b = S.flo(bot.entity.position); if (b.y < st.mine.bottom[1]) st.mine.bottom = [b.x, b.y, b.z]; if (b.y <= 22) delete st.mine.partial; G.save() }
       }
@@ -679,7 +716,11 @@ module.exports = function plan(G, S, M, api, log) {
       // counted as empty, so the bot stayed on that level for days with no iron at all (2026-11-09)
       if ((ironUnits() - before) === 0 && t.len >= 16) st.mineEmpty = (st.mineEmpty || 0) + 1; else if (ironUnits() - before > 0) st.mineEmpty = 0
       // not below y4: the deepslate caves under that killed the bot at y-8 (two skeleton arrows, 23:26), and iron is best around y16
-      if ((st.mineEmpty || 0) >= 2 && st.mine && st.mine.bottom && st.mine.bottom[1] - 8 >= 4) {
+      if ((st.mineEmpty || 0) >= 2 && st.mine && st.mine.ladder && st.mine.bottom && st.mine.bottom[1] - 8 >= 4) {
+        const sh = LD.shafts().find(s => s.id === st.mine.shaft)
+        if (sh) { const bb = v(...sh.bottom); if (S.dist(bb) > 3) await S.goto(new goals.GoalNear(bb.x, bb.y, bb.z, 1), { dig: false, ms: 90000, escalate: false })
+          if (S.dist(bb.offset(0.5, 0, 0.5)) < 2) { const r = await LD.dig(bb, sh.bottom[1] - 8, { into: sh }); if (r && r.bottom) { st.mine.bottom = r.bottom; st.mineEmpty = 0; G.save(); note(`mine: the laddered shaft goes on down to y${r.bottom[1]} (${r.end})`) } } }
+      } else if ((st.mineEmpty || 0) >= 2 && st.mine && st.mine.bottom && st.mine.bottom[1] - 8 >= 4) {
         const target = st.mine.bottom[1] - 8
         // from the foot of the shaft, back along its own tunnel, so each new level stays under the shaft (it used to start at the tunnel's far end)
         { const bb = v(...st.mine.bottom); if (S.dist(bb) > 3) await S.goto(new goals.GoalNear(bb.x, bb.y, bb.z, 1), { dig: false, ms: 90000, escalate: false }) }
@@ -1332,6 +1373,7 @@ module.exports = function plan(G, S, M, api, log) {
   }
   M.goSurface = async () => {
     if (S.skyVisible()) return 'already up'
+    if (st.mine && st.mine.ladder) { const sh = ladderShaft(); if (sh && Math.hypot(bot.entity.position.x - sh.entry[0], bot.entity.position.z - sh.entry[2]) < 48 && await LD.up(sh)) return 'via the ladder' }
     // at the shaft's own entry (or above it) is up, sky or not: the entry at 219,88,-402 is under a tree, and standing there read as 'no
     // way up from y88', a reset (11:48)
     const atTop = () => { try { if (!st.mine || !st.mine.entry) return false; const e = v(...st.mine.entry); return S.dist(e) < 4 || (bot.entity.position.y >= e.y - 1 && Math.hypot(bot.entity.position.x - e.x, bot.entity.position.z - e.z) < 12) } catch { return false } }
