@@ -101,8 +101,18 @@ module.exports = function storage(G, S, M, api, log) {
   async function goRoom(sh, P) {
     if (inRoom(P)) return true
     const cell = v(sh.entry[0], P.y, sh.entry[2])
-    if (bot.entity.position.y < P.y - 1 && S.dist(cell) < 40) await S.goto(new goals.GoalBlock(cell.x, cell.y, cell.z), { dig: false, ms: 60000, escalate: false })
-    else await LD().down({ ...sh, bottom: [cell.x, cell.y, cell.z] })
+    if (bot.entity.position.y < P.y - 1 && Math.hypot(bot.entity.position.x - cell.x - 0.5, bot.entity.position.z - cell.z - 0.5) < 3) {
+      // below the room in the shaft: climb the ladder by hand to the room's level (the pathfinder has no ladder moves; Smeo444 04:29 at the
+      // shaft bottom), then step off into the corridor
+      const w = sh.wall || [1, 0]
+      await S.goto(new goals.GoalBlock(cell.x, Math.floor(bot.entity.position.y), cell.z), { dig: false, ms: 8000, escalate: false }).catch(() => {})
+      try { await bot.lookAt(v(cell.x + 0.5 + w[0], bot.entity.position.y + 1.6, cell.z + 0.5 + w[1]), true); bot.setControlState('jump', true); bot.setControlState('forward', true); const t0 = Date.now(); while (Date.now() - t0 < 30000 && bot.entity.position.y < P.y + 0.1) await new Promise(r => setTimeout(r, 100)) } catch {} finally { bot.clearControlStates() }
+    } else if (bot.entity.position.y < P.y - 1 && S.dist(cell) < 40) await S.goto(new goals.GoalBlock(cell.x, cell.y, cell.z), { dig: false, ms: 60000, escalate: false })
+    else {
+      // far off: to the shaft top with nav's escalation first (a walk-only path failed from 40 blocks out, Smeo444 04:28), then down the ladder
+      if (S.dist(v(...sh.entry)) > 4) await S.goto(new goals.GoalNear(sh.entry[0], sh.entry[1], sh.entry[2], 1), { dig: false, ms: 90000, escalate: true })
+      await LD().down({ ...sh, bottom: [cell.x, cell.y, cell.z] })
+    }
     for (const c of P.corridor) await walk(c, 8000)
     await walk(P.at(3, 0), 8000)
     return inRoom(P)

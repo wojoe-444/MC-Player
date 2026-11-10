@@ -840,10 +840,17 @@ module.exports = function plan(G, S, M, api, log) {
   const homeBox = () => { if (Date.now() - hbAt < 5000) return hbCache; hbAt = Date.now(); const h = home(); hbCache = h ? { x0: h.x - 6, x1: h.x + 6, y0: h.y - 2, y1: h.y + 6, z0: h.z - 8, z1: h.z + 6 } : null; return hbCache }
   const inBox = (p, b) => b && p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1 && p.z >= b.z0 && p.z <= b.z1
   const nearList = (p, list, r) => (list || []).some(q => Math.abs(q[0] - p.x) <= r && Math.abs(q[1] - p.y) <= r && Math.abs(q[2] - p.z) <= r)
+  // the placed-block log (brain/placed.js): Walter's (any player's who is not a bot) blocks are always built; a bot's own blocks are built
+  // unless they are plain filler (pillar and bridge scaffolding, cave seals: the bots take those down again as they go)
+  const PL = (() => { try { return require('../placed').attach(bot, (m) => log('PLACED', m)) } catch (e) { log('PLAN', 'placed log not loaded: ' + e.message); return null } })()
+  S.placed = PL
+  const BOTS = /^(OzoGo444|Smeo444)$/
+  const FILL = /^(cobblestone|cobbled_deepslate|dirt|coarse_dirt|stone|netherrack|gravel|sand|andesite|diorite|granite|tuff|deepslate)$/
   S.isEstablished = (block) => {
     if (!block || !block.position) return false
     const p = block.position
     if (BUILT.test(block.name)) return true
+    try { const r = PL && PL.at(p, block.name); if (r && (!BOTS.test(r.by) || !FILL.test(r.name))) return true } catch {}
     // a job site's own harvest (zone.json allow: Smeo444's birch logs and leaves) is work, even inside the box around the home bed
     try { const z = S.zone(); if (z && (z.allow || []).some(a => p.x >= a.x0 && p.x <= a.x1 && p.y >= a.y0 && p.y <= a.y1 && p.z >= a.z0 && p.z <= a.z1 && new RegExp(a.blocks).test(block.name))) return false } catch {}
     if (inBox(p, homeBox()) && block.boundingBox === 'block') return true      // the house shell, whatever it is made of
