@@ -26,8 +26,10 @@ module.exports = function makeTools({ bot, limits, log = () => {} }) {
     if (isOre(b)) {
       const ok = ps.filter(p => p.tier >= needTier(b))
       if (!ok.length) return null
+      // the lowest tier that can harvest it (stone for iron ore, iron for diamond), then the fastest of that tier
       let best = null, bt = Infinity
-      for (const p of ok) { let t = 0; try { t = b.digTime(p.it.type, false, false, false, [], {}) } catch { t = 10 - p.tier } if (t < bt) { bt = t; best = p } }
+      const lowest = Math.min(...ok.map(p => p.tier))
+      for (const p of ok.filter(p => p.tier === lowest)) { let t = 0; try { t = b.digTime(p.it.type, false, false, false, [], {}) } catch { t = 10 - p.tier } if (t < bt) { bt = t; best = p } }
       return best.it
     }
     if (!ps.length) return null
