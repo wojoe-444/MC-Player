@@ -148,15 +148,40 @@ module.exports = function ladder(bot, S, goals, v, log) {
     const r = await S.goto(new goals.GoalBlock(b.x, b.y, b.z), { dig: false, ms: 90000, escalate: false })
     return r.ok || S.dist(b.offset(0.5, 0, 0.5)) < 2
   }
+  // Up and out (bug hunt 2026-11-10 #6): the entry cell has no floor (the first ladder hangs one below it), so a go-to aimed at it counted as
+  // reached on the top rung and the bot slid back down when the keys were let go: ladder bobbing. Now the bot climbs by hand past the top and
+  // steps off onto a floored cell beside the entry; success only when it stands on ground at entry level or above.
+  const passable = (c) => { const b = S.block(c); return !!b && b.boundingBox === 'empty' && !S.isLiquid(b) }
+  L.exits = (sh) => {
+    const e = v(...sh.entry), w = sh.wall || [1, 0]
+    // the wall side first: holding forward against the wall at the top walks the bot straight onto it
+    return [w, [-w[1], w[0]], [w[1], -w[0]], [-w[0], -w[1]]].map(([dx, dz]) => e.offset(dx, 0, dz)).filter(c => passable(c) && passable(c.offset(0, 1, 0)) && solid(c.offset(0, -1, 0)))
+  }
+  const outAt = (sh) => bot.entity.onGround && bot.entity.position.y >= sh.entry[1] - 0.01 && !L.inColumn(sh)
   L.up = async (sh) => {
     const e = v(...sh.entry), b = v(...sh.bottom)
+    if (outAt(sh)) return true
     if (S.dist(b) > 3 && Math.abs(bot.entity.position.y - b.y) <= 3) await S.goto(new goals.GoalNear(b.x, b.y, b.z, 1), { dig: false, ms: 90000, escalate: false })
     await L.repair(sh).catch(() => 0)
-    const r = await S.goto(new goals.GoalBlock(e.x, e.y, e.z), { dig: false, ms: 90000, escalate: false })
-    if (r.ok || S.dist(e.offset(0.5, 0, 0.5)) < 2) return true
-    // by hand: on the ladder, look at the wall and hold jump
-    try { await bot.lookAt(v(e.x + 0.5 + sh.wall[0], bot.entity.position.y + 1.6, e.z + 0.5 + sh.wall[1]), true); bot.setControlState('jump', true); bot.setControlState('forward', true); const t0 = Date.now(); while (Date.now() - t0 < 40000 && bot.entity.position.y < e.y - 0.1) await sleep(100) } catch {} finally { bot.clearControlStates() }
-    return S.dist(e.offset(0.5, 0, 0.5)) < 3
+    if (!L.inColumn(sh)) await S.goto(new goals.GoalBlock(e.x, Math.floor(bot.entity.position.y), e.z), { dig: false, ms: 20000, escalate: false }).catch(() => {})
+    const exits = L.exits(sh)
+    if (L.inColumn(sh)) {
+      await L.rideTo(sh, e.y + 0.4, 45000)
+      // step off: face an exit and walk onto it, jumping (the last rung tops out a little under the floor level)
+      for (const x of exits) {
+        if (outAt(sh)) break
+        const t0 = Date.now()
+        try {
+          while (Date.now() - t0 < 2500 && !(outAt(sh) && Math.floor(bot.entity.position.x) === x.x && Math.floor(bot.entity.position.z) === x.z)) {
+            await bot.lookAt(x.offset(0.5, 1.6, 0.5), true); bot.setControlState('forward', true); bot.setControlState('jump', true); await sleep(50)
+          }
+        } catch {} finally { bot.clearControlStates() }
+      }
+    }
+    if (!outAt(sh) && exits.length) await S.goto(new goals.GoalBlock(exits[0].x, exits[0].y, exits[0].z), { dig: false, ms: 20000, escalate: false }).catch(() => {})
+    const ok = outAt(sh)
+    if (!ok) log('LADDER', 'up ' + sh.id + ': not out at the top (at ' + bot.entity.position.floored() + ', exits ' + exits.length + ')')
+    return ok
   }
   return L
 }
