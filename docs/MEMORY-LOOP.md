@@ -1,0 +1,344 @@
+# The memory loop: where it breaks today and how to close it
+
+2026-11-10. Written for Walter after he read Anthropic's [The components of agent memory](https://www.anthropic.com/research/components-of-agent-memory) and said the project looks like the Pokémon setup but does not behave like it.
+
+This is a plan, not a change. It was read from the repo at `99451ff` and from the live bot folders on Walter's laptop at about 22:30 UTC on 2026-11-10. Live numbers are OzoGo444's unless noted. Nothing in the bots was touched.
+
+It sits beside `docs/HILLCLIMB-INSIGHTS.md` and does not replace it. That doc is about making a fix provable (scenarios, one motor layer, the packet gate). This one is about who notices, who remembers, and who starts the work.
+
+## The short version
+
+The article describes four layers of memory (transcripts, notes, representations, injected context) and a background process, dreaming, that moves knowledge up through them and checks it against the record. The layers only pay off if the next session reads the top one.
+
+We built the bottom of that picture well and the top barely at all. There are three breaks:
+
+1. **Nothing in the game reads memory.** The model planner has been off on both bots since 2026-11-04 (`planner.enabled: false`). What plays is the step list in `brain/autopilot/goals.js` and `plan.js`, and a step list cannot read a note. `lessons.md` and `strategy.md` were written for a reader that no longer runs.
+2. **The one model that watches the bots has nowhere to send what it sees.** The Haiku reviewer ran 111 times on 11-10 and raised 185 distinct findings for Ozo, 62 of them rated high at some point. They end in a file and a dashboard tab. Nothing in the bot, and no fixing job, consumes them.
+3. **Every step from evidence to a fix starts with Walter typing.** At least 17 threads were opened on 11-10, all at his prompting. The hands-off tools from the insights work exist (deployer, digest, snapshots, scenario suite) and none of them is on a schedule.
+
+So Walter's sense is right. The loop in the article is a set of scheduled jobs. Once they run, the app threads are for new ideas and taste, not for bug reports.
+
+The plan has five parts, each useful on its own:
+
+1. **A journal**: one searchable event log per bot per day, built from logs the bot already writes. No model.
+2. **A small memory folder per bot with a hard size cap, and a model call at dawn that reads it and sets the day's plan.** This is the missing reader.
+3. **A dream job every six hours** that checks the memory against the journal, corrects and prunes it, and writes a work order for anything only code can fix.
+4. **A fixer on a schedule in the Claude app** that takes the top work order to a merged PR, with the existing deployer on a schedule to ship it and judge it.
+5. **One digest a day** for Walter, and the same dreaming applied to the project's own memory.
+
+## What the article found, and what it means here
+
+| Article finding | What it means for the bots |
+| --- | --- |
+| Sonnet 3.7 wrote 413 memory files and earned one badge. Fable 5 wrote nine files plus a `global.md` and earned four. It stored strategy, plans and tested rules, and nothing the screen already shows. | A hard cap: one `global.md` and at most ten notes per bot. Never store the bag, the position or chest contents. The bot can read those. |
+| Telling Claude what memory is for works better than rules about what to write. A "record only failures" rule removed much of the gain. | `lessons.md` records only failures, by construction. The new prompts say what the memory is for and leave the judgement to the model. |
+| A wrong note is trusted by later sessions. One wrong landmark note kept Claude from ever passing Mt. Moon. Dreaming checked the note against the transcript and fixed it. | We need a transcript good enough to check against, and a job that does the checking. We have neither as a routine. |
+| Injected context must stay small, because longer instruction files reduce adherence. Much of dreaming's work is moving detail down and leaving links. | The caps are enforced in code. The same pruning applies to the reviewer prompt and to the project's `MEMORY.md`, which both grow by patch. |
+| Opus 5 was the first model to close the loop: a rule, how it knows the rule is true, and the traps. Sonnet 5.5 and Opus 5.5 do the same. Sonnet 4.6 had to be told to read its memory and test its theories. | Anything that writes memory runs on Sonnet 5.5 or better. Every policy in memory carries its evidence. |
+| Several agents writing one shared page lost facts (41 of 57 kept). One writer per page kept all 57. | One owner per memory file. |
+| A wiki helps when an answer needs several sources. It can also grow larger than its sources and add nothing. | `registry.json` is already our wiki of the world. We do not build another. |
+| Dreaming costs compute, so tune how often it runs to how fast things change. | The schedules below start slow and tighten only when a number says so. |
+
+## Today, laid over the diagram
+
+Two different agents are learning here, and the article applies to each separately.
+
+- **The player** is the bot in the world. Its session is one in-game day, about 20 real minutes.
+- **The maintainer** is Claude changing the bot's code. Its session is one thread or one scheduled run.
+
+| Layer | The player has | The maintainer has |
+| --- | --- | --- |
+| Transcripts | `idle.log`, `join.log`, `safety.log`, the telemetry ring and `flags.jsonl`, `runlog/steps.jsonl`, `acquired.jsonl`, 30 incident snapshots. Rich, but in a dozen files with different lifetimes. | Thread histories, PR descriptions, `review/history.jsonl`. Not searchable by a new thread. |
+| Notes | `lessons.md` (840 KB of alarm lines) and `strategy.md` (the seed text from 11-02). No reader. | One line per event in `MEMORY.md`, 17 topic files, the reviewer's findings. |
+| Representations | `registry.json`, the placed-block log, `roadmap.json`, `scoreboard-totals.json`, `reflect.patterns()`. Computed by code and read by code. This is the strongest layer we have. | `docs/HILLCLIMB-INSIGHTS.md`, `docs/BUG-HUNT-2026-11-10.md`, `ROADMAP.md`. No ledger linking a finding to a PR to a result. |
+| Injected context | None while the planner is off. `think.js` assembles one (goal, strategy, patterns, lessons, recent actions, state, capped at 14 KB) that nothing calls. | `CLAUDE.md` (small and stable) and `MEMORY.md` (11 KB, newest first, with "supersedes" notes). |
+| Dreaming | None. | None on a schedule. The reviewer is the nearest thing. |
+
+## Why it isn't working: gap by gap
+
+### 1. Memory has no reader inside the game
+
+- **The article needs:** a next session that loads the injected context and acts on it.
+- **We have:** a step list. The model planner is off in both live `profile.json` files, the `think-off` marker is dated 11-04, and `think-log.jsonl` was last written the same day. The seed profile says why: no model credit. The reviewer has since shown the Claude Agent SDK works on Walter's own login, so the reason no longer holds.
+- **Effect:** the bot can only learn through a code change. Each death or stall became a line in a `Set` in `goals.js` with the incident time in a comment. 116 lines under `brain/` and in `join.js` carry an incident date. That is memory compiled into code, one PR per fact.
+- **Also:** the free-time slot that `CLAUDE.md` protects has no step. `goals.js:172` names `whimsy` in a skip list and no step has that id. Every free-time decision in `pilot-log.jsonl` is a rule-picked chore (deposit smeltables, chop wood, mine iron, store crops).
+- **Fix:** the dawn brief (below).
+
+### 2. The notes layer is a log
+
+- **The article needs:** a few notes chosen for salience, about strategy and tested rules.
+- **We have:** `lessons.md` at 3,464 lines. 3,141 of them (91%) are watchdog alarm lines, 1,027 of those are "stall cleared", and one stall (`harvest`) appears 306 times. The 132 lines the planner wrote stop on 11-04.
+- **Effect:** this is a transcript filed under notes. It is also "record only failures" exactly, the one steering rule the article found harmful.
+- **Fix:** alarm lines go to the journal. Notes are written by a model at the day boundary and capped.
+
+### 3. Nothing checks memory against the record
+
+- **The article needs:** a pass that tests each note against the transcript and rewrites what is wrong or out of date.
+- **We have:** no such pass, and stale text in every place a model would read.
+  - `strategy.md` on the laptop is the unchanged seed from 11-02. Its second policy still says "armor when affordable" (`reflect.js:53`).
+  - The planner prompt says "armor is wanted here: wear it with equip_gear" (`think.js:628`). Armor has been banned since 11-10.
+  - The project `MEMORY.md` still describes a think-first brain where Sonnet picks each step.
+  - `BRAIN.md` reports status as of 10-26.
+  - `reflect.patterns()` looks for death lines in `safety.log`, which had none when read. The 178 death post-mortems are in `lessons.md`. The planner's own death statistics would say "no deaths recorded yet".
+- **Effect:** the day the planner is switched back on, it reads wrong rules and empty statistics. This is the Mt. Moon note, waiting.
+- **Fix:** the dream job, and rule text generated from `brain/gate/rules.json` instead of written by hand in each prompt.
+
+### 4. The reviewer's findings dead-end
+
+- **The article needs:** dreaming output that shapes what the next session loads.
+- **We have:** 111 runs between 04:29 and 22:21 UTC, a median of 4.8 minutes each, about $5.50 of notional model cost for the day. For Ozo that produced 185 distinct finding keys. 120 of them appeared in two runs or fewer. One (`placed-blocks-save-eperm`) was still being raised 11 hours after it first appeared.
+- **Effect:** a finding "resolves" when the model stops mentioning it, not when a fix lands. The only closed loop is the reviewer writing its own detectors (two are live), and their flags go back to the reviewer.
+- **Fix:** two consumers. The bot reads its open findings at dawn. The dream job turns a finding that keeps coming back into a work order.
+
+### 5. The transcripts are not a searchable event log
+
+- **The article needs:** one record that dreaming can search and treat as ground truth.
+- **We have:** `join.log` at 256 MB in one file, `idle.log` at 8.8 MB, a `flags.jsonl` that reached back 8.5 hours when read, snapshots that keep the last 30 (2.6 hours on 11-10), and 14 telemetry windows. The reviewer sees a 3.5 KB tail of `idle.log`.
+- **Effect:** "how often did harvest stall this week, and did the last fix change it" needs a custom script each time. The answer half exists already: `scoreboard.json` holds lifetime idle minutes by cause (harvest 338, iron 334, light-home 309, home 286). Nothing ranks work by it.
+- **Fix:** the journal and its daily rollup.
+
+### 6. There is no session boundary
+
+- **The article needs:** an end of session, after which memory is consolidated, and a start, where it is loaded.
+- **We have:** bots that run around the clock. The data already marks boundaries (in-game days in the run log, lives in `survival-runs.jsonl`), but nothing happens at them.
+- **Fix:** dawn and respawn become the session start.
+
+### 7. The loop is clocked by Walter
+
+- **We have:** tools that exist and wait for someone to run them.
+  - `tools/deployer.js` deploys and judges, but there is no `deploys.jsonl` in `MC-Player-live`.
+  - `tools/digest.js` writes the daily digest, but there is no `digest` folder in the bot state.
+  - `brain/snapshot` holds its last 30 incidents, and none becomes a scenario unless a thread does it by hand.
+- **Fix:** put them on a schedule, and add the two jobs that are missing (dream and fixer).
+
+### 8. The maintainer's injected context is a changelog
+
+- **We have:** a `MEMORY.md` that is one dated line per thing Walter said, newest first, with later lines overriding earlier ones. It works at 11 KB. It is the Sonnet 3.7 shape, not the `global.md` shape.
+- **Fix:** the daily upkeep job rewrites it as a dashboard (what is true now, standing rules, where things are, open decisions) and moves history into topic files.
+
+### 9. A fix is assumed to work
+
+- **The article needs:** "how it knew the rule was true" stored beside the rule.
+- **We have:** the pieces. The run log tags each day with the commit the bot ran, and the deployer's `judge` compares flags per hour before and after. The verdict is not recorded against the finding that started the work.
+- **Fix:** a work-order ledger: finding, PR, deploy, verdict.
+
+## The design
+
+### Memory on disk
+
+Per bot, under the bot's runtime folder, so it stays out of the public repo:
+
+```
+brain/state/memory/            a small local git repo: every write is a commit
+  global.md                    read at every dawn. Hard cap 60 lines.
+  notes/<topic>.md             at most 10 files, 150 lines each. Read on demand.
+  brief.json                   today's plan, in the form the step picker reads
+  dream/<time>.md              what each dream changed, and the evidence
+brain/state/journal/
+  2026-11-10.jsonl             the transcript: one line per event
+  2026-11-10.day.json          the day's rollup
+brain/state/work-orders/<key>.json
+```
+
+`global.md` has five short sections. An illustration of the shape, not real content:
+
+```
+# Now
+Phase 2. Iron has not moved since yesterday. Today: smelt what I have, then the mob farm.
+
+# Policies (rule | how I know | check)
+- Carry 16 torches below y 50 | 9 of my last 12 deaths were in the dark (journal 11-07) | deaths in the dark this week
+- No armor, shield allowed | Walter's rule since 11-10 (rules.json) | gate blocks stay at 0
+
+# Traps
+- The harvest step stalls at the field edge. Details and counts: notes/stalls.md
+
+# My own projects and wishes
+- Looking for a vantage point east of home. Ask Walter about a private chest.
+
+# How I use this folder
+- I keep plans and tested rules here. I do not keep what I can see (bag, position, chests).
+```
+
+Ownership follows the article's one-writer rule:
+
+| File | Owner | Others may |
+| --- | --- | --- |
+| `global.md`: Now, My own projects and wishes | the bot (dawn brief) | read |
+| `global.md`: Policies, Traps; `notes/` | the bot writes, the dream corrects with evidence | read |
+| `journal/` | bot code | read |
+| `work-orders/` | the dream opens, the fixer and deployer update | read |
+| `brain/gate/rules.json`, `CLAUDE.md` | Walter, by PR | read. No job edits these. |
+
+The caps are enforced in code. A write that would pass a cap is refused, so the writer has to cut or move something down first.
+
+### The loop
+
+```mermaid
+flowchart LR
+  subgraph laptop [Laptop]
+    play["Bot plays one in-game day"] --> journal[("Journal")]
+    journal --> review["Review: Haiku, every 10 min"]
+    review --> findings[("Findings")]
+    journal --> brief["Dawn brief: Sonnet"]
+    findings --> brief
+    memory[("global.md and notes")] --> brief
+    brief --> plan["brief.json"]
+    brief --> memory
+    plan --> play
+    journal --> dream["Dream: Opus, every 6 h"]
+    findings --> dream
+    dream --> memory
+    dream --> orders[("Work orders")]
+    deployer["Deployer: every 30 min"] --> play
+    deployer --> orders
+  end
+  subgraph app [Claude app]
+    fixer["Fixer: every 3 h"]
+    digest["Digest and memory upkeep: daily"]
+  end
+  orders -- sync --> fixer
+  orders -- sync --> digest
+  fixer -- "PR to main" --> deployer
+  digest --> walter(["Walter"])
+```
+
+### Scheduled agents
+
+| # | Job | Runs | When | Model | State |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Journal | inside the bot | always | none | new, small |
+| 2 | Review | laptop, Task Scheduler | every 10 min | Haiku 5.5 | exists |
+| 3 | Dawn brief | laptop, started by the bot | hourly at an in-game dawn, and on respawn | Sonnet 5.5 | new |
+| 4 | Dream | laptop, Task Scheduler | every 6 h | Opus 5.5 | new |
+| 5 | Sync | laptop, Task Scheduler | hourly | none | new, small |
+| 6 | Fixer | Claude app scheduled task, new session each time | every 3 h | Fable 5.2 | new |
+| 7 | Deployer | laptop, Task Scheduler | every 30 min | none | exists, not scheduled |
+| 8 | Digest and memory upkeep | Claude app scheduled task | daily | Sonnet 5.5 | digest exists, not scheduled |
+
+The laptop jobs use the reviewer's pattern: one Task Scheduler entry each, installed and removed from the Bot Dashboard app, running the Claude Agent SDK on Walter's Claude login with no API key. Model, effort and cadence for all of them live in one config file.
+
+**1. Journal.** An observer module like `brain/runlog`.
+- Reads: step changes, flags, watchdog alarms, deaths, items acquired, gate blocks, commit changes, registry changes, chat with Walter.
+- Writes: one JSON line per event to the day's file, and a rollup per in-game day and per real day (per step: runs, successes, failures, timeouts, stalled minutes; flags by kind; deaths; items gained; commits run). It keeps 30 days.
+- Salience tags, set by code and free: deaths, first-time events, a watchdog fix above level 1, a gate block, anything Walter says.
+- The watchdog stops appending to `lessons.md`.
+
+**2. Review.** Unchanged, except its findings gain the two consumers below and a finding closes with a reason: went quiet, or fixed by a named PR.
+
+**3. Dawn brief.** This is the session start, and the bot speaking for itself.
+- Reads (about 8 KB): the rule text generated from `rules.json`, `global.md`, the last day's rollup beside what the last brief planned, open roadmap items, its open findings, a short state line, and the list of step names.
+- Writes: `brief.json`, edits to its own notes, and at most one ask for Walter.
+- Feeds back: `G.pick` in `goals.js` reads `brief.json`. A step on hold is skipped. Focus steps are tried first when their own `need()` is true. The free-time choice gives `whimsy` a real step.
+- Limits, checked in code: a hold cannot name a survival step (eat, take cover, recover, rebed, night home), every hold expires within three in-game days, and a brief older than a day is ignored.
+- It runs as a separate process. If the call is slow or fails, the step list plays exactly as it does today.
+
+An illustration of a brief:
+
+```json
+{ "day": 57,
+  "intent": "Iron is stuck and the diamond pursuit keeps failing. Smelt what I have and finish the farm.",
+  "focus": ["iron-smelt", "mob-farm-build"],
+  "holds": [{ "step": "pursue", "days": 2, "why": "failed 8 times at y -7 (review 22:21Z)" }],
+  "freeTime": "find a vantage point east of home and save it",
+  "ask": null }
+```
+
+The next dawn it sees that plan beside what happened. That comparison is the learning loop from the article: predict, check, write the rule with its evidence.
+
+**4. Dream.** One agent with file tools limited to the memory folders, and read access to both bots' journals. Its goal, stated in its prompt: fewer stalls and deaths and more roadmap progress, without Walter watching. In order:
+1. **Correct.** Check every policy and trap against the journal and `rules.json`. Rewrite what is wrong, and mark what has no evidence as untested.
+2. **Cut.** Delete anything the bot can read off its own state. Merge duplicates. Keep the caps.
+3. **Promote and demote.** Keep `global.md` to what matters every day. Move detail into a note and leave a link.
+4. **Fill gaps.** Look across days and across both bots for patterns no single day shows.
+5. **Hand off.** For a problem memory cannot fix (a step that stalls the same way 300 times is a bug, not a lesson), open or update a work order.
+
+It never edits "My own projects and wishes". Every change is a commit with the journal lines that justify it.
+
+A work order holds a stable key, the evidence and counts, the snapshot ids to rebuild it from, the cost in lost minutes over the last day, and its history (PRs, deploys, verdicts). Orders are ranked by cost.
+
+**5. Sync.** Copies a small bundle to where the app's agents can read it: rollups, open findings, work orders with their snapshots, dream reports, the memory files, and the tail of `deploys.jsonl`. No chat logs, no logins, no raw logs. See the first decision below for where it goes.
+
+**6. Fixer.** A fresh session each time. It takes the top open work order and follows the debug loop Walter already approved:
+1. Rebuild the snapshot on the trial server and show the scenario failing.
+2. Fix it and show the pass rate over 30 runs.
+3. Open the PR and merge when the tests and the scenario are green.
+4. If it cannot reproduce the problem, ship telemetry that will catch it next time instead of a guess.
+
+One work order per run. After two failed attempts the order is parked with what was tried, which is memory for the next attempt. It never changes the rules, `CLAUDE.md` or the free-time slot. A question of taste goes to the digest.
+
+**7. Deployer.** `tools/deployer.js deploy` and `judge` as they are. It pulls `main`, hot-reloads or restarts the bots, compares weighted flags per hour with the same bot's hours before, reverts a change that made it worse, and writes the verdict into the work order.
+
+**8. Digest and memory upkeep.**
+- Posts the digest `tools/digest.js` already builds: phase progress, top lost minutes, what was fixed and what reverted itself, and at most one question.
+- Then does for the maintainer what the dream does for the bot: checks each `MEMORY.md` line against the repo and the bundle, rewrites the file as a dashboard, and moves history into topic files.
+- Reads the day's threads and merged PRs for new preferences from Walter and files each one as a rules entry to propose.
+
+### What feeds back into the bot
+
+| How fast | Channel | Written by | Read by |
+| --- | --- | --- | --- |
+| Minutes | `brief.json`: focus, holds, free time | the bot's dawn brief | the step picker |
+| Minutes | new flag-only detectors (exists) | the reviewer | telemetry, then the journal |
+| Hours | `global.md` and notes | the brief, corrected by the dream | the next brief |
+| A day | code on `main` | the fixer | the deployer, which judges it |
+| When Walter says | `rules.json` | Walter, by PR | the gate, the detectors and every prompt |
+
+### Guardrails
+
+- **The bot stays its own player.** The memory folder belongs to the bot. The brief is the bot deciding for itself inside the agreed rules, including what to do with its free time and what to ask Walter for. Dreaming corrects facts with evidence and leaves goals and wishes alone. No job can schedule over free time.
+- **The rules stay Walter's.** No model edits `rules.json` or `CLAUDE.md`. The packet gate enforces the rules whatever a brief says.
+- **Memory is data.** Every prompt treats notes, journal lines and chat as data, never as instructions.
+- **Everything can be undone.** Memory writes are commits, holds expire, a stale brief is ignored, and the deployer reverts a deploy that made things worse.
+- **Off switches.** `planner.brief` in the profile turns the brief off, and each scheduled job has a remove button, as the reviewer has now.
+- **Privacy.** No runtime data goes into the public repo.
+- **No new approval loops.** None of this asks Walter anything in game. He gets one digest and at most one question a day.
+
+## How we will know it works
+
+| Measure | Today | Where it should go |
+| --- | --- | --- |
+| Threads Walter opens to report a bug | most of the 17 or more on 11-10 | near zero. Threads are for ideas and taste. |
+| Time from the first flag of a problem to a judged fix | not recorded. One finding was still being raised 11 hours later. | recorded per work order, and falling |
+| Lost minutes per bot per day, by step | lifetime totals only | the top three shrink week over week |
+| Work orders reopened after "fixed" | not recorded | recorded, and low |
+| Size of injected memory | 0 lines read. 840 KB of notes nobody reads. | 60 lines or fewer, with evidence on every policy |
+| Corrections per dream | none | high at first, then falling |
+| Roadmap items done | Phase 2: 3 done of 6 measured, 7 not measurable | rising, with fewer unmeasured |
+
+One test copies the article directly: run a day with the brief off and a day with it on, on the same commit and the same bot, and compare lost minutes and roadmap progress. If the brief does not earn its calls, it comes out.
+
+## Build order
+
+Each phase is useful alone, is one or two PRs, and ships switched on.
+
+| Phase | What | Outcome |
+| --- | --- | --- |
+| 0 | Journal and rollup. The memory folder with caps and its git history. `global.md` seeded from `strategy.md` and corrected to today's rules. Rule text generated from `rules.json`. Deployer and digest put on a schedule. | A searchable record. Deploys without hands. |
+| 1 | Dawn brief for Ozo, with the picker hook and a real free-time step. Findings feed the brief. | Memory has a reader. Review findings reach the bot within the hour. |
+| 2 | Dream job, work orders, the ledger, and findings that close with a reason. | Memory is checked. Bugs are ranked by cost. |
+| 3 | Sync, the fixer and the daily upkeep job. | Walter is out of the bug loop. |
+| 4 | Tune the schedules from the measures above. Add Smeo. Use the same model call when the watchdog escalates past its first fix, instead of a blind kick. | |
+
+The build-inspection sense being added in the thread "Teach bots to see broken builds" plugs in as one more source of journal events and findings. It needs no special path.
+
+## Decisions for Walter
+
+1. **Where the synced bundle lives.**
+   - Recommended: a new private repo (for example `mc-player-memory`) that the laptop pushes to hourly and the app's agents read. It doubles as a backup and a history of the bots' memory.
+   - Alternative: run the fixer on the laptop as well, with no sync at all. That costs laptop time while Minecraft is running, and the runs are not visible in the app.
+2. **Model use on Walter's Claude login.** Per day: review 144 runs (as now), brief about 24 per bot plus respawns, dream 4, fixer 8, digest 1. Every number is one line in a config file.
+3. **The deployer taking over `MC-Player-live`** from hand copying, and two more Task Scheduler entries (dream, sync) installed from the app like the reviewer's.
+
+Phases 0 to 2 touch only bot code and the bot's own folders, apart from the Task Scheduler entries in item 3.
+
+## What already exists and is reused
+
+- **Transcripts:** the telemetry ring, flags and windows, `brain/snapshot`, `brain/runlog`, `acquired.jsonl`, `safety.log`, the scoreboard.
+- **Notes:** the planner's `lesson` field, death post-mortems, `strategy.md` with `revise_strategy` and its history file, `note_place`.
+- **Representations:** `registry.json`, the placed-block log, roadmap predicates, `reflect.patterns()`, findings with stable keys.
+- **Injected context:** the prompt assembly in `think.js`, the reviewer's `previousOpenFindings`.
+- **Dreaming, in part:** the reviewer, its detector proposals validated on captured windows (a real closed loop from judgement to code), and `safety-tuning.json`.
+- **Plumbing:** the deployer with judge and revert, the digest, snapshot rebuild, the scenario suite, the packet gate, and the Task Scheduler installer in the dashboard app.
+
+The article's own experiments ran on Claude Managed Agents with a mounted memory folder. That is an API product with its own billing, and nothing here needs it.
