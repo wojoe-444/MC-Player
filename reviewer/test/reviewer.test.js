@@ -198,3 +198,23 @@ test('runReview: a bot with fewer than 3 normal windows gets no window digests a
   assert.match(bots[1].detectorProposals, /^closed/); assert.ok(!('windows' in bots[1]))
   assert.ok(!/\n\s+"/.test(r.prompt.slice(r.prompt.indexOf('['))), 'no pretty-printing whitespace in the evidence')
 })
+
+test('findings.merge: a resolved key that returns keeps its first-seen time and run count; the model sees recentlyResolved', async () => {
+  const bot = { id: 'ozo', name: 'OzoGo444' }
+  const f = (key) => ({ key, kind: 'code_fault', severity: 'med', confidence: 'high', title: key, evidence: 'e', suggestion: 's', explainsFlags: [] })
+  let st = findings.merge(null, bot, { findings: [f('ozo-gap')], resolved: [] }, { now: NOW })
+  st = findings.merge(st, bot, { findings: [f('ozo-gap')], resolved: [] }, { now: NOW + 600e3 })
+  st = findings.merge(st, bot, { findings: [], resolved: ['ozo-gap'] }, { now: NOW + 1200e3 })
+  assert.strictEqual(st.open.length, 0); assert.strictEqual(st.recentlyResolved[0].key, 'ozo-gap')
+  st = findings.merge(st, bot, { findings: [f('ozo-gap')], resolved: [] }, { now: NOW + 1800e3 })
+  const g = st.open.find(x => x.key === 'ozo-gap')
+  assert.strictEqual(g.firstSeen, new Date(NOW).toISOString()); assert.strictEqual(g.seenRuns, 3)
+  assert.ok(!st.recentlyResolved.some(x => x.key === 'ozo-gap'))
+  // the evidence handed to the model carries the recently resolved keys
+  const root = tmp(), cfg = cfgFor(root); mkBot(cfg.bots[0].dir); mkBot(cfg.bots[1].dir)
+  findings.save(cfg.bots[0], { ...st, open: [], recentlyResolved: [{ key: 'ozo-old', title: 'Old thing', resolvedAt: 'x', why: 'w' }] }, {})
+  const r = await runReview(cfg, { ask: async () => ({ ok: true, data: { bots: [] } }), now: NOW, dryRun: true })
+  const bots = JSON.parse(r.prompt.slice(r.prompt.indexOf('[')))
+  assert.deepStrictEqual(bots[0].recentlyResolved.map(x => x.key), ['ozo-old'])
+  assert.match(SYSTEM_PROMPT, /KEYS ARE IDENTITY/); assert.match(SYSTEM_PROMPT, /reset process/)
+})
