@@ -516,11 +516,26 @@ module.exports = function createEngine({ bot, say = () => {}, goals, tryGoto, sa
   }
 
   // task entry points (they all take the scheduler ctx)
+  // The fence wood follows what the bag holds (31 fences + a gate are about 60 planks): the configured wood when the bag has at least 4 planks or
+  // logs of it, else the wood with the most logs and planks. OzoGo444 had 30 oak logs, no birch, and the build stopped at "missing 31 birch_fence".
+  function chooseWood(want) {
+    const have = {}
+    for (const it of bot.inventory.items()) {
+      const m = /^(oak|spruce|birch|jungle|acacia|dark_oak|mangrove|cherry|bamboo|crimson|warped)_(log|planks|wood|stem|block)$/.exec(it.name); if (!m || m[1] === 'crimson' || m[1] === 'warped') continue
+      have[m[1]] = (have[m[1]] || 0) + it.count * (m[2] === 'planks' ? 1 : 4)
+    }
+    if ((have[want] || 0) >= 16) return want
+    const best = Object.entries(have).sort((a, b) => b[1] - a[1])[0]
+    return best && best[1] >= 16 ? best[0] : want
+  }
   const runBuild = (ctx, opts = {}) => guardedRun(async () => {
     let pen = state.pens.find(p => !p.built)
+    if (pen && !pen.started) { const w = chooseWood(pen.wood); if (w !== pen.wood) { note(`pen: fence wood ${pen.wood} -> ${w} (what the bag holds)`); pen.wood = w; save() } }
     if (!pen && state.pens.length && !opts.another) return { ok: false, why: `${state.pens[0].id} is already standing (say "build another animal pen" for a second one)` }
     if (!pen) { const r = planPen(); if (!r.ok) return { ok: false, why: 'no pen site: ' + r.why }; pen = r.pen; note(`pen: site ${pen.ox},${pen.oy},${pen.oz} (${pen.w}x${pen.d})`) }
+    if (!pen.started) { const w = chooseWood(pen.wood); if (w !== pen.wood) { note(`pen: fence wood ${pen.wood} -> ${w} (what the bag holds)`); pen.wood = w; save() } }
     const r = await buildPen(ctx, pen)
+    if (r && (r.placed || r.progress)) pen.started = true
     return { ok: true, pen: pen.id, ...r }
   })
   // a run that was cut short by danger is retried soon; any other end (done, nothing to do, missing items) waits for the interval
