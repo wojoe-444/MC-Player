@@ -549,6 +549,11 @@ module.exports = function mobfarmbuild(G, S, M, api, log) {
   }
   G.mobFarmBuild = { run, status, needs, stock }
 
+  // one builder at a time: both bots share the shaft and the registry, and two farms would be dug into the same rock. The claim is a small file in
+  // bot-shared; it lapses after 6 hours.
+  const CLAIM = require('path').join(__dirname, '..', '..', '..', 'bot-shared', 'mobfarm-claim.json')
+  const otherBotBuilding = () => { try { const c = JSON.parse(require('fs').readFileSync(CLAIM, 'utf8')); return c.by !== bot.username && Date.now() - c.at < 6 * 3600000 && !(B().phase === 'done') } catch { return false } }
+  const claim = () => { try { require('fs').writeFileSync(CLAIM, JSON.stringify({ by: bot.username, at: Date.now() })) } catch { /* ignore */ } }
   return {
     id: 'mob-farm-build', budget: 1200000, cool: 300000,
     need: () => {
@@ -558,8 +563,14 @@ module.exports = function mobfarmbuild(G, S, M, api, log) {
       if (!st.mine || !st.mine.ladder) return false
       const sh = shaftOf(); if (!sh || !sh.bottom) return false
       if (!(LD().rooms() || []).some(r => r.type === 'storage' && r.shaft === sh.id)) return false      // the storage room comes first (Phase 2 item 2)
-      return Object.keys(needs()).length === 0 && S.freeSlots() >= 4
+      if (otherBotBuilding()) return false
+      // the kit the step crafts itself (hopper, chest, water buckets) must not be a precondition of the step: nothing else makes it, so the step
+      // never started (status "not started", needs hopper 1, chest 1, water_bucket 2 on both live bots). Enough iron for them is the condition.
+      const n = needs(), soft = new Set(['hopper', 'chest', 'water_bucket'])
+      if (Object.keys(n).some(k => !soft.has(k))) return false
+      const iron = (n.hopper ? 5 : 0) + (n.water_bucket ? 3 * n.water_bucket : 0)
+      return S.count(/^iron_ingot$/) >= iron && S.freeSlots() >= 4
     },
-    run: async () => run(),
+    run: async () => { claim(); return run() },
   }
 }
