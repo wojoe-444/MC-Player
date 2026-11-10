@@ -806,6 +806,34 @@ module.exports = function makeSkills({ bot, api, log }) {
       bot._equipWrapped = 2
     }
   }
+  // ---- a fixed hotbar (Walter 2026-11-10: "if I have a sword, it's always in slot 1"): 1 sword, 2 pickaxe, 3 axe, 4 shovel, 5 building
+  // block, 6 torches, 7 food, 8 ladders (else a bow), 9 free. Sorted every 30 s while nothing else is going on, one hotbar-swap click per
+  // slot that is wrong, then a resync. It also makes a wrong tool in hand easy to spot. ----
+  const TIER = (n) => /netherite/.test(n) ? 6 : /diamond/.test(n) ? 5 : /iron/.test(n) ? 4 : /stone/.test(n) ? 3 : /golden/.test(n) ? 2 : /wooden/.test(n) ? 1 : 0
+  const bestOf = (re) => bot.inventory.items().filter(i => re.test(i.name)).sort((a, b) => TIER(b.name) - TIER(a.name) || b.count - a.count)[0]
+  const FOOD = /^(bread|cooked_[a-z_]+|baked_potato|apple|golden_carrot|carrot|sweet_berries|pumpkin_pie|cookie|melon_slice|dried_kelp)$/
+  const LAYOUT = [
+    () => bestOf(/_sword$/), () => bestOf(/_pickaxe$/), () => bestOf(/_axe$/), () => bestOf(/_shovel$/),
+    () => bestOf(/^(cobblestone|cobbled_deepslate|dirt|stone|andesite|diorite|granite|tuff)$/), () => bestOf(/^torch$/),
+    () => bestOf(FOOD), () => bestOf(/^ladder$/) || bestOf(/^bow$/), () => null]
+  S.sortHotbar = async () => {
+    if (!bot.entity || bot.currentWindow || bot.targetDigBlock || bot.usingHeldItem) return 0
+    if (bot._combat && bot._combat.engaged && bot._combat.engaged()) return 0
+    let moved = 0
+    for (let k = 0; k < 9; k++) {
+      const want = LAYOUT[k](); if (!want) continue
+      const target = 36 + k, cur = bot.inventory.slots[target]
+      if (cur && cur.type === want.type && cur.name === want.name) continue
+      // already elsewhere in the hotbar at a slot the layout fills with something else: still swap it in
+      if (want.slot === target) continue
+      try { await bot.clickWindow(want.slot, k, 2); moved++ } catch {}
+      await new Promise(r => setTimeout(r, 120))
+    }
+    if (moved) { try { S.resyncLight && S.resyncLight() } catch {} }
+    return moved
+  }
+  if (bot._hotbarTimer) clearInterval(bot._hotbarTimer)
+  bot._hotbarTimer = setInterval(() => { if (Date.now() - (bot._lastClickAt || 0) < 5000) return; S.sortHotbar().catch(() => {}) }, 30000)
   if (!S.resyncLight) S.resyncLight = () => { try { bot._client.write('window_click', { windowId: 0, stateId: -1, slot: -999, mouseButton: 0, mode: 0, changedSlots: [], cursorItem: null }); bot._lastResyncAt = Date.now() } catch {} }
   return S
 }
