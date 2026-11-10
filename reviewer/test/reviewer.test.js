@@ -157,3 +157,44 @@ test('a failed pass keeps the detector events from earlier passes', () => {
   const st = findings.merge(prev, { id: 'ozo', name: 'OzoGo444' }, { summary: 'failed', findings: [], resolved: [] }, { now: Date.now(), run: {}, evidence: {}, age: false })
   assert.deepStrictEqual(st.detectorEvents, prev.detectorEvents)
 })
+
+test('plannerEvidence: a switched-off or long-silent planner log is a statement, not counts (the 16-run false alarm of 2026-11-10)', () => {
+  const { plannerEvidence } = require('../lib/collect')
+  const summary = { steps: 0, otherEvents: { 'model-error': 380, 'no-plan': 369 } }
+  const dead = plannerEvidence({ summary, logMtime: NOW - 6 * 86400e3, switchedOff: true, now: NOW })
+  assert.strictEqual(dead.plannerRunning, false); assert.strictEqual(dead.switchedOff, true); assert.ok(!('otherEvents' in dead)); assert.match(dead.note, /switched off/)
+  const quiet = plannerEvidence({ summary, logMtime: NOW - 2 * 3600e3, switchedOff: false, now: NOW })
+  assert.strictEqual(quiet.plannerRunning, false); assert.match(quiet.note, /120 min/)
+  assert.match(plannerEvidence({ summary, logMtime: 0, switchedOff: false, now: NOW }).note, /no planner log/i)
+  const live = plannerEvidence({ summary, logMtime: NOW - 60e3, switchedOff: false, now: NOW })
+  assert.strictEqual(live.plannerRunning, true); assert.strictEqual(live.otherEvents['model-error'], 380)
+  // collectBot wires it in: a stale think-log plus think-off never reaches the model as counts
+  const root = tmp(); mkBot(path.join(root, 'ozo'))
+  const sd = path.join(root, 'ozo', 'brain', 'state'); fs.writeFileSync(path.join(sd, 'think-log.jsonl'), '{"ev":"model-error"}\n{"ev":"no-plan"}\n'); fs.writeFileSync(path.join(sd, 'think-off'), '')
+  fs.utimesSync(path.join(sd, 'think-log.jsonl'), new Date(NOW - 6 * 86400e3), new Date(NOW - 6 * 86400e3))
+  const ev = collectBot({ dir: path.join(root, 'ozo') }, { now: NOW })
+  assert.strictEqual(ev.plannerSummary.plannerRunning, false); assert.ok(!('otherEvents' in ev.plannerSummary))
+})
+
+test('findings.merge: a flag named in explainsFlags is covered, so no extra HIGH "Detector:" entry is appended', () => {
+  const bot = { id: 'ozo', name: 'OzoGo444' }
+  const f = { key: 'ozo-nav-timeouts', kind: 'code_fault', severity: 'high', confidence: 'high', title: 't', evidence: 'e', suggestion: 's', explainsFlags: ['repeated_failure'] }
+  const flags = [{ kind: 'repeated_failure', sev: 'high', msg: '26x timeout' }, { kind: 'pillar_failing', sev: 'high', msg: 'p' }]
+  const st = findings.merge(null, bot, { findings: [f], resolved: [] }, { now: NOW, evidence: { activeDetectorFlags: flags } })
+  assert.deepStrictEqual(st.open.map(x => x.key).sort(), ['ozo-detector-pillar_failing', 'ozo-nav-timeouts'])   // only the uncovered flag is added
+  const same = findings.merge(null, bot, { findings: [{ ...f, kind: 'repeated_failure', explainsFlags: [] }], resolved: [] }, { now: NOW, evidence: { activeDetectorFlags: [flags[0]] } })
+  assert.deepStrictEqual(same.open.map(x => x.key), ['ozo-nav-timeouts'])   // same kind still covers
+  assert.ok(SCHEMA.properties.bots.items.properties.findings.items.required.includes('explainsFlags'))
+})
+
+test('runReview: a bot with fewer than 3 normal windows gets no window digests and a closed detector-proposal note; the prompt is compact JSON', async () => {
+  const root = tmp(), cfg = cfgFor(root)
+  mkBot(cfg.bots[0].dir); mkBot(cfg.bots[1].dir)
+  const wd = path.join(cfg.bots[0].dir, 'brain', 'state', 'telemetry', 'windows'); fs.mkdirSync(wd, { recursive: true })
+  for (const id of ['w1-normal', 'w2-normal', 'w3-normal']) fs.writeFileSync(path.join(wd, id + '.json'), JSON.stringify({ id, kind: 'normal', at: 'x', samples: [], digest: { n: 1 } }))
+  const r = await runReview(cfg, { ask: async () => ({ ok: true, data: { bots: [] } }), now: NOW, dryRun: true })
+  const bots = JSON.parse(r.prompt.slice(r.prompt.indexOf('[')))
+  assert.strictEqual(bots[0].detectorProposals, 'open'); assert.strictEqual(bots[0].windows.length, 3)
+  assert.match(bots[1].detectorProposals, /^closed/); assert.ok(!('windows' in bots[1]))
+  assert.ok(!/\n\s+"/.test(r.prompt.slice(r.prompt.indexOf('['))), 'no pretty-printing whitespace in the evidence')
+})
