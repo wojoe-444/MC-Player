@@ -133,3 +133,59 @@ test('setMode switches a rule at runtime; callSites keeps repo frames only', () 
   const sites = callSites('Error\n    at x (/repo/node_modules/mineflayer/a.js:1:1)\n    at y (/repo/brain/safety/loadout.js:61:20)\n    at node:internal/foo:1:1\n    at /repo/join.js:15:3', '/repo')
   assert.deepStrictEqual(sites, ['brain/safety/loadout.js:61', 'join.js:15'])
 })
+
+test('permit: a dig or place with no job running is flagged with its owner; a running job, an explicit permit, torches and dig-finish packets are not', () => {
+  const r = rig({ held: 'stone' })
+  let owner = null; r.gate.setOwner(() => owner)
+  const dig = () => r.bot._client.write('block_dig', { status: 0, location: { x: 1, y: 2, z: 3 }, face: 1 })
+  const place = () => r.bot._client.write('block_place', { hand: 0, location: { x: 1, y: 2, z: 3 }, direction: 1 })
+  dig(); place()
+  assert.strictEqual(r.gate.summary().rules.permit.violations, 2)
+  assert.strictEqual(r.gate.recent()[0].owner, null); assert.match(r.logs[0], /permit.*dig with no job/)
+  owner = 'mining'; dig(); place()                                    // a job holds the body
+  assert.strictEqual(r.gate.summary().rules.permit.violations, 2)
+  owner = 'nav'; dig()                                                // walking is not a job that may dig
+  assert.strictEqual(r.gate.summary().rules.permit.violations, 3); assert.strictEqual(r.gate.recent().pop().owner, 'nav')
+  const p = r.gate.permit('dig', 'out of a buried head', 5000)
+  dig(); assert.strictEqual(r.gate.summary().rules.permit.violations, 3)
+  place(); assert.strictEqual(r.gate.summary().rules.permit.violations, 4)   // a dig permit does not cover placing
+  p.release(); dig(); assert.strictEqual(r.gate.summary().rules.permit.violations, 5)
+  r.bot._client.write('block_dig', { status: 2, location: { x: 1, y: 2, z: 3 }, face: 1 })   // finishing the dig is not a new one
+  assert.strictEqual(r.gate.summary().rules.permit.violations, 5)
+  r.bot.heldItem = item('torch'); place(); assert.strictEqual(r.gate.summary().rules.permit.violations, 5)
+  assert.strictEqual(r.sent.length, 10)                                // log mode drops nothing
+})
+
+test('permit expires by itself; enforce mode drops an unpermitted dig', () => {
+  const r = rig({ mode: 'enforce', held: 'stone' })
+  const p = r.gate.permit('any', 'test', 100)                         // the fake clock moves 5 s per call: it is gone by the next packet
+  assert.strictEqual(r.bot._client.write('block_dig', { status: 0, location: { x: 0, y: 0, z: 0 }, face: 1 }), undefined)
+  assert.strictEqual(r.sent.length, 0); assert.strictEqual(r.gate.summary().rules.permit.blocked, 1); p.release()
+})
+
+test('chatRate in enforce mode: a dropped line does not reset the gap, so the next line one second later gets through', () => {
+  let t = 100000
+  const sent = []
+  const bot = { registry: mcData, heldItem: null, _client: { write: (n, p) => { sent.push(p.message); return 'ok' } }, inventory: { slots: [], items: () => [] }, blockAt: () => null }
+  install(bot, { rules: { chatRate: { mode: 'enforce', minGapMs: 1000, repeatWindowMs: 60000, packets: ['chat_message'] } }, logFile: null, now: () => t })
+  const say = (m, dt) => { t += dt; bot._client.write('chat_message', { message: m }) }
+  say('a', 0); say('b', 400); say('c', 400); say('d', 400)           // b and c are under a second after the last LET THROUGH line; d is 1200 ms after a
+  assert.deepStrictEqual(sent, ['a', 'd'])
+})
+
+test('GATE=log turns an enforced rule into log mode', () => {
+  process.env.GATE = 'log'
+  try {
+    const r = rig({ mode: 'enforce', inv: ['iron_boots'] })
+    assert.strictEqual(r.bot._client.write('window_click', { windowId: 0, slot: 8, mode: 0, changedSlots: [{ location: 8, item: slotItem('iron_boots') }] }), 'ok')
+    assert.strictEqual(r.gate.summary().rules.noArmor.mode, 'log')
+  } finally { delete process.env.GATE }
+})
+
+test('a dropped inventory click makes the gate ask the server for the real window (the client had already moved the item locally)', async () => {
+  const r = rig({ mode: 'enforce', inv: ['iron_boots'] })
+  let synced = 0; r.bot._syncWindow = async () => { synced++ }
+  r.bot._client.write('window_click', { windowId: 0, slot: 8, mode: 0, changedSlots: [{ location: 8, item: slotItem('iron_boots') }] })
+  await new Promise(res => setTimeout(res, 200))
+  assert.strictEqual(synced, 1)
+})

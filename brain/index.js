@@ -55,6 +55,7 @@ module.exports = function attach(deps) {
   scheduler.on('start', (t) => { if (t.name === 'safety') lastSafetyAt = now() })
   const safetyQuiet = () => now() - lastSafetyAt > 60000      // no safety task for a minute: the area is calm enough for lava work
   scheduler.on('start', (t) => events.emit('task', { event: 'start', task: t }))
+  if (bot._gate && bot._gate.setOwner) bot._gate.setOwner(() => (scheduler.running ? scheduler.running.name : null))     // the gate's permit rule asks which job holds the body
   scheduler.on('done', (t) => events.emit('task', { event: 'done', task: t }))
   scheduler.on('parked', (t) => {
     events.emit('task', { event: 'parked', task: t })
