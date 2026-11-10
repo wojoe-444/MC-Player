@@ -345,7 +345,10 @@ module.exports = function plan(G, S, M, api, log) {
       const surface = (x, z) => { for (let y = h.y + 20; y >= h.y - 16; y--) { const g = S.block(v(x, y - 1, z)); if (!g) return null
           if (S.isLiquid(g)) return null; if (/leaves/.test(g.name)) continue
           if (outdoorCell(v(x, y, z))) return v(x, y, z) } return null }
-      const avoid = (p) => nearList(p, st.grove, 1) || nearList(p, st.farm, 1) || inBox(p, homeBox())
+      // an animal pen (brain/husbandry) and 2 blocks around it: fenced, lit by its own post torches, and a go-to onto its grass has no path
+      // (Smeo444 paced 77 noPath a minute around his new pen at 08:10, the reviewer's HIGH finding)
+      const inPen = (p) => { try { const H = bot._husbandry; if (!H || !H.state) return false; const { boxOf } = require('../husbandry/blueprint'); return H.state.pens.some(pn => { const b = boxOf(pn); return p.x >= b.x0 - 2 && p.x <= b.x1 + 2 && p.z >= b.z0 - 2 && p.z <= b.z1 + 2 }) } catch { return false } }
+      const avoid = (p) => nearList(p, st.grove, 1) || nearList(p, st.farm, 1) || inBox(p, homeBox()) || inPen(p)
       const torchNear = (p, r) => bot.findBlocks({ matching: torchIds, point: p, maxDistance: r + 1, count: 6 }).some(t => Math.abs(t.x - p.x) <= r && Math.abs(t.z - p.z) <= r && Math.abs(t.y - p.y) <= 4)
       // 1. grid points: x and z on the home lattice; a point on water, a tree, the farm or the house shifts to the nearest usable cell within 2
       const grid = []
@@ -399,7 +402,7 @@ module.exports = function plan(G, S, M, api, log) {
       if (R > 24) {      // safe before the grid is complete too: a torch is only taken if the light without it still leaves no spawnable cell
         const onGrid = (t) => grid.some(g => Math.abs(g.x - t.x) <= 2 && Math.abs(g.z - t.z) <= 2 && Math.abs(g.y - t.y) <= 4)
         const off = bot.findBlocks({ matching: torchIds, point: h, maxDistance: R, count: 3000 }).filter(t => {
-          if (onGrid(t) || inBox(t, homeBox()) || nearList(t, st.farm, 2) || nearList(t, st.grove, 2)) return false
+          if (onGrid(t) || inBox(t, homeBox()) || nearList(t, st.farm, 2) || nearList(t, st.grove, 2) || inPen(t)) return false
           // on the surface: open sky above the torch (the column scan skips the torch cell itself, so it cannot be used here)
           for (let y = t.y + 1; y <= t.y + 24; y++) { const a = S.block(v(t.x, y, t.z)); if (a && a.boundingBox === 'block' && !/leaves/.test(a.name)) return false }
           return true })
