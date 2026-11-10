@@ -561,6 +561,9 @@ module.exports = function mobfarmbuild(G, S, M, api, log) {
     need: () => {
       const b = B()
       if (b.phase === 'done' || Date.now() < (b.restUntil || 0)) return false
+      // one mob farm per world: the registry is shared, the bots' own build state is not. OzoGo444 started a second farm (platform y53, kill level y31)
+      // ten times over while Smeo444's farm, already built and registered, stood next to it, and two farms split the same mob cap
+      try { if ((LD().rooms() || []).some(r => r.type === 'mobfarm')) return false } catch { /* ignore */ }
       if (S.isNight() && !S.underground()) return false
       if (!st.mine || !st.mine.ladder) return false
       const sh = shaftOf(); if (!sh || !sh.bottom) return false
