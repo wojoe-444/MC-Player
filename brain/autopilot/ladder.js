@@ -139,10 +139,27 @@ module.exports = function ladder(bot, S, goals, v, log) {
     try { while (Date.now() - t0 < 2500 && !L.inColumn(sh)) { await bot.lookAt(c.offset(0.5, 0.5, 0.5), true); bot.setControlState('forward', true); await sleep(50) } } catch {} finally { bot.setControlState('forward', false) }
     return L.inColumn(sh)
   }
+  // To the middle of the column cell (within 0.2): a bot pressed to the east edge of the shaft cell climbed nowhere ('climb not rising ... feet air,
+  // collidedH true' at y39, 11:47-11:48, the mob farm's ride to y59 failed three times from the same spot)
+  L.centre = async (sh) => {
+    const cx = sh.entry[0] + 0.5, cz = sh.entry[2] + 0.5, t0 = Date.now()
+    try {
+      while (Date.now() - t0 < 2500) {
+        const e = bot.entity.position, d = Math.hypot(cx - e.x, cz - e.z)
+        if (d < 0.2) break
+        await bot.lookAt(v(cx, e.y + 1.6, cz), true)
+        bot.setControlState('forward', d > 0.3); bot.setControlState('sprint', false); bot.setControlState('sneak', d <= 0.45)
+        await sleep(50)
+        if (d <= 0.45) { bot.setControlState('forward', true); await sleep(40); bot.setControlState('forward', false) }
+      }
+    } catch {} finally { bot.setControlState('forward', false); bot.setControlState('sneak', false) }
+    return L.inColumn(sh)
+  }
   L.rideTo = async (sh, y, ms = 40000) => {
     // not in the column yet (or drifted out of it since the caller's check): step in first, a failed step ends the ride, logged
     if (!L.inColumn(sh) && !(await L.enterColumn(sh))) { log('LADDER', 'rideTo y' + y + ': could not get into the column from ' + bot.entity.position.floored()); return false }
     if (!L.inColumn(sh)) return false
+    await L.centre(sh)
     const w = sh.wall || [1, 0], t0 = Date.now(), at = () => bot.entity.position.y
     try {
       if (at() < y - 0.2) {
@@ -162,7 +179,10 @@ module.exports = function ladder(bot, S, goals, v, log) {
             if (at() - y0 < 0.5) {
               const fb = S.block(bot.entity.position.floored()), cs = bot.controlState || {}
               log('LADDER', 'climb not rising at y' + at().toFixed(2) + ': feet ' + (fb && fb.name) + ', collidedH ' + !!bot.entity.isCollidedHorizontally + ', ground ' + bot.entity.onGround + ', keys ' + Object.keys(cs).filter(k => cs[k]).join('+') + ', yaw ' + bot.entity.yaw.toFixed(2))
-              try { await bot.lookAt(v(sh.entry[0] + 0.5 + w[0], at() + 1.6, sh.entry[2] + 0.5 + w[1]), true); bot.setControlState('sneak', false); bot.setControlState('jump', true); bot.setControlState('forward', true) } catch {}
+              try {
+                if (!L.inColumn(sh) || Math.hypot(bot.entity.position.x - sh.entry[0] - 0.5, bot.entity.position.z - sh.entry[2] - 0.5) > 0.35) { bot.clearControlStates(); if (!(await L.enterColumn(sh))) break; await L.centre(sh) }
+                await bot.lookAt(v(sh.entry[0] + 0.5 + w[0], at() + 1.6, sh.entry[2] + 0.5 + w[1]), true); bot.setControlState('sneak', false); bot.setControlState('jump', true); bot.setControlState('forward', true)
+              } catch {}
             }
             y0 = at()
           }
