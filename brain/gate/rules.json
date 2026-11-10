@@ -18,7 +18,7 @@
     "permit": {
       "mode": "log",
       "note": "rule 3 of the shared world: no digging or placing unless asked or part of an agreed job. A dig/place with no job running and no explicit permit is a violation. LOG until gate-log.json shows which stray call sites need a permit (escapes from a buried head, lava, a flooded pit), then enforce.",
-      "allowedOwners": ["mining", "excavation", "build", "treefarm", "lighting", "clearbox", "villagers", "autopilot", "safety", "survival", "routines", "crafting", "furnace"],
+      "allowedOwners": ["mining", "excavation", "build", "treefarm", "husbandry", "lichen", "lighting", "clearbox", "villagers", "autopilot", "safety", "survival", "routines", "crafting", "furnace"],
       "torchesFree": true,
       "packets": ["block_dig", "block_place"]
     },
