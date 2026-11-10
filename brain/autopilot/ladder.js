@@ -28,6 +28,7 @@ module.exports = function ladder(bot, S, goals, v, log) {
   const solid = (p) => { const b = S.block(p); return !!b && b.boundingBox === 'block' && !S.isLiquid(b) && !/leaves|glass|ice|slab|stairs|fence|wall$|_log$|_wood$/.test(b.name) }
   const liquidNear = (p) => { for (const [dx, dy, dz] of [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, -1, 0], [0, 1, 0]]) { const b = S.block(p.offset(dx, dy, dz)); if (b && (S.isLiquid(b) || S.isWaterish(b) || /lava/.test(b.name))) return true } return false }
   const ladders = () => S.count('ladder')
+  const passable = (c) => { const b = S.block(c); return !!b && b.boundingBox === 'empty' && !S.isLiquid(b) }
   // 7 sticks -> 3 ladders; sticks from planks from logs (S.craft fills in the intermediates)
   L.ensureLadders = async (n) => {
     for (let k = 0; k < 8 && ladders() < n; k++) { const before = ladders(); await S.craft('ladder', Math.min(ladders() + 9, n)).catch(() => false); if (ladders() <= before) break }
@@ -85,6 +86,31 @@ module.exports = function ladder(bot, S, goals, v, log) {
   // (about 3 blocks a second), sneaking the moment the feet reach y so it holds there. The pathfinder has no ladder moves, so a go-to from
   // inside the shaft to a level in it failed both ways (storage room: Smeo444 04:29 from below, OzoGo444 04:43 from above).
   L.inColumn = (sh) => { const e = bot.entity.position; return Math.hypot(e.x - sh.entry[0] - 0.5, e.z - sh.entry[2] - 0.5) < 0.9 }
+  // Into the shaft column at the bot's own level. The pathfinder treats a cell holding a ladder as solid, so a go-to aimed at the shaft cell
+  // never finds a path (OzoGo444 04:58, looping 'not out at the top' every 3 s two blocks from the shaft). Instead: walk to a side cell of the
+  // column (digging it open if it is rock, with the usual liquid checks), then step in with the movement keys.
+  L.enterColumn = async (sh) => {
+    if (L.inColumn(sh)) return true
+    const y = Math.floor(bot.entity.position.y), col = v(sh.entry[0], y, sh.entry[2]), w = sh.wall || [1, 0]
+    if (y >= sh.entry[1] || y < sh.bottom[1]) return false
+    const me = bot.entity.position
+    const sides = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dz]) => dx !== w[0] || dz !== w[1]).map(([dx, dz]) => col.offset(dx, 0, dz))
+      .sort((a, b) => a.distanceTo(me) - b.distanceTo(me))
+    const open = (c) => passable(c) && passable(c.offset(0, 1, 0)) && solid(c.offset(0, -1, 0))
+    for (const n of [...sides.filter(open), ...sides.filter(c => !open(c))]) {
+      if (!open(n)) {
+        if (S.dist(n.offset(0.5, 0.5, 0.5)) > 4.5 || !solid(n.offset(0, -1, 0))) continue
+        if ((await S.clearCell(n)) !== 'ok' || (await S.clearCell(n.offset(0, 1, 0))) !== 'ok') continue
+      }
+      const fl = bot.entity.position.floored()
+      if (!(fl.x === n.x && fl.z === n.z)) await S.goto(new goals.GoalBlock(n.x, n.y, n.z), { dig: false, ms: 20000, escalate: false }).catch(() => {})
+      const f2 = bot.entity.position.floored(); if (!(f2.x === n.x && f2.z === n.z) && S.dist(n.offset(0.5, 0, 0.5)) > 1.2) continue
+      const t0 = Date.now()
+      try { while (Date.now() - t0 < 2500 && !L.inColumn(sh)) { await bot.lookAt(col.offset(0.5, 1.6, 0.5), true); bot.setControlState('forward', true); await sleep(50) } } catch {} finally { bot.setControlState('forward', false) }
+      if (L.inColumn(sh)) return true
+    }
+    return L.inColumn(sh)
+  }
   L.rideTo = async (sh, y, ms = 40000) => {
     if (!L.inColumn(sh)) return false
     const w = sh.wall || [1, 0], t0 = Date.now(), at = () => bot.entity.position.y
@@ -151,7 +177,6 @@ module.exports = function ladder(bot, S, goals, v, log) {
   // Up and out (bug hunt 2026-11-10 #6): the entry cell has no floor (the first ladder hangs one below it), so a go-to aimed at it counted as
   // reached on the top rung and the bot slid back down when the keys were let go: ladder bobbing. Now the bot climbs by hand past the top and
   // steps off onto a floored cell beside the entry; success only when it stands on ground at entry level or above.
-  const passable = (c) => { const b = S.block(c); return !!b && b.boundingBox === 'empty' && !S.isLiquid(b) }
   L.exits = (sh) => {
     const e = v(...sh.entry), w = sh.wall || [1, 0]
     // the wall side first: holding forward against the wall at the top walks the bot straight onto it
@@ -163,12 +188,7 @@ module.exports = function ladder(bot, S, goals, v, log) {
     if (outAt(sh)) return true
     if (S.dist(b) > 3 && Math.abs(bot.entity.position.y - b.y) <= 3) await S.goto(new goals.GoalNear(b.x, b.y, b.z, 1), { dig: false, ms: 90000, escalate: false })
     await L.repair(sh).catch(() => 0)
-    if (!L.inColumn(sh)) {
-      const col = v(e.x, Math.floor(bot.entity.position.y), e.z)
-      await S.goto(new goals.GoalBlock(col.x, col.y, col.z), { dig: false, ms: 20000, escalate: false }).catch(() => {})
-      // the shaft cell walled in at this level (OzoGo444 04:57, one block off diagonally at the bottom): dig the short way in
-      if (!L.inColumn(sh) && S.dist(col.offset(0.5, 0, 0.5)) < 4) await S.goto(new goals.GoalBlock(col.x, col.y, col.z), { dig: true, ms: 20000, escalate: false }).catch(() => {})
-    }
+    if (!L.inColumn(sh)) await L.enterColumn(sh)
     const exits = L.exits(sh)
     if (L.inColumn(sh)) {
       await L.rideTo(sh, e.y + 0.4, 45000)

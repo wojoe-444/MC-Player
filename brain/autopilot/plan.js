@@ -103,9 +103,13 @@ module.exports = function plan(G, S, M, api, log) {
           if (sh && sh.bottom && sh.bottom[1] <= me.y + 1 && sh.entry[1] > me.y + 4 && sh.entry[1] >= gy - 12) {
             riding = true
             try {
-              const at = v(sh.entry[0], Math.floor(me.y), sh.entry[2])
-              if (Math.hypot(me.x - at.x - 0.5, me.z - at.z - 0.5) > 1) await innerGoto(new goals.GoalBlock(at.x, at.y, at.z), { dig: false, ms: 60000, escalate: false })
-              if (Math.hypot(bot.entity.position.x - at.x - 0.5, bot.entity.position.z - at.z - 0.5) < 1.5) { const up = await LD.up(sh); log('PLAN', 'up the laddered shaft before a go-to ' + Math.round(gy - me.y) + ' blocks up: ' + up) }
+              // a shaft that failed recently is not tried again for 3 minutes (no fast loop of failed climbs)
+              const failedAt = (bot._shaftFail || {})[sh.id] || 0
+              if (Date.now() - failedAt > 180000 && S.dist(v(sh.entry[0], me.y, sh.entry[2])) < 24) {
+                const up = (await LD.enterColumn(sh)) && (await LD.up(sh))
+                log('PLAN', 'up the laddered shaft before a go-to ' + Math.round(gy - me.y) + ' blocks up: ' + up)
+                if (!up) { bot._shaftFail = bot._shaftFail || {}; bot._shaftFail[sh.id] = Date.now() }
+              }
             } finally { riding = false }
           }
         }
