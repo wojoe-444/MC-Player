@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { BagBadges, BotBadges, dayClock, GoalBox, StaleAlert, Vitals } from "@/components/BotParts"
 import { BehaviorPanel } from "@/components/BehaviorPanel"
+import { AcquiredPanel } from "@/components/AcquiredPanel"
 import { InventoryPanel } from "@/components/InventoryPanel"
 import { badgeVariant, clean, clock, KEY, LogPanel } from "@/components/LogPanel"
 import { ReplayPanel } from "@/components/ReplayPanel"
@@ -138,12 +139,13 @@ export function BotInventory() {
   const bot = useBot()
   return (
     <div className="flex flex-col gap-6">
-      <BotTitle page="Inventory" description="Hotbar, main grid, armor and offhand, as of the latest snapshot." />
+      <BotTitle page="Inventory" description="Hotbar, main grid, armor and offhand as of the latest snapshot, and the items both bots have picked up." />
       <Card>
         <CardContent>
           {bot.status ? <InventoryPanel status={bot.status} /> : <Empty><EmptyHeader><EmptyTitle>No data</EmptyTitle><EmptyDescription>No status yet.</EmptyDescription></EmptyHeader></Empty>}
         </CardContent>
       </Card>
+      <Card><CardContent><AcquiredPanel id={bot.id} /></CardContent></Card>
     </div>
   )
 }
