@@ -49,6 +49,22 @@ function plannerEvidence({ summary, logMtime, switchedOff, now }) {
   return { plannerRunning: true, logAgeMin: ageMin, ...summary }
 }
 
+// brain/inspect writes summary.json (one row per inspected build) and <build>.md (findings, a block-light map of the spawning room, two cutaways as text).
+// Only builds that fail (or have warnings) send their pictures, trimmed: the model reads the picture, the numbers say where to look. Older than 3 hours = not evidence.
+function buildInspections(sd) {
+  const sum = readJson(path.join(sd, 'inspect', 'summary.json'))
+  if (!sum || !sum.rooms) return 'no inspection has run on this bot yet (it needs the farm\'s chunks loaded)'
+  const out = {}
+  for (const [id, r] of Object.entries(sum.rooms)) {
+    if (r.skipped) { out[id] = { skipped: r.skipped }; continue }
+    const ageMin = Math.round((Date.now() - Date.parse(r.at || 0)) / 60000)
+    const row = { ok: r.ok, faults: r.faults, warns: r.warns, ageMin, headline: r.headline, stats: r.stats }
+    if ((!r.ok || r.warns) && ageMin < 180) { try { row.report = fs.readFileSync(path.join(sd, 'inspect', r.file), 'utf8').slice(0, 5200) } catch { /* ignore */ } }
+    out[id] = row
+  }
+  return out
+}
+
 function collectBot(bot, { now = Date.now(), staleMin = 5, since = 0, maxFlags = 6 } = {}) {
   const sd = stateDir(bot)
   const exists = fs.existsSync(bot.dir)
@@ -73,6 +89,7 @@ function collectBot(bot, { now = Date.now(), staleMin = 5, since = 0, maxFlags =
     plannerSummary: think,
     idleLogTail: tailText(path.join(bot.dir, 'idle.log'), 3500),
     lessonsTail: tailText(path.join(sd, 'lessons.md'), 1200),
+    buildInspections: buildInspections(sd),
     hurtLifetimeTotals: readJson(path.join(sd, 'hurt.json')),
     joinLogTail: tailText(path.join(bot.dir, 'join.log'), 1200),
   }

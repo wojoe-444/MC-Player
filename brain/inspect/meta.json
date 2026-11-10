@@ -1,0 +1,9 @@
+{
+  "name": "inspect",
+  "version": 1,
+  "kind": "observer",
+  "summary": "Checks the bot's own builds (today the mob farm) against their design and against what they are for, from the blocks it has loaded: open cells open, shell solid, pieces in place, block light on the spawning pads, water levels, the slit. Writes brain/state/inspect/ (findings plus a light map and cutaways as text) for the planner, the roadmap and the reviewer.",
+  "requires": [],
+  "provides": [],
+  "claims": []
+}
