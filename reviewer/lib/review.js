@@ -56,6 +56,7 @@ async function runReview(cfg, { ask, now = Date.now(), force = false, dryRun = f
       existingDetectors: [...BUILTIN_DETECTORS, ...proposals.customList(b)],
       detectorEvents: ((prevState[b.id] && prevState[b.id].detectorEvents) || []).slice(-5).map(e => ({ name: e.name, action: e.action, reason: e.reason })),
       previousReview: prevState[b.id] && prevState[b.id].status !== 'offline' ? { at: prevState[b.id].updatedAt, summary: prevState[b.id].summary, bag: prevState[b.id].bag } : null,
+      recentlyResolved: ((prevState[b.id] && prevState[b.id].recentlyResolved) || []).slice(0, 10).map(f => ({ key: f.key, title: f.title, resolvedAt: f.resolvedAt })),
       previousOpenFindings: ((prevState[b.id] && prevState[b.id].open) || []).map(f => ({ key: f.key, kind: f.kind, severity: f.severity, title: f.title, firstSeen: f.firstSeen, seenRuns: f.seenRuns, evidence: String(f.evidence || '').slice(0, 300), suggestion: String(f.suggestion || '').slice(0, 160) })),
     }))
     const prompt = buildUserPrompt({ now: t, bots: payload })

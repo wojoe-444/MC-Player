@@ -170,6 +170,15 @@ test('counters summarize time by task and held item', () => {
   assert.ok(c.blocksWalked >= 55)
 })
 
+test('counters: second sums never exceed the span they cover (0.1 s rounding per 0.25 s step used to add about 10%)', () => {
+  const ss = ring(600, () => ({ tk: 'autopilot', h: 'stone_pickaxe' }))
+  const c = D.counters(ss, [], now(ss), 600000)
+  const span = (ss[ss.length - 1].t - ss[0].t) / 1000
+  assert.ok(c.secondsByTask.autopilot <= span + 0.1, `task seconds ${c.secondsByTask.autopilot} vs span ${span}`)
+  assert.ok(c.secondsByHeldItem.stone_pickaxe <= span + 0.1)
+  assert.ok(c.secondsByTask.autopilot > span - 2)
+})
+
 // ---- the module on a mock bot ----
 function rig() {
   const bot = mockBot({ pos: [0, 64, 0] })

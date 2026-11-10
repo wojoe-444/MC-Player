@@ -389,11 +389,13 @@ function counters(samples, events, now, windowMs) {
   for (let i = 1; i < ss.length; i++) {
     const dt = Math.min(2, (ss[i].t - ss[i - 1].t) / 1000)
     const tk = ss[i].tk || '(none)', h = ss[i].h || '(empty hand)'
-    tasks[tk] = +((tasks[tk] || 0) + dt).toFixed(1)
-    held[h] = +((held[h] || 0) + dt).toFixed(1)
+    tasks[tk] = (tasks[tk] || 0) + dt     // rounded once after the loop: rounding each 0.25 s step to 0.1 drifted the sums about 10% over the window (the reviewer reported it as a bug for 10 hours)
+    held[h] = (held[h] || 0) + dt
     if (!ss[i].act && Math.hypot(ss[i].x - ss[i - 1].x, ss[i].z - ss[i - 1].z) < 0.02 && Math.abs(ss[i].y - ss[i - 1].y) < 0.02) idleS += dt
     if (typeof ss[i].hp === 'number') hpMin = hpMin === null ? ss[i].hp : Math.min(hpMin, ss[i].hp)
   }
+  for (const k of Object.keys(tasks)) tasks[k] = +tasks[k].toFixed(1)
+  for (const k of Object.keys(held)) held[k] = +held[k].toFixed(1)
   const digs = ev.filter(e => e.k === 'dig'), mins = Math.max(windowMs / 60000, 1e-6)
   const spanMin = ss.length > 1 ? (ss[ss.length - 1].t - ss[0].t) / 60000 : 0
   const fails = {}

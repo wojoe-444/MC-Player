@@ -37,7 +37,9 @@ function merge(prev, bot, answer, { now, run, evidence, age = true }) {
   const incoming = [...(answer.findings || []), ...detectorFindings(bot, evidence && evidence.activeDetectorFlags, answer.findings || [])]
   for (const f of incoming) {
     seen.add(f.key)
-    const old = open.get(f.key)
+    // a key that comes back after being resolved is the same problem returning: keep its history instead of starting at "seen in 1 run"
+    let old = open.get(f.key)
+    if (!old) { const i = resolved.findIndex(r => r.key === f.key); if (i >= 0) { const r = resolved[i]; resolved.splice(i, 1); old = { firstSeen: r.firstSeen, seenRuns: r.seenRuns || 0 } } }
     open.set(f.key, { source: 'model', ...f, firstSeen: old ? old.firstSeen : at, lastSeen: at, seenRuns: (old ? old.seenRuns : 0) + 1, missedRuns: 0 })
   }
   for (const key of answer.resolved || []) {
