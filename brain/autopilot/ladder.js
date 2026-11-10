@@ -81,6 +81,28 @@ module.exports = function ladder(bot, S, goals, v, log) {
     return n
   }
 
+  // Ride the ladder by hand to level y, the bot already in the shaft column: up = face the wall and hold jump+forward; down = let go and slide
+  // (about 3 blocks a second), sneaking the moment the feet reach y so it holds there. The pathfinder has no ladder moves, so a go-to from
+  // inside the shaft to a level in it failed both ways (storage room: Smeo444 04:29 from below, OzoGo444 04:43 from above).
+  L.inColumn = (sh) => { const e = bot.entity.position; return Math.hypot(e.x - sh.entry[0] - 0.5, e.z - sh.entry[2] - 0.5) < 0.9 }
+  L.rideTo = async (sh, y, ms = 40000) => {
+    if (!L.inColumn(sh)) return false
+    const w = sh.wall || [1, 0], t0 = Date.now(), at = () => bot.entity.position.y
+    try {
+      if (at() < y - 0.2) {
+        await L.repair(sh).catch(() => 0)
+        await bot.lookAt(v(sh.entry[0] + 0.5 + w[0], at() + 1.6, sh.entry[2] + 0.5 + w[1]), true)
+        bot.setControlState('jump', true); bot.setControlState('forward', true)
+        while (Date.now() - t0 < ms && at() < y + 0.05) await sleep(50)
+      } else if (at() > y + 0.2) {
+        bot.clearControlStates()
+        while (Date.now() - t0 < ms && at() > y + 0.1) await sleep(50)
+      }
+      bot.clearControlStates(); bot.setControlState('sneak', true); await sleep(300)
+    } catch {} finally { bot.clearControlStates() }
+    return Math.abs(at() - y) < 0.8
+  }
+
   // dig a new laddered shaft down from entry (the bot's feet cell at the top) to targetY. Returns the shaft record (also saved).
   L.dig = async (entry, targetY, { wall = null, by = bot.username, into = null } = {}) => {
     // the ladder wall: a solid side all the way is checked as we go; start with the first solid side of the entry's column
