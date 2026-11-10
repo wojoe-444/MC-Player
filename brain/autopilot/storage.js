@@ -147,6 +147,11 @@ module.exports = function storage(G, S, M, api, log) {
       await S.craft('chest', 2).catch(() => false)
     }
     if (cnt('chest') < 2) { note('storage: no chests to add (' + cnt('chest') + ' in the bag)'); return false }
+    // the record follows the room: chests standing at chest spots count even when the record lost them (both bots write the registry; the
+    // first room's two chests were missing from it and the bot dug for a pair that was already there, OzoGo444 05:00)
+    { const have = new Set((room.chests || []).map(c => c.join())); let added = 0
+      for (const pr of P.chestSpots) for (const c of pr) { const b = S.block(c); if (b && /^(chest|trapped_chest|barrel)$/.test(b.name) && !have.has([c.x, c.y, c.z].join())) { room.chests = (room.chests || []).concat([[c.x, c.y, c.z]]); have.add([c.x, c.y, c.z].join()); added++ } }
+      if (added) { LD().putRoom(room); note('storage: ' + added + ' chest(s) found in the room that the record had lost') } }
     const used = new Set((room.chests || []).map(c => c.join()))
     // a spot counts only while its cell is open on a solid floor (the room may be shorter than planned)
     const usable = (c) => { const g = S.block(c.offset(0, -1, 0)); return g && g.boundingBox === 'block' && air(c) }
