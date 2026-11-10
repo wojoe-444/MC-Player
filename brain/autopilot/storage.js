@@ -113,6 +113,24 @@ module.exports = function storage(G, S, M, api, log) {
     await walk(P.at(3, 0), 8000)
     return inRoom(P)
   }
+  // dig out the room slices that hold a chest pair (and any slice between it and the open part), cell by cell as when the room was dug
+  const sliceOf = (P, c) => Math.round((c.x - P.s.x) * P.d[0] + (c.z - P.s.z) * P.d[1])
+  async function grow(P, pr) {
+    const kEnd = Math.max(sliceOf(P, pr[0]), sliceOf(P, pr[1]))
+    let dug = 0
+    for (let k = 3; k <= kEnd; k++) {
+      S.check()
+      for (const j of [0, -1, 1, -2, 2]) for (let h = 0; h < H; h++) {
+        const c = P.at(k, j, h); if (air(c)) continue
+        { const b = S.block(c); if (b && /chest|barrel|torch|ladder/.test(b.name)) continue }
+        if (!(await clear(c))) { note('storage: the room cannot grow past ' + (k - 3) + ' long (' + lastWhy + ')'); return false }
+        dug++
+      }
+      await walk(P.at(k, 0), 8000)
+    }
+    if (dug) { const n = await seal(P); note('storage: the room grew to ' + (kEnd - 2) + ' long (' + dug + ' blocks dug, ' + n + ' openings sealed)') }
+    return true
+  }
   // a double chest at the next free pair of spots
   async function addDouble(room, P) {
     { const sh = LD().shafts().find(q => q.id === room.shaft); if (sh && !(await goRoom(sh, P))) { note('storage: could not get into the storage room (at ' + bot.entity.position.floored() + ')'); return false } }
@@ -125,7 +143,13 @@ module.exports = function storage(G, S, M, api, log) {
     const used = new Set((room.chests || []).map(c => c.join()))
     // a spot counts only while its cell is open on a solid floor (the room may be shorter than planned)
     const usable = (c) => { const g = S.block(c.offset(0, -1, 0)); return g && g.boundingBox === 'block' && air(c) }
-    const pair = P.chestSpots.find(pr => !used.has([pr[0].x, pr[0].y, pr[0].z].join()) && usable(pr[0]) && usable(pr[1]))
+    let pair = P.chestSpots.find(pr => !used.has([pr[0].x, pr[0].y, pr[0].z].join()) && usable(pr[0]) && usable(pr[1]))
+    // the room grows: the next planned pair still in rock gets its slices dug out (the first room came out 3 long; OzoGo444 04:56 had chests
+    // to store and no spot left)
+    if (!pair) {
+      const next = P.chestSpots.find(pr => !used.has([pr[0].x, pr[0].y, pr[0].z].join()))
+      if (next && await grow(P, next)) pair = usable(next[0]) && usable(next[1]) ? next : null
+    }
     if (!pair) { note('storage: no open pair of chest spots left in the room'); return false }
     let ok = 0
     for (const c of pair) {
