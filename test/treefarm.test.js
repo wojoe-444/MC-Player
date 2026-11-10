@@ -401,10 +401,11 @@ function moduleRig({ chat = true } = {}) {
   return { ...r, scheduler, handle, cmds, api }
 }
 
-test('registers an idle routine that is on by default, and eight brain commands', () => {
+test('registers an idle routine that is off by default (natural trees are kept), and eight brain commands', () => {
   const m = moduleRig()
   const routine = m.scheduler.routines.get('treefarm')
-  assert.ok(routine && routine.idleOnly && m.scheduler.isEnabled('treefarm'))
+  assert.ok(routine && routine.idleOnly)
+  assert.strictEqual(m.scheduler.isEnabled('treefarm'), false, 'off by default; "tree routine on" turns it on')
   assert.strictEqual(routine.priority, PRIORITY.FARM)
   assert.strictEqual(m.handle.name, 'treefarm')
   assert.ok(m.cmds.length >= 8)
@@ -456,6 +457,7 @@ test('amounts: trees and logs', () => {
 test('the routine submitted by the scheduler runs while idle and yields when Walter chats', async () => {
   const site = { name: 'tree farm', x: 0, y: 64, z: 20, radius: 25 }
   const m = moduleRig(); const { bot } = m
+  m.scheduler.setEnabled('treefarm', true)
   require('fs').writeFileSync(require('path').join(m.dir, 'waypoints.json'), JSON.stringify({ 'Tree Farm': { x: 0, y: 64, z: 20 } }))
   assert.strictEqual(m.handle.sitesFn().length, 1, 'a waypoint named like a tree farm is a site')
   const logs = growTree(bot, { x: 2, z: 20, h: 5 })
@@ -517,7 +519,7 @@ test('a work-site chest left in the state (restart mid-job) is hauled and picked
 
 // ================================================================ through the real brain/index.js
 
-test('loads through brain/index.js: idle routine on by default, chat routed to it, a tree chopped with the shared api helpers', async () => {
+test('loads through brain/index.js: idle routine off by default, chat routed to it, a tree chopped with the shared api helpers', async () => {
   const fs = require('fs'), os = require('os'), path = require('path')
   const { extendTrees, mockBot, flatWorld } = require('./treefarm.helpers')
   const attach = require('../brain')
@@ -535,9 +537,9 @@ test('loads through brain/index.js: idle routine on by default, chat routed to i
     moduleEntries: [{ name: 'treefarm', path: path.join(__dirname, '..', 'brain', 'treefarm', 'index.js') }]
   })
   const routine = brain.scheduler.status().routines.find(x => x.name === 'treefarm')
-  assert.ok(routine && routine.enabled, 'on by default')
+  assert.ok(routine && !routine.enabled, 'off by default')
   assert.strictEqual(brain.route('OGWO', 'tree status', { handleCommand: () => false }), true)
-  assert.ok(said.some(t => /Tree routine is ON/.test(t)), said.join(' | '))
+  assert.ok(said.some(t => /Tree routine is OFF/i.test(t)), said.join(' | '))
   assert.strictEqual(brain.route('OGWO', 'please chop a tree', { handleCommand: () => false }), true)
   const t0 = Date.now()
   while ((brain.scheduler.status().running || brain.scheduler.status().queue.length) && Date.now() - t0 < 8000) await wait(20)

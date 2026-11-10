@@ -81,12 +81,41 @@ test('saplings come from the LEAVES of a natural birch (the trunk stays), a few 
   r.stop()
 })
 
-test('no saplings and no birch leaves anywhere: says what to do instead of idling', async () => {
-  const r = mk({ inv: { torch: 64 } }); const { bot, engine } = r
-  growTree(bot, { x: 30, z: 30, h: 6, species: 'oak' })                           // oak leaves give oak saplings: not for a birch farm
+test('no birch within reach but an oak wood: the farm becomes an oak farm, saplings come from oak leaves, planting stays strict', async () => {
+  const r = mk({ inv: { torch: 64, dirt: 10 } }); const { bot, engine, state } = r
+  const trunk = growTree(bot, { x: 30, z: 30, h: 6, species: 'oak' })
+  const baseDig = bot.dig; let leaves = 0
+  bot.dig = async (b, f) => { const leaf = /_leaves$/.test(b.name); await baseDig(b, f); if (leaf && ++leaves % 4 === 0) bot.addItemEntity(b.position.x + 0.5, b.position.y + 0.5, b.position.z + 0.5, 'oak_sapling', 1) }
+  const out = await engine.farm.build(ctx(), { home: { x: 0, y: 64, z: 0 }, quiet: true })
+  assert.ok(out.ok && out.planted >= 1, JSON.stringify(out))
+  const f = state.farms[0]
+  assert.strictEqual(f.species, 'oak'); assert.strictEqual(state.sites[0].species, 'oak')
+  assert.ok(spotsOf(f).some(s => blockName(bot, s.x, s.y, s.z) === 'oak_sapling'))
+  assert.ok(spotsOf(f).every(s => !/birch/.test(blockName(bot, s.x, s.y, s.z))))
+  assert.strictEqual(trunk.filter(p => blockName(bot, p.x, p.y, p.z) === 'oak_log').length, trunk.length, 'the oak itself is untouched')
+  r.stop()
+})
+
+test('species choice: the configured one wins when it has a source, saplings in the bag count, an explicit species is honoured, big ones are never used', async () => {
+  const pick = async (inv, trees, opt) => {
+    const r = mk({ inv }); for (const t of trees) growTree(r.bot, { x: t.x, z: 30, h: 6, species: t.sp })
+    const p = (await r.engine.farm.create(ctx(), { home: { x: 0, y: 64, z: 0 }, ...opt })).species; r.stop(); return p
+  }
+  assert.strictEqual((await pick({}, [{ x: 30, sp: 'oak' }, { x: -30, sp: 'birch' }])).species, 'birch', 'birch leaves in range: birch, whatever else grows around')
+  assert.strictEqual((await pick({ oak_sapling: 3 }, [])).species, 'oak', 'no birch source, oak saplings in the bag')
+  assert.strictEqual((await pick({ birch_sapling: 1 }, [{ x: 30, sp: 'oak' }])).species, 'birch', 'a birch sapling in the bag beats oak leaves')
+  assert.strictEqual((await pick({}, [{ x: 30, sp: 'spruce' }])).species, 'spruce', 'falls back past oak (none) to spruce')
+  assert.strictEqual((await pick({}, [{ x: 30, sp: 'dark_oak' }])).species, 'birch', 'dark oak is never chosen: with no source it stays on the configured species')
+  assert.strictEqual((await pick({}, [{ x: -30, sp: 'birch' }, { x: 30, sp: 'oak' }], { species: 'oak' })).species, 'oak', 'an explicit species with a source is used')
+  assert.strictEqual((await pick({}, [{ x: -30, sp: 'birch' }], { species: 'oak' })).species, 'birch', 'an explicit species with no source falls back')
+})
+
+test('no saplings and no leaves of any usable species: stays on birch and says what to do instead of idling', async () => {
+  const r = mk({ inv: { torch: 64 } }); const { engine, state } = r
   const out = await engine.farm.build(ctx(), { home: { x: 0, y: 64, z: 0 }, quiet: true })
   assert.strictEqual(out.planted, 0)
-  assert.ok(out.needs.some(n => /birch leaves|birch saplings/.test(n)), JSON.stringify(out.needs))
+  assert.strictEqual(state.farms[0].species, 'birch')
+  assert.ok(out.needs.some(n => /birch leaves|birch saplings|birch trees/.test(n)), JSON.stringify(out.needs))
   assert.strictEqual(count(r, 'torch'), 20, 'it still lights the farm so saplings planted later grow')
   r.stop()
 })
