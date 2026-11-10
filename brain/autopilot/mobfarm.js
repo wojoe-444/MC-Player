@@ -83,6 +83,7 @@ module.exports = function mobfarm(G, S, M, api, log) {
       const vs = victims(c).filter(e => S.eye().distanceTo(e.position.offset(0, (e.height || 1.8) * 0.4, 0)) <= 3.2)
       if (!vs.length) { if (++idle > 6) break; await S.wait(500); continue }
       idle = 0
+      if (bot.health < 8) { note('mob farm: health ' + Math.round(bot.health) + ', stopping the pass'); break }     // skeletons shoot through the slit
       const e = vs.sort((a, b) => (a.health || 20) - (b.health || 20))[0]
       try { await bot.lookAt(e.position.offset(0, Math.min(0.6, (e.height || 1.8) * 0.3), 0), true); bot.attack(e); hits++ } catch {}
       await S.wait(700)                                            // a full-strength stone sword swing every 0.65 s
@@ -94,6 +95,8 @@ module.exports = function mobfarm(G, S, M, api, log) {
   // the farm's chest: is it (nearly) full? Then move its loot into the overflow chests
   async function emptyFarmChest(c) {
     const cp = v(...c.chests[0]); const cb = S.block(cp); if (!cb || !/chest/.test(cb.name)) return 0
+    // a farm from mobfarmbuild.js keeps its chest out of reach of the kill spot (behind rock): stand where it can be seen
+    if (c.chestSpot) { const cs = v(...c.chestSpot); if (S.dist(cs.offset(0.5, 0, 0.5)) > 1.2) await S.goto(new goals.GoalBlock(cs.x, cs.y, cs.z), { dig: false, ms: 40000, escalate: false }) }
     let box; S.closeWindows(); try { box = await bot.openContainer(cb) } catch { return 0 }
     let moved = 0, free = 0
     try {
