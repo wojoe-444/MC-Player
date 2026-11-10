@@ -40,6 +40,13 @@ jobs:
       - name: Set the release version
         working-directory: app
         run: npm pkg set version=0.1.${{ github.run_number }}
+      # electron-builder uploads the installer and the blockmap in parallel and both try to create the release,
+      # which races (422 "Published releases must have a valid tag") and leaves a release without latest.yml.
+      # Creating the release first means it only uploads assets.
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "v0.1.${{ github.run_number }}" --target "${{ github.sha }}" --title "0.1.${{ github.run_number }}" --notes "Bot Dashboard installer built from ${{ github.sha }}"
       - name: Build and publish the installer
         working-directory: app
         env:
