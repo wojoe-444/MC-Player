@@ -550,15 +550,21 @@ class Reach {
       // not holding the block after all (the bag drifted from the server's): no jumping in place with a sword
       if (!bot.heldItem || bot.heldItem.name !== it.name) { this.log('pillar: not holding ' + it.name + ' (' + (bot.heldItem ? bot.heldItem.name : 'nothing') + ')'); return false }
       await bot.look(bot.entity.yaw, -Math.PI / 2, true)
+      // from the ground only: a jump started while still dropping onto the last block put the place attempt on the way down, where the
+      // server (a tick behind) already has the feet back in the cell (logged 03:43: tick 3, +1.12 up but falling at -0.155, refused; the
+      // server had the bot at +0.42)
+      for (let w = 0; w < 20 && !bot.entity.onGround && !this.stopped(run); w++) await this.ticks(1, run)
       bot.setControlState('jump', true)
       let placed = false
       for (let i = 0; i < 40 && !placed && !this.stopped(run); i++) {
         await this.ticks(1, run)
         // near the top of the jump, not the moment the feet clear the cell: the server checks the new block against where it last heard the
         // player was, a tick behind, and refused the block again and again at +1.0 (Smeo444 climbing its shaft, 22:52)
-        if (bot.entity.position.y >= f.y + 1.1) {
+        // rising or at the top of the jump only (vy > -0.05), never on the way down
+        if (bot.entity.position.y >= f.y + 1.1 && bot.entity.velocity.y > -0.05) {
           // one more tick first, so the server has the position packet that puts the feet above the cell before the place packet arrives
           await this.ticks(1, run)
+          if (bot.entity.position.y < f.y + 1.1 || bot.entity.velocity.y < -0.1) continue
           // every attempt is logged in full until the jump-and-place failures are understood (Walter 2026-11-10)
           const at = { tick: i, dy: +(bot.entity.position.y - f.y).toFixed(3), vy: +bot.entity.velocity.y.toFixed(3), ground: bot.entity.onGround, held: bot.heldItem ? bot.heldItem.name : null, slot: bot.quickBarSlot, ref: ref.name + '@' + ref.position, dest: this.blk(f.x, f.y, f.z) ? this.blk(f.x, f.y, f.z).name : '?' }
           try { if (!bot.heldItem || bot.heldItem.name !== it.name) await bot.equip(it, 'hand'); await bot.placeBlock(ref, new Vec3(0, 1, 0)); placed = true; this.log('pillar ok ' + JSON.stringify(at)) } catch (e) {
