@@ -417,12 +417,15 @@ module.exports = function plan(G, S, M, api, log) {
       return placed + filled + removed > 0 || !missing.length } },
 
     // storage grows with the work: every chest at home is used, and when they are all full a new one is crafted and set down (the single chest filled up and the bag jammed)
-    { id: 'stash', budget: 240000, need: () => S.freeSlots() <= 6 && !!home(), cool: 60000, run: async () => {
+    // armor rides in the bag only while it is allowed (Act 2: none until diamond gear with Mending); otherwise it is stored for later, not junk
+    { id: 'stash', budget: 240000, need: () => !!home() && (S.freeSlots() <= 6 || (!(bot._armorAllowed && bot._armorAllowed()) && S.items().some(i => /_(helmet|chestplate|leggings|boots)$/.test(i.name)))), cool: 60000, run: async () => {
       const h = home()
       const plan = () => { const kept = {}, out = []
         for (const it of S.items()) {
           let keep = 0
-          if (/_(pickaxe|axe|sword|shovel|hoe|helmet|chestplate|leggings|boots)$|^(shield|torch|bed|.*_bed|crafting_table|furnace|bucket|water_bucket|stick|fishing_rod)$/.test(it.name)) continue
+          const armorOk = !!(bot._armorAllowed && bot._armorAllowed())
+          if (/_(pickaxe|axe|sword|shovel|hoe)$|^(shield|torch|bed|.*_bed|crafting_table|furnace|bucket|water_bucket|stick|fishing_rod)$/.test(it.name)) continue
+          if (armorOk && /_(helmet|chestplate|leggings|boots)$/.test(it.name)) continue
           if (/^(bread|cooked_|baked_potato|apple|carrot|dried_kelp|sweet_berries)/.test(it.name)) continue
           if (/^(coal|charcoal|iron_ingot|raw_iron|string)$/.test(it.name)) continue
           if (cobbleRe.test(it.name)) keep = 64
