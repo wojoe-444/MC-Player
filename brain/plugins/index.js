@@ -15,9 +15,12 @@ module.exports = function register(api) {
     name: 'plugins',
     async start() {
       try {
-        if (!bot.armorManager) require(path.join(VENDOR, 'mineflayer-armor-manager'))(bot)
-        ok.armor = true
-        timer = setInterval(() => { try { if (bot.entity && !bot.currentWindow) bot.armorManager.equipAll().catch(() => {}) } catch {} }, 60000)
+        // Walter 2026-11-10: no armor (free mob-farm drops only, handled by the autopilot). The armor manager put on any armor picked up.
+        if (process.env.ARMOR_MANAGER === '1') {
+          if (!bot.armorManager) require(path.join(VENDOR, 'mineflayer-armor-manager'))(bot)
+          ok.armor = true
+          timer = setInterval(() => { try { if (bot.entity && !bot.currentWindow) bot.armorManager.equipAll().catch(() => {}) } catch {} }, 60000)
+        }
       } catch (e) { log('armor-manager not loaded: ' + e.message) }
       try {
         if (!bot.autoEat) {
