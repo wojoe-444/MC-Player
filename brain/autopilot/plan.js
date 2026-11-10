@@ -1299,7 +1299,7 @@ module.exports = function plan(G, S, M, api, log) {
     for (const t of ts) { const n = ts.filter(o => near(t, o)).length; if (n) out.push({ t, n }) }
     return out.sort((a, b) => b.n - a.n)
   }
-  steps.push({ id: 'torch-spacing', budget: 150000, cool: 600000, need: () => !S.isNight() && !!home() && Date.now() > (st.torchSpaceAt || 0) && torchPairs().length > 0, run: async () => {
+  steps.push({ id: 'torch-spacing', budget: 360000, cool: 600000, need: () => !S.isNight() && !!home() && Date.now() > (st.torchSpaceAt || 0) && torchPairs().length > 0, run: async () => {
     delete require.cache[require.resolve('./light')]
     const L = require('./light')(bot, v(0, 0, 0).constructor)
     let removed = 0, kept = 0
