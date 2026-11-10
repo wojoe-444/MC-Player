@@ -13,7 +13,7 @@ test('ladder: every rung has members, read from the code', () => {
   assert.ok(c.primitive.includes('goto') && c.primitive.includes('digBlock') && c.primitive.includes('craft'))
   assert.ok(c.skill.includes('fetch') && c.skill.includes('go_down_mine') && c.skill.includes('wall_in'))
   assert.ok(c.goal.includes('eat') && c.goal.includes('night-home') && c.goal.includes('take-cover'))
-  assert.deepStrictEqual(c.job.sort(), ['build', 'clearbox', 'excavation', 'lighting', 'mining', 'routines', 'treefarm', 'villagers'])
+  assert.deepStrictEqual(c.job.sort(), ['build', 'clearbox', 'excavation', 'husbandry', 'lighting', 'mining', 'routines', 'treefarm', 'villagers'])
   assert.deepStrictEqual(c.planner, ['think', 'routine'])
   assert.ok(c.primitive.length > 50 && c.skill.length > 25 && c.goal.length > 30)
 })

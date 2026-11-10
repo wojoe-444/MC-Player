@@ -12,7 +12,7 @@ const arr = (a) => (Array.isArray(a) ? a : [])
 function loadFacts(stateDir, dir) {
   const s = (f) => readJson(path.join(stateDir, f))
   return {
-    autopilot: s('autopilot-state.json'), mining: s('mining-state.json'), treefarm: s('treefarm-state.json'), mobfarm: s('mobfarm.json'),
+    autopilot: s('autopilot-state.json'), mining: s('mining-state.json'), treefarm: s('treefarm-state.json'), mobfarm: s('mobfarm.json'), husbandry: s('husbandry-state.json'),
     furnace: s('furnace-state.json'), nether: s('nether-network.json'), crafting: s('crafting-chests.json'),
     waypoints: readJson(path.join(dir, 'waypoints.json'), {}), stations: readJson(path.join(dir, 'stations.json')), chestIndex: readJson(path.join(dir, 'chest-index.json')),
     registry: readJson(process.env.BOT_REGISTRY || path.join(__dirname, '..', '..', '..', 'bot-shared', 'registry.json')),
@@ -40,7 +40,8 @@ const PREDICATES = [
   { id: '2.6.smelter', phase: '2', title: 'Hopper smelter on charcoal is running', check: () => null, needs: 'a "hopper smelter built" flag in furnace-state.json' },
   { id: '2.7.cropfarm', phase: '2', title: 'Underground crop farm and composter', check: () => null, needs: 'a farm registry with depth and crops' },
   { id: '2.8.mobfarm', phase: '2', title: 'Mob farm has a kill box and a chest', check: (f) => (f.mobfarm ? !!f.mobfarm.killBox && arr(f.mobfarm.chests).length > 0 : false), needs: 'mobfarm.json' },
-  { id: '2.9.pens', phase: '2', title: 'Animal pens (cows, sheep, pigs, chickens)', check: () => null, needs: 'a pen registry' },
+  { id: '2.9.pens', phase: '2', title: 'A fenced, lit animal pen is built', check: (f) => (f.husbandry ? arr(f.husbandry.pens).some(p => p && p.built && p.lit) : null), needs: 'husbandry-state.json' },
+  { id: '2.11.lichen', phase: '2', title: 'Glow lichen farm has a wall and lichen has grown on it', check: (f) => (f.husbandry ? arr(f.husbandry.lichen).some(l => l && l.last && l.last.faces > 0) : null), needs: 'husbandry-state.json' },
   { id: '2.12.lava', phase: '2', title: 'Pointed dripstone and a safe lava farm', check: () => null, needs: 'a lava-farm record' },
   { id: '3.5.portal', phase: '3.5', title: 'Nether portal with a cobblestone shell on the far side', check: (f) => (f.nether ? Object.keys(f.nether).length > 0 : null), needs: 'nether-network.json (a portal entry with a shell flag)' }
 ]

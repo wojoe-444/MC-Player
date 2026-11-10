@@ -10,9 +10,9 @@ test('predicates: no records means unmeasured or open, never done; records flip 
   assert.ok(empty.items.every(i => i.status !== 'done'))
   assert.ok(empty.items.filter(i => i.status === 'unmeasured').every(i => i.needs))
   assert.strictEqual(new Set(PREDICATES.map(p => p.id)).size, PREDICATES.length)
-  const facts = { autopilot: { home: [1, 70, 2], shelterDoor: [3, 70, 3] }, mining: { mines: [{ id: 'a' }] }, treefarm: { sites: [{}], stats: { planted: 4 } }, mobfarm: { killBox: {}, chests: [[1, 2, 3]] }, waypoints: { 'Storage room': { x: 1 } }, crafting: null, chestIndex: null }
+  const facts = { autopilot: { home: [1, 70, 2], shelterDoor: [3, 70, 3] }, mining: { mines: [{ id: 'a' }] }, treefarm: { sites: [{}], stats: { planted: 4 } }, mobfarm: { killBox: {}, chests: [[1, 2, 3]] }, husbandry: { pens: [{ built: true, lit: true }], lichen: [{ last: { faces: 4 } }] }, waypoints: { 'Storage room': { x: 1 } }, crafting: null, chestIndex: null }
   const r = evaluate(facts); const by = Object.fromEntries(r.items.map(i => [i.id, i.status]))
-  for (const id of ['1.home', '1.shelter', '2.1.shaft', '2.4.treefarm', '2.8.mobfarm', '2.2.storage']) assert.strictEqual(by[id], 'done', id)
+  for (const id of ['1.home', '1.shelter', '2.1.shaft', '2.4.treefarm', '2.8.mobfarm', '2.2.storage', '2.9.pens', '2.11.lichen']) assert.strictEqual(by[id], 'done', id)
   assert.strictEqual(by['2.1.ladder'], 'unmeasured'); assert.strictEqual(by['2.2.resetchest'], 'unmeasured')
   assert.deepStrictEqual(r.phases['1'], { total: 2, measured: 2, done: 2 })
 })
