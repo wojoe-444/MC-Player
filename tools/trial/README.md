@@ -34,3 +34,11 @@ Result of one run of 30 per cell (2026-11-10, flying-squid 1.21.4 superflat, see
 
 Limits: the refusal is computed from the vanilla overlap rule, not observed (flying-squid accepts everything), and the start yaw and in-cell
 offset are modelled. The vanilla half needs the `trial-server` skill (Mojang jar) and should confirm real refusal rates per variant.
+
+## Results on the real 1.21.6 server (2026-11-10)
+- pillar-look-lab.js --vanilla: 360 of 360 observed server refusals match the model `lastSentY < cell.y + 1`; forced look removes the wait.
+- tick-sprint-lab.js: `/tick sprint 60000t` gives about 300x server ticks, bot speed in real time is unchanged. Not a way to compress runs.
+- ladder-lab.js (30-block shaft, 10 up + 10 down): 2.38 blocks/s up, 3.0 down, 0 reversals, 0 server corrections, 0.1 stalled samples. A clean shaft is not the problem.
+- packet-gate-lab.js (5 min, real join.js, iron/diamond tools and armor in the bag, log-only gate): 23 tool_tier events, 0 armor, 0 lava.
+  All tool_tier events come from `S.equipFor` in brain/autopilot/skills.js (picks the fastest tool, i.e. the highest tier, not the minimum).
+  The armor path in plan.js:267 is guarded by NO_ARMOR and did not fire; asking "put on your armor" in chat produced no armor packet.
