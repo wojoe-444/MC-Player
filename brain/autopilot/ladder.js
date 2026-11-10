@@ -140,6 +140,8 @@ module.exports = function ladder(bot, S, goals, v, log) {
     return L.inColumn(sh)
   }
   L.rideTo = async (sh, y, ms = 40000) => {
+    // not in the column yet (or drifted out of it since the caller's check): step in first, a failed step ends the ride, logged
+    if (!L.inColumn(sh) && !(await L.enterColumn(sh))) { log('LADDER', 'rideTo y' + y + ': could not get into the column from ' + bot.entity.position.floored()); return false }
     if (!L.inColumn(sh)) return false
     const w = sh.wall || [1, 0], t0 = Date.now(), at = () => bot.entity.position.y
     try {
