@@ -35,12 +35,13 @@ Food, stone tools, bed, shelter, torches. Done on the Earth map.
 ## Phase 3: Structured mining base
 
 1. A mining room at one Y level with food, chests, torches, a bed or small farm.
-2. **Diamond pickaxe** for obsidian: save 3 diamonds before Phase 3.5.
-3. **Villager hall** (design in `brain/villagers/DESIGN.md`), once Walter says "approve villager plan". Priority: it holds the librarian with Mending.
-4. **Fishing station.** Offered to the bot, not scheduled over its free time.
-5. **Item sorter** at the storage room entrance (needs steady iron).
-6. **Multi-day journeys, boat legs and desire paths** (design below).
-7. **Iron golem farm** after the hall.
+2. **Building-material taste: move on from cobblestone.** Intentional builds (rooms, halls, stations, farms' visible shells) use smooth stone, stone bricks and similar polished stone, not raw cobblestone. Cobblestone stays only as a deliberate texture inside a larger build (a mixed wall, a foundation course, a rustic accent). This is a taste principle, not a survival rule: it applies from early Phase 3, once it is cheap to follow, meaning cobblestone is abundant, fuel farms are running (the charcoal and hopper smelter from Phase 2) and autosmelters exist to turn cobblestone into stone. Before then, cobblestone is fine for functional fill, cave sealing and scaffolding. It could later become a reviewer taste rule (a detector that flags raw cobblestone in finished builds), so keep the wording checkable.
+3. **Diamond pickaxe** for obsidian: save 3 diamonds before Phase 3.5.
+4. **Villager hall** (design in `brain/villagers/DESIGN.md`), once Walter says "approve villager plan". Priority: it holds the librarian with Mending.
+5. **Fishing station.** Offered to the bot, not scheduled over its free time.
+6. **Item sorter** at the storage room entrance (needs steady iron).
+7. **Multi-day journeys, boat legs and desire paths** (design below).
+8. **Iron golem farm** after the hall.
 
 ## Phase 3.5: Nether portal
 
