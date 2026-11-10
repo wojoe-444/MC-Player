@@ -477,7 +477,7 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
         if (!(await raise(ctx, tree, sum, tree.trunk))) break                           // the rest is out of reach: it decays by itself
       }
     } finally { sum.leavesCleared += broken }
-    if (S.pillar) { await descend(ctx); await collectDrops(ctx, bot.entity.position, 4, 12, C.scaffold) }
+    if (S.pillar) { await descend(ctx); await ctx.sleep(C.fallSettleMs ?? 300); await collectDrops(ctx, bot.entity.position, 4, 12, C.scaffold) }      // the last pillar blocks need a moment to land as items
     await ctx.sleep(C.dropWaitMs)
     await collectDrops(ctx, new Vec3(tree.trunk.x + 0.5, tree.trunk.y, tree.trunk.z + 0.5), Math.max(10, box.x1 - box.x0), 30, null)
   }
