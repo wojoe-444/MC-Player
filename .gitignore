@@ -68,3 +68,4 @@ Thumbs.db
 
 # throwaway trial server (jar, world, logs)
 .trial-server/
+tools/scenarios/results/
