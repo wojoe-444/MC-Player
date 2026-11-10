@@ -175,6 +175,7 @@ module.exports = function storage(G, S, M, api, log) {
     room.at = Date.now(); LD().putRoom(room)
     return ok === 2
   }
+  G.storagePlan = () => { const room = G.storageRoom(); if (!room) return null; const sh = LD().shafts().find(q => q.id === room.shaft); return sh ? plan(sh) : null }
   G.storageGo = async () => { const room = G.storageRoom(); if (!room) return false; const sh = LD().shafts().find(q => q.id === room.shaft); return sh ? goRoom(sh, plan(sh)) : false }
   G.storageAddDouble = async () => { const room = G.storageRoom(); if (!room) return false; const sh = LD().shafts().find(s => s.id === room.shaft); return sh ? addDouble(room, plan(sh)) : false }
 

@@ -628,8 +628,9 @@ module.exports = function makeSkills({ bot, api, log }) {
     if (!S.has('furnace')) { if (!(await S.craft('furnace', 1))) return null }
     return await S.placeWork('furnace')
   }
-  S.fuelPlan = () => { // what to burn: coal/charcoal first, then planks, then logs
+  S.fuelPlan = (n = 1) => { // what to burn: junk wooden tools when they cover the job (that uses them up), then coal/charcoal, planks, logs
     const inv = {}; for (const it of bot.inventory.items()) inv[it.name] = (inv[it.name] || 0) + it.count
+    try { const j = (S.junk ? S.junk() : []).filter(i => /^wooden_/.test(i.name)); if (j.length && j.length >= n) return { name: j[0].name, per: 1, have: j.filter(i => i.name === j[0].name).length } } catch {}
     for (const n of ['coal', 'charcoal']) if (inv[n]) return { name: n, per: 8, have: inv[n] }
     for (const n of Object.keys(inv)) if (PLANK_RE.test(n)) return { name: n, per: 1.5, have: inv[n] }
     for (const n of Object.keys(inv)) if (LOG_RE.test(n) && !/stripped/.test(n)) return { name: n, per: 1.5, have: inv[n] }
@@ -639,7 +640,7 @@ module.exports = function makeSkills({ bot, api, log }) {
   S.smelt = async (input, n, { keepFuelLogs = 0 } = {}) => {
     const have = S.count(input); n = Math.min(n, have)
     if (n <= 0) return 0
-    const fuel = S.fuelPlan(); if (!fuel) return 0
+    const fuel = S.fuelPlan(n); if (!fuel) return 0
     const furnaceBlock = await S.ensureFurnace(); if (!furnaceBlock) return 0
     S.closeWindows()
     let f
