@@ -1,0 +1,126 @@
+// brain/autopilot/storage.js: the central storage room off the laddered shaft (Walter 2026-11-10, Act 2 "structure"). One room per shaft,
+// shared by both bots and recorded in the registry as a tracked entity (type 'storage'); double chests in a row along its walls, added in
+// order as they fill. The room is dug by hand from the shaft, its walls, floor and ceiling are sealed against caves with the bot's own
+// stone, and it is lit with torches (two blocks apart at least).
+//
+// Layout, seen from the shaft (d = away from the ladder wall, p = across):
+//   shaft cell -> 2-cell corridor -> room 5 across x 7 along x 3 high; chest rows against the two long walls (across = -2 and +2),
+//   pairs (k, k+1) along the room = one double chest each.
+module.exports = function storage(G, S, M, api, log) {
+  const bot = S.bot, { goals } = S, v = S.v, st = G.state
+  const note = (m) => { try { G.note(m) } catch { log('STORAGE', m) } }
+  const LD = () => M.LD
+  const W = 5, LEN = 7, H = 3
+  const cnt = (n) => S.count(n)
+
+  // the room's geometry for a shaft record
+  function plan(sh) {
+    const wall = sh.wall || [1, 0], d = [-wall[0], -wall[1]], p = [d[1], -d[0]]
+    const y = Math.max(sh.bottom[1] + 2, sh.entry[1] - 10)
+    const s = v(sh.entry[0], y, sh.entry[2])
+    const at = (k, j, h = 0) => s.offset(d[0] * k + p[0] * j, h, d[1] * k + p[1] * j)
+    const corridor = [at(1, 0), at(2, 0)]
+    const cells = []
+    for (let k = 3; k < 3 + LEN; k++) for (let j = -2; j <= 2; j++) for (let h = 0; h < H; h++) cells.push(at(k, j, h))
+    // chest spots: along both long walls, in pairs, the near end first
+    const chestSpots = []
+    for (const j of [-2, 2]) for (let k = 4; k + 1 < 3 + LEN; k += 3) chestSpots.push([at(k, j), at(k + 1, j)])
+    const torches = [at(3, 0), at(6, 0), at(9, 0)]
+    const xs = cells.map(c => c.x), zs = cells.map(c => c.z)
+    const box = { x0: Math.min(...xs), x1: Math.max(...xs), y0: y, y1: y + H - 1, z0: Math.min(...zs), z1: Math.max(...zs) }
+    return { y, s, d, p, at, corridor, cells, chestSpots, torches, box }
+  }
+  const roomOf = (sh) => (LD().rooms() || []).find(r => r.type === 'storage' && r.shaft === sh.id)
+  G.storageRoom = () => { try { const sh = st.mine && st.mine.ladder ? LD().shafts().find(s => s.id === st.mine.shaft) : null; return sh ? roomOf(sh) : null } catch { return null } }
+
+  const air = (c) => { const b = S.block(c); return b && b.boundingBox === 'empty' && !S.isLiquid(b) }
+  async function clear(c) { const r = await S.clearCell(c); return r === 'ok' }
+  async function walk(c, ms = 15000) { return (await S.goto(new goals.GoalBlock(c.x, c.y, c.z), { dig: false, ms, escalate: false })).ok }
+
+  async function digRoom(sh, P) {
+    // down the ladder to the room's level (the shaft cell at that height has a ladder in it)
+    await LD().down({ ...sh, bottom: [sh.entry[0], P.y, sh.entry[2]] })
+    if (Math.abs(bot.entity.position.y - P.y) > 1.5) { note('storage: could not get down the ladder to y' + P.y); return false }
+    // corridor, then the room cell by cell: the middle line first (walked along), each slice across and up
+    for (const c of P.corridor) { if (!(await clear(c)) || !(await clear(c.offset(0, 1, 0)))) { note('storage: corridor blocked at ' + c); return false } }
+    await walk(P.corridor[1])
+    for (let k = 3; k < 3 + LEN; k++) {
+      S.check()
+      for (const j of [0, -1, 1, -2, 2]) for (let h = 0; h < H; h++) { const c = P.at(k, j, h); if (!air(c) && !(await clear(c))) { note('storage: could not clear ' + c + ' (water or lava?), the room stops at ' + (k - 3) + ' long'); return k - 3 >= 3 } }
+      await walk(P.at(k, 0))
+    }
+    return true
+  }
+  // walls, floor and ceiling: any opening outside the room's shell gets a block (caves, holes), so nothing walks in
+  async function seal(P) {
+    let n = 0
+    const inRoom = (c) => P.cells.some(q => q.equals(c)) || P.corridor.some(q => q.equals(c) || q.offset(0, 1, 0).equals(c))
+    const shell = new Map()
+    for (const c of P.cells) for (const [dx, dy, dz] of [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0], [0, -1, 0]]) { const q = c.offset(dx, dy, dz); if (!inRoom(q)) shell.set(q.toString(), q) }
+    for (const q of shell.values()) {
+      const b = S.block(q); if (!b || b.boundingBox === 'block') continue
+      if (/torch|ladder/.test(b.name)) continue
+      if (S.dist(q) > 4.5) await S.goto(new goals.GoalNear(q.x, q.y, q.z, 3), { dig: false, ms: 10000, escalate: false })
+      if (await M.fill(q).catch(() => false)) n++
+    }
+    return n
+  }
+  async function light(P) {
+    let n = 0
+    for (const t of P.torches) {
+      if (!S.has('torch')) break
+      const g = S.block(t.offset(0, -1, 0)), c = S.block(t)
+      if (!g || g.boundingBox !== 'block' || !c || !S.isAir(c)) continue
+      if (S.dist(t) > 4) await walk(t.offset(0, 0, 0)).catch(() => false)
+      if (await S.placeAgainst(g, v(0, 1, 0), 'torch').catch(() => false)) n++
+    }
+    return n
+  }
+  // a double chest at the next free pair of spots
+  async function addDouble(room, P) {
+    if (!S.has('chest') || cnt('chest') < 2) {
+      const lg = (S.items().find(i => /_(log|wood)$/.test(i.name)) || {}).name
+      if (S.planks() < 16 && lg) await S.craft(lg.replace(/^stripped_/, '').replace(/_(log|wood)$/, '_planks'), Math.min(16, S.planks() + S.logs() * 4)).catch(() => false)
+      await S.craft('chest', 2).catch(() => false)
+    }
+    if (cnt('chest') < 2) return false
+    const used = new Set((room.chests || []).map(c => c.join()))
+    const pair = P.chestSpots.find(pr => !used.has([pr[0].x, pr[0].y, pr[0].z].join()))
+    if (!pair) return false
+    let ok = 0
+    for (const c of pair) {
+      const g = S.block(c.offset(0, -1, 0)); if (!g || g.boundingBox !== 'block' || !air(c)) continue
+      if (S.dist(c) > 3.5) await S.goto(new goals.GoalNear(c.x, c.y, c.z, 2), { dig: false, ms: 15000, escalate: false })
+      if (await S.placeAgainst(g, v(0, 1, 0), 'chest').catch(() => false)) { ok++; room.chests = (room.chests || []).concat([[c.x, c.y, c.z]]) }
+    }
+    room.at = Date.now(); LD().putRoom(room)
+    return ok === 2
+  }
+  G.storageAddDouble = async () => { const room = G.storageRoom(); if (!room) return false; const sh = LD().shafts().find(s => s.id === room.shaft); return sh ? addDouble(room, plan(sh)) : false }
+
+  return {
+    id: 'storage-room', budget: 900000, cool: 300000,
+    need: () => {
+      if (S.isNight() || !st.mine || !st.mine.ladder || Date.now() < (st.storageRestUntil || 0)) return false
+      const sh = LD().shafts().find(s => s.id === st.mine.shaft); if (!sh || !sh.bottom) return false
+      if (roomOf(sh)) return false
+      return cnt('torch') >= 4 && S.planks() + S.logs() * 4 >= 40 && S.count(/^(cobblestone|cobbled_deepslate|dirt|stone)$/) >= 24 && S.freeSlots() >= 6
+    },
+    run: async () => {
+      const sh = LD().shafts().find(s => s.id === st.mine.shaft); if (!sh) return false
+      const P = plan(sh)
+      note(`storage: digging the storage room off the shaft at y${P.y} (${W}x${LEN}x${H})`)
+      const dug = await digRoom(sh, P)
+      if (!dug) { st.storageRestUntil = Date.now() + 30 * 60000; G.save(); await LD().up(sh); return false }
+      const sealed = await seal(P), lit = await light(P)
+      const room = { id: 'storage-' + sh.id, type: 'storage', by: bot.username, shaft: sh.id, box: P.box, y: P.y, chests: [], at: Date.now() }
+      LD().putRoom(room)
+      let doubles = 0
+      for (let i = 0; i < 2; i++) if (await addDouble(room, P)) doubles++
+      note(`storage: room done at ${P.at(3, 0)} to ${P.at(2 + LEN, 0)} (y${P.y}): ${sealed} openings sealed, ${lit} torches, ${doubles} double chests`)
+      G.save()
+      await LD().up(sh)
+      return true
+    }
+  }
+}
