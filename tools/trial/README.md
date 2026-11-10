@@ -56,3 +56,28 @@ Both need the vanilla trial server (`node .claude/skills/trial-server/scripts/se
 
 Result of the last full run (2026-11-10, flat world, stone block, shaft 40 deep): built in 630 s, 379 platform cells + 22 column + chamber, nothing dug outside the plan,
 trench fully wet, column dry, no crafting table left behind, health 20 all the way; zombies fell into the pocket and the kill routine hit them through the slit.
+
+## lightup-lab.js (light-up task for the mob farm; design in brain/lightup/README.md)
+
+    node .claude/skills/trial-server/scripts/server.js start --minutes 60
+    node tools/trial/lightup-lab.js [--zombies 6] [--creepers 0] [--static 0 [--static-first]] [--abort-hp H] [--no-check] [--sample 90] [--out result.json]
+
+Builds a stone block with a sealed farm platform, a rest corridor, four chambers with tunnels, a staircase down to a lower chamber, a sealed pocket and two existing
+torches, runs the real `brain/autopilot/lightup.js` as a survival bot with the real combat reflex, and judges light with the SERVER (datapack predicate `lab:dark`,
+light 0, written to `.trial-server/world/datapacks/lab/` by hand: `pack_format` 80, `data/lab/predicate/dark.json` = `location_check` with `light: {light: {min: 0, max: 0}}`,
+then `/reload`; the lab does the `/reload`, you create the pack once). Needs the world folder to exist (start the server once). Exit 0 means: no death, torch spacing kept, nothing
+lit on the platform, sampled cells the model called dark were dark in vanilla before, lit ones are lit after.
+
+Results (2026-11-10, flat world, stone block): 764 dark spots (30 more in a sealed pocket) lit with 9 torches, 63 to 121 s per run, 0 deaths. The mobs were killed by the
+combat reflex, not by the task; the dance branches (postpone, fall back) are exercised by the frozen-creeper run, the fall back itself by one earlier run.
+
+| zombies | creepers | frozen creeper at a spot | min health | postponed | dark left | vanilla: sampled lit cells still dark | platform dark after |
+|---|---|---|---|---|---|---|---|
+| 6 | 0 | 0 | 17 | 0 | 0 | 0 of 90 | 25 of 25 |
+| 10 | 3 | 0 | 13.2 | 0 | 0 | 0 of 90 | 25 of 25 |
+| 0 | 0 | 2 (route spots) | 20 | 0 | 0 | 0 of 90 | 25 of 25 |
+| 0 | 0 | 1 (the first spot) | 20 | 1 (done last) | 0 | 0 of 90 | 25 of 25 |
+| 10 | 2 | 0 (`--abort-hp 19`, health regenerated before the check) | 17 | 3 | 0 | not checked | not checked |
+
+Before each run, 90 of 90 sampled model-dark cells were dark in vanilla too (the scan does not invent spots); the 30 cells of the sealed pocket stayed dark (control).
+Two lab geometry mistakes found on the way (a stair whose steps are 2 high cannot be walked off; `/fill` is capped at 32768 blocks) are fixed in the lab.

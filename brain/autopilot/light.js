@@ -46,5 +46,8 @@ module.exports = function makeLight(bot, Vec3) {
       return !!(b && up && g && level(p) === 0 && b.boundingBox === 'empty' && up.boundingBox === 'empty' && !/water|lava/.test(b.name + up.name) && g.boundingBox === 'block' && !NOFLOOR.test(g.name)) }
     return { level, spawnable, sources: src.length, cells: lvl.size }
   }
-  return { compute, EMIT }
+  // light attenuation of the cell at x,y,z (1 for open cells, 99 for opaque or unloaded ones): brain/lightup floods single torches with it
+  const passCost = (x, y, z) => { const s = sid(x, y, z); return s == null ? 99 : cost(s) }
+  return { compute, EMIT, cost: passCost }
 }
+module.exports.NOFLOOR = NOFLOOR
