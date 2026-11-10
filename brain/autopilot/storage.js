@@ -169,12 +169,14 @@ module.exports = function storage(G, S, M, api, log) {
       // too far and no path: the room's middle line at the spot's slice (the floor face is in sight from there)
       if (S.dist(c) > 3.5) { const r = await S.goto(new goals.GoalNear(c.x, c.y, c.z, 2), { dig: false, ms: 15000, escalate: false }); if (!r.ok) await walk(P.at(Math.round((c.x - P.s.x) * P.d[0] + (c.z - P.s.z) * P.d[1]), 0)).catch(() => false) }
       const g = S.block(c.offset(0, -1, 0))
+      await G.storageClearAbove(c).catch(() => false)
       if (await S.placeAgainst(g, v(0, 1, 0), 'chest').catch(() => false)) { ok++; room.chests = (room.chests || []).concat([[c.x, c.y, c.z]]) }
       else note('storage: a chest would not go down at ' + c + ' (standing ' + bot.entity.position.floored() + ')')
     }
     room.at = Date.now(); LD().putRoom(room)
     return ok === 2
   }
+  G.storageClearAbove = async (c) => { const up = S.block(c.offset(0, 1, 0)); if (up && up.boundingBox === 'block' && !/chest|barrel/.test(up.name)) return (await S.clearCell(c.offset(0, 1, 0))) === 'ok'; return true }
   G.storagePlan = () => { const room = G.storageRoom(); if (!room) return null; const sh = LD().shafts().find(q => q.id === room.shaft); return sh ? plan(sh) : null }
   G.storageGo = async () => { const room = G.storageRoom(); if (!room) return false; const sh = LD().shafts().find(q => q.id === room.shaft); return sh ? goRoom(sh, plan(sh)) : false }
   G.storageAddDouble = async () => { const room = G.storageRoom(); if (!room) return false; const sh = LD().shafts().find(s => s.id === room.shaft); return sh ? addDouble(room, plan(sh)) : false }
