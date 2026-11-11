@@ -13,6 +13,7 @@ const { DoorTender } = require('./doors')
 const { Penalties, StuckMonitor } = require('./stuck')
 const { HazardGuard, MotionMonitor } = require('./hazards')
 const { DescentAssist } = require('./climb')
+const { FarmlandGuard } = require('./farmland')
 const { LadderWork } = require('./ladders')
 const B = require('./blocks')
 const { dimOf } = require('./waypoints')
@@ -69,6 +70,8 @@ class Navigator extends EventEmitter {
     this.motion.attach()
     this.descent = new DescentAssist({ bot, log: (m) => this.log(m) })
     this.descent.attach()
+    this.farmland = new FarmlandGuard({ bot, log: (m) => this.log(m) })           // no hop that lands on farmland (it turns to dirt)
+    this.farmland.attach()
     bot.on('physicsTick', this._onTick)
     bot.on('goal_updated', this._onGoalUpdated)
     // join.js says "Here." on EVERY 'goal_reached', whoever set the goal (a furnace trip, a farm leg, a goal queued behind a routine...),
@@ -107,7 +110,7 @@ class Navigator extends EventEmitter {
     bot.removeListener('goal_updated', this._onGoalUpdated)
     if (this._patchedEmit && bot.emit === this._patchedEmit) bot.emit = this._origEmit
     this._patchedEmit = null
-    for (const c of [this.doors, this.stuck, this.guard, this.motion, this.descent]) { try { c && c.detach() } catch { /* ignore */ } }
+    for (const c of [this.doors, this.stuck, this.guard, this.motion, this.descent, this.farmland]) { try { c && c.detach() } catch { /* ignore */ } }
     if (this.mvHandle) this.mvHandle.restore()
     this.mvHandle = null
     this.attached = false
@@ -430,6 +433,7 @@ class Navigator extends EventEmitter {
       hazards: this.guard ? this.guard.stats : null,
       motion: this.motion ? this.motion.status() : null,
       ladderDescentTicks: this.descent ? this.descent.ticks : 0,
+      farmland: { jumpsHeld: this.farmland ? this.farmland.stats.held : 0, dropsPriced: this.mvHandle && this.mvHandle.stats ? this.mvHandle.stats.farmlandDropsPriced : 0 },
       penalties: this.pen.size,
       reach: this.reach.status()
     }

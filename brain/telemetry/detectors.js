@@ -4,6 +4,7 @@
 //   { k:'dig',  t, block, x,y,z, held, need, have, ok, harvestOk }       (a dig started on `block` with `held` in hand)
 //   { k:'place', t, block, x,y,z, sky, tk }
 //   { k:'fail', t, what, note }                                          (what: noPath | timeout | digAbort | taskFailed)
+//   { k:'trample', t, x,y,z, by, how, dist, fall, space, step, tk }       (farmland turned to dirt near the bot; by: 'bot' | 'unknown', how: jump | drop | hop | none)
 // The reviewer (reviewer/) reads the flags and counters; Haiku reasons over those plus a few raw excerpts, not over raw logs.
 
 const DEFAULTS = {
@@ -21,6 +22,7 @@ const DEFAULTS = {
   chat: { windowS: 60, tooFast: 2, perMin: 10, repeats: 3 },
   tier: { minOver: 3 },
   pillar: { windowS: 20, minJumps: 4, maxExtent: 1.5, minGain: 1.0, lookDown: 0.9 },
+  farmland: { windowS: 600, highCount: 3 },
 }
 const FILLER = new Set(['cobblestone', 'dirt', 'stone', 'netherrack', 'cobbled_deepslate', 'gravel', 'andesite', 'diorite', 'granite', 'tuff', 'sand', 'deepslate'])
 
@@ -140,6 +142,24 @@ function pillarFlag(samples, events, now, cfg) {
   if (jumps >= c.minJumps && gain < c.minGain && placed < jumps * 0.5) return { kind: 'pillar_failing', sev: 'high', t0, t1: now,
     msg: `trying to pillar up: ${jumps} jumps looking down in ${c.windowS}s, ${placed} block(s) placed, height gained ${data.heightGained} (holding ${held})`, data }
   return null
+}
+
+// Farmland turned back to dirt right under the bot's landing (telemetry/index.js records a `trample` event when a farmland block next to the bot becomes dirt, after the
+// ledger said the bot did not dig, till or build on it). Vanilla does this for any landing after a fall of more than half a block (a plain jump is about 1.25), so one is
+// already a sign that something hopped or dropped onto a crop plot. Flag only: the cause is in nav (movements.js landing cost, farmland.js jump guard).
+// Walter 2026-11-11: "the recursive loop should be able to discover / flag when a bot lands on farmland and turns it back into regular dirt".
+function farmlandFlag(events, now, cfg) {
+  const c = cfg.farmland, t0 = now - c.windowS * 1000
+  const ev = evSince(events, t0, 'trample').filter(e => e.by === 'bot')
+  if (!ev.length) return null
+  const how = {}; for (const e of ev) how[e.how || 'unknown'] = (how[e.how || 'unknown'] || 0) + 1
+  const last = ev[ev.length - 1]
+  const hows = Object.entries(how).sort((a, b) => b[1] - a[1]).map(([h, n]) => `${h} x${n}`).join(', ')
+  const where = last.space ? ` in ${last.space}` : ''
+  const doing = last.step || last.tk ? ` while ${last.step || last.tk}` : ''
+  return { kind: 'farmland_trampled', sev: ev.length >= c.highCount ? 'high' : 'med', t0, t1: now,
+    msg: `${ev.length} farmland block(s) turned back to dirt under the bot in ${Math.round(c.windowS / 60)} min (${hows})${where}${doing}; last at ${last.x},${last.y},${last.z}`,
+    data: { n: ev.length, how, space: last.space || null, step: last.step || last.tk || null, blocks: ev.slice(-5).map(e => [e.x, e.y, e.z]) } }
 }
 
 function oscillationFlag(samples, now, cfg) {
@@ -374,7 +394,7 @@ function analyze(samples, events, now, over, state) {
   const cfg = merge(DEFAULTS, over)
   const flags = [
     ...jumpFlags(samples, events, now, cfg), pillarFlag(samples, events, now, cfg), ladderBobFlag(samples, events, now, cfg), oscillationFlag(samples, now, cfg), stuckFlag(samples, now, cfg), idleFlag(samples, events, now, cfg),
-    wrongToolFlag(events, now, cfg), stairsFlag(events, now, cfg), placementFlag(events, now, cfg), torchFlag(events, now, cfg), lavaFlag(samples, now, cfg), armorFlag(state, now), armorCarriedFlag(state, now), tierFlag(events, now, cfg), chatFlag(events, now, cfg),
+    wrongToolFlag(events, now, cfg), stairsFlag(events, now, cfg), placementFlag(events, now, cfg), torchFlag(events, now, cfg), lavaFlag(samples, now, cfg), armorFlag(state, now), armorCarriedFlag(state, now), tierFlag(events, now, cfg), chatFlag(events, now, cfg), farmlandFlag(events, now, cfg),
     ...toolFlags(events, now), ...failFlags(events, now, cfg),
   ].filter(Boolean)
   return flags
@@ -406,6 +426,7 @@ function counters(samples, events, now, windowMs) {
     blocksWalked: +pathLength(ss).toFixed(0), idleSeconds: +idleS.toFixed(0),
     digs: digs.length, digsWithWrongTool: digs.filter(d => d.need && !d.ok && d.have).length, digsThatDropNothing: digs.filter(d => d.harvestOk === false).length,
     placed: ev.filter(e => e.k === 'place').length, placedOpenAir: ev.filter(e => e.k === 'place' && e.sky && FILLER.has(e.block)).length,
+    trampled: ev.filter(e => e.k === 'trample' && e.by === 'bot').length,
     failures: fails, minHp: hpMin, secondsByTask: tasks, secondsByHeldItem: held,
     yRange: ss.length ? [+Math.min(...ss.map(s => s.y)).toFixed(0), +Math.max(...ss.map(s => s.y)).toFixed(0)] : null,
   }

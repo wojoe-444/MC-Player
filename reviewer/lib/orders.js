@@ -14,6 +14,8 @@ const path = require('path')
 
 const OUTCOME_MIN_PER_H = 5               // a build that should produce and does not costs this many minutes per hour in range (flat, like DEATH_MIN)
 const DEATH_MIN = 10                       // what one death is counted as: the walk back and the lost bag. A constant, not a measurement.
+const TRAMPLE_MIN = 3                      // lost minutes per trampled farmland block: the walk to re-till and re-plant it, and the crop it carried
+const MIN_TRAMPLES = 2
 const MIN_LOSS = 10, MIN_FAILS = 5, MIN_ALARMS = 5, MIN_DEATHS = 2, MIN_FLAGS = 10, MIN_FINDING_RUNS = 6
 const QUIET_DREAMS = 6                     // an order nobody has seen for this many dreams of a running bot closes as "went quiet" (12 h at one dream per 2 h)
 const REASK_MS = 24 * 3600000
@@ -58,6 +60,20 @@ function candidates({ rollup, events = [], findings = [], snapshots = [] }) {
     out.push({ key: `death-${k}`, type: 'death', step: null, costMin: g.length * DEATH_MIN, counts: { deaths: g.length },
       line: `${g.length} deaths from ${cut(g[0].cause || 'unknown', 60)}`, evidence: g.slice(-3).map(d => `${String(d.at).slice(0, 16)}Z ${cut(d.cause, 60)} while ${cut(d.doing || '?', 50)}${d.pos ? ` at ${d.pos.join(',')}` : ''}`) })
   }
+  // Farmland a bot turned back to dirt by landing on it (brain/telemetry `trample` events, kept by the journal). The bot has no business doing this at all, so the order
+  // carries its own problem statement, written from the numbers, and the dream opens it without asking a model (`auto`), the way an outcome verdict does.
+  const tr = rollup && rollup.trampled
+  if (tr && tr.n >= MIN_TRAMPLES) {
+    const top = (m) => Object.entries(m || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} x${v}`).join(', ')
+    const last = events.filter(e => e.k === 'trample' && e.by === 'bot').slice(-3).map(e => `${String(e.at).slice(11, 16)}Z ${(e.pos || []).join(',')} after a ${e.how || 'landing'}${e.space ? ` in ${e.space}` : ''}${e.step ? ` during ${e.step}` : ''}`)
+    out.push({
+      key: 'trample-farmland', type: 'trample', step: null, costMin: round1(tr.n * TRAMPLE_MIN), counts: { trampled: tr.n },
+      line: `${tr.n} farmland blocks turned back to dirt by a bot landing on them (${top(tr.byHow)}; steps: ${top(tr.byStep)})`, evidence: last, snapshots: snaps(s2 => s2.kind === 'farmland_trampled'),
+      auto: { isBug: true, kind: 'bug', title: 'Bot lands on farmland and turns it to dirt',
+        problem: cut(`${tr.n} farmland blocks next to a bot became dirt in the last day, each right after a jump, drop or hop that landed on them (${top(tr.byHow)}; in ${top(tr.bySpace)}; during ${top(tr.byStep)}). In vanilla any landing after a fall of more than half a block can do this, so some code path jumps or drops onto a crop plot.`, 600),
+        suggestion: 'brain/nav/movements.js prices drops onto farmland and brain/nav/farmland.js holds in-place hops, so look for what bypasses them: a control state set before nav attached, a non-nav move (motor, build, mining hop), or a step that walks diagonally off a ledge. The evidence names the step.' },
+    })
+  }
   for (const [kind, n] of Object.entries((rollup && rollup.flags) || {})) {
     if (n < MIN_FLAGS) continue
     const last = events.filter(e => e.k === 'flag' && e.kind === kind).slice(-2).map(e => `${String(e.at).slice(11, 16)}Z ${cut(e.msg, 120)}`)
@@ -86,7 +102,7 @@ function candidates({ rollup, events = [], findings = [], snapshots = [] }) {
   }
   return out.sort((a, b) => (b.costMin - a.costMin) || (weight(b) - weight(a)))
 }
-const weight = (c) => (c.counts.deaths || 0) * 100 + (c.counts.alarms || 0) + (c.counts.fail || 0) + (c.counts.timeout || 0) + (c.counts.flags || 0) / 10 + (c.counts.seenRuns || 0) / 10
+const weight = (c) => (c.counts.deaths || 0) * 100 + (c.counts.alarms || 0) + (c.counts.fail || 0) + (c.counts.timeout || 0) + (c.counts.trampled || 0) + (c.counts.flags || 0) / 10 + (c.counts.seenRuns || 0) / 10
 
 function load(loopDir, key) { return readJson(fileOf(loopDir, key)) }
 function list(loopDir, { status = null } = {}) {

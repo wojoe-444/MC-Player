@@ -32,6 +32,8 @@ const STEP_COST = {
   soul_sand: 3, honey_block: 6, slime_block: 4
 }
 const FLOOR_COST = { farmland: 2 }
+// Extra cost of a move that ends on farmland after a drop or a parkour jump (more than half a block of fall can turn it to dirt). Walking or stepping up onto it is free of this.
+const FARMLAND_LANDING_COST = 100
 
 const dirName = { 0: 'south', 1: 'west', 2: 'north', 3: 'east' }
 // Compass word for a vector from the bot to something (z+ is south).
@@ -47,4 +49,4 @@ function passAxis(props) {
   return (f === 'east' || f === 'west') ? 'x' : 'z'
 }
 
-module.exports = { isHandOpenable, isDoor, isGate, isTrapdoor, HARD_AVOID, CLIMBABLE, NEAR_COST, STEP_COST, FLOOR_COST, compass, passAxis, dirName }
+module.exports = { isHandOpenable, isDoor, isGate, isTrapdoor, HARD_AVOID, CLIMBABLE, NEAR_COST, STEP_COST, FLOOR_COST, FARMLAND_LANDING_COST, compass, passAxis, dirName }

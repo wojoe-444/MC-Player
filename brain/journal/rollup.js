@@ -15,6 +15,7 @@ function salientLine(e) {
   if (e.k === 'death') o.what = `${e.cause || 'died'}${e.doing ? ` while ${e.doing}` : ''}`
   else if (e.k === 'alarm') o.what = `${e.type} cleared after ${e.secs}s at fix level ${e.level}`
   else if (e.k === 'gate') o.what = `${e.rule} blocked ${e.packet || 'a packet'} x${e.n}: ${e.why || ''}`.trim()
+  else if (e.k === 'trample') o.what = `farmland at ${(e.pos || []).join(',')} turned to dirt${e.by === 'bot' ? ` after the bot's ${e.how || 'landing'}` : ' (not clearly the bot)'}${e.space ? ` in ${e.space}` : ''}${e.step ? ` during ${e.step}` : ''}`
   else if (e.k === 'flag') o.what = `${e.kind}: ${e.msg || ''}`.trim()
   else if (e.k === 'chat') o.what = `${e.from}: ${e.text}`
   else if (e.k === 'first') o.what = `first ${e.what}: ${e.id}`
@@ -29,7 +30,7 @@ function rollup(events, { date = null } = {}) {
   const out = {
     v: 1, date, from: evs.length ? evs[0].at : null, to: evs.length ? evs[evs.length - 1].at : null, events: evs.length,
     steps: {}, alarms: { raised: 0, cleared: 0, stalledMin: 0, maxLevel: 0, byType: {} }, flags: {}, flagsHigh: 0,
-    deaths: [], items: {}, firsts: [], gate: {}, commits: [], starts: 0, chat: 0, reflexes: 0, notes: 0, salient: [], salientDropped: 0, gameDays: {}
+    deaths: [], trampled: { n: 0, byHow: {}, bySpace: {}, byStep: {}, last: null }, items: {}, firsts: [], gate: {}, commits: [], starts: 0, chat: 0, reflexes: 0, notes: 0, salient: [], salientDropped: 0, gameDays: {}
   }
   const step = (id) => (out.steps[id] = out.steps[id] || newStep())
   const days = out.gameDays
@@ -80,6 +81,14 @@ function rollup(events, { date = null } = {}) {
       case 'first': out.firsts.push(`${e.what}:${e.id}`); break
       case 'gate': { const r = (out.gate[e.rule] = out.gate[e.rule] || { violations: 0, blocked: 0 }); if (e.blocked) r.blocked += e.n || 1; else r.violations += e.n || 1; break }
       case 'commit': if (!e.same && !out.commits.some(c => c.commit === e.commit)) out.commits.push({ at: e.at, commit: e.commit, subject: e.subject || '' }); break
+      case 'trample': {
+        if (e.by !== 'bot') break                                                    // an unexplained one is on the record (the day file) but is not counted against the bot
+        const tr = out.trampled; tr.n++
+        const bump = (m, k) => { m[k] = (m[k] || 0) + 1 }
+        bump(tr.byHow, e.how || 'unknown'); bump(tr.bySpace, e.space || 'unassigned'); bump(tr.byStep, e.step || e.task || 'unknown')
+        tr.last = { at: e.at, pos: e.pos || null, how: e.how || null }
+        break
+      }
       case 'chat': out.chat++; break
       case 'reflex': out.reflexes++; break
       case 'note': out.notes++; break

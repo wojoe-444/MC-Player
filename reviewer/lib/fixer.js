@@ -144,7 +144,7 @@ function journalFor(bot, o, now) {
     for (const l of text.split('\n')) {
       if (!l) continue
       let e; try { e = JSON.parse(l) } catch { continue }
-      const mine = o.type === 'step' ? (e.step === o.step || (e.k === 'step' && e.prev === o.step)) : o.type === 'death' ? e.k === 'death' : o.type === 'flag' ? (e.k === 'flag' && `flag-${orders.slug(e.kind)}` === o.key) : false
+      const mine = o.type === 'step' ? (e.step === o.step || (e.k === 'step' && e.prev === o.step)) : o.type === 'death' ? e.k === 'death' : o.type === 'flag' ? (e.k === 'flag' && `flag-${orders.slug(e.kind)}` === o.key) : o.type === 'trample' ? (e.k === 'trample' || (e.k === 'flag' && e.kind === 'farmland_trampled')) : false
       if (mine || e.k === 'commit') out.push(l)
     }
   }
