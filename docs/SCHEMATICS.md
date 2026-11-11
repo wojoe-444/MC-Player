@@ -40,7 +40,7 @@ node tools/schematic.js world lithic-spire --kind void --name "Test - Spire in t
 node tools/schematic.js world path/to/build.schem --name "Test - X"   (the file as it is: every block property kept)
 node tools/schematic.js world path/to/deep_node.schem --surface 70 --rock path/to/deep_node_viewer.html --name "Test - Deep Node"
 ```
-- Saves go to `%APPDATA%.minecraftsaves` (`--saves <dir>` or `MC_SAVES_DIR` to change). Open it in **Minecraft 1.21.6** (vanilla or Fabric): Singleplayer, "Test - ...". It is a vanilla
+- Saves go to `%APPDATA%\.minecraft\saves` (`--saves <dir>` or `MC_SAVES_DIR` to change). Open it in **Minecraft 1.21.6** (vanilla or Fabric): Singleplayer, "Test - ...". It is a vanilla
   world (only the vanilla data pack is enabled, flat generator), so Fabric mods neither help nor get in the way; Terralith / Tectonic do not touch a flat world. Cheats are on (`/tp`, `/gamemode`).
 - A catalog schematic keeps only some block properties, so `settle.js` works out the rest from the neighbours: fence / wall / pane connections, wall posts, hanging lanterns, persistent leaves.
   A raw `.schem` already has them all and keeps them. Block entities (chest contents, sign text) are not in a schematic and stay empty.
