@@ -1,0 +1,9 @@
+{
+  "name": "difficulty",
+  "version": 1,
+  "kind": "observer",
+  "summary": "Reads the world difficulty the server sends at login and on change; logs it loudly, records changes in brain/state/difficulty.json and the journal, reminds every 15 minutes while Peaceful. Never changes anything.",
+  "requires": [],
+  "provides": [],
+  "claims": []
+}
