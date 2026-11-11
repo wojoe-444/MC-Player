@@ -81,3 +81,15 @@ test('judge: flags that jump after a deploy put the clone back, mark the commit 
   assert.strictEqual(D.deploy(base(r2)).result, 'bad')                                              // not redeployed until main moves on
   r2.put('brain/autopilot/skills.js', '3'); assert.strictEqual(D.deploy(base(r2)).result, 'deployed')
 })
+
+test('deploy: when package.json changed, the install runs before the bots are told to restart; --no-install leaves a note instead', () => {
+  const r = rig(); r.put('package.json', '{"name":"x"}')
+  const out = D.deploy(base(r, { installCmd: 'node -e "require(\'fs\').writeFileSync(\'installed.txt\', String(require(\'fs\').existsSync(\'../rt/restart-needed.json\')))"' }))
+  assert.strictEqual(out.result, 'deployed'); assert.strictEqual(out.install, true); assert.strictEqual(out.action, 'restart'); assert.ok(out.from && out.to && out.from !== out.to)
+  assert.strictEqual(fs.readFileSync(path.join(r.live, 'installed.txt'), 'utf8'), 'false', 'no restart request existed yet when the install ran')
+  assert.ok(fs.existsSync(path.join(r.rt, 'restart-needed.json')))
+  const r2 = rig(); r2.put('package.json', '{"name":"y"}')
+  const out2 = D.deploy(base(r2, { install: false, installCmd: 'node -e "process.exit(9)"' }))
+  assert.strictEqual(out2.result, 'deployed'); assert.strictEqual(out2.install, undefined)
+  assert.match(JSON.parse(fs.readFileSync(path.join(r2.rt, 'restart-needed.json'), 'utf8')).why, /npm install first/)
+})

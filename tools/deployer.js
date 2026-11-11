@@ -3,13 +3,14 @@
 // It touches only the code folder it is given (a git clone that exists to be deployed to) and writes records next to the bots; it never edits the world,
 // never installs the app, and never runs two bots differently (no A/B between bots: each bot is compared with ITS OWN previous hours).
 //
-//   node tools/deployer.js deploy --code <clone> [--runtime <dir>]... [--test-cmd "npm test"] [--no-tests] [--restart-cmd "<cmd>"] [--dry-run]
+//   node tools/deployer.js deploy --code <clone> [--runtime <dir>]... [--test-cmd "npm test"] [--no-tests] [--no-install] [--restart-cmd "<cmd>"] [--dry-run]
 //   node tools/deployer.js judge  --code <clone> [--runtime <dir>]... [--min-minutes 40]
 //   node tools/deployer.js status --code <clone>
 //
 // deploy: fetch origin/main; stop if the clone has local changes (drift is reported, never overwritten); run the tests on the candidate commit in a scratch
 //         worktree (merge on green); fast-forward the clone; then tell the bots: only brain/autopilot/*.js (the files ap.reload() re-reads) hot-reloads through
-//         brain/state/ap-cmd.js in every --runtime folder, anything else asks for a restart (--restart-cmd, else a restart-needed.json for whoever supervises).
+//         brain/state/ap-cmd.js in every --runtime folder, anything else asks for a restart (--restart-cmd, else a restart-needed.json in each runtime folder,
+//         which the bot's supervisor, run.js, acts on within 15 seconds). When package.json changed, `npm install` runs in the clone first.
 // judge:  for the latest deploy, once --min-minutes (default 40, about two in-game days) have passed, compare the weighted flags per hour since the deploy with the
 //         same-length window before it, per runtime folder. Clearly worse (at least 1.5x and 6 more weighted flags; high = 3, med = 1) puts the clone back on the
 //         previous commit, marks the commit bad (it is not redeployed until main moves on) and reloads or restarts the same way.
@@ -76,7 +77,8 @@ function runTests(code, commit, testCmd) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'deploy-'))
   try {
     git(code, 'worktree', 'add', '--detach', dir + '/wt', commit)
-    try { if (fs.existsSync(path.join(code, 'node_modules'))) fs.symlinkSync(path.join(code, 'node_modules'), path.join(dir, 'wt', 'node_modules'), 'dir') } catch { /* tests will say */ }
+    // (a junction on Windows: a plain directory symlink needs admin rights there)
+    try { if (fs.existsSync(path.join(code, 'node_modules'))) fs.symlinkSync(path.join(code, 'node_modules'), path.join(dir, 'wt', 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir') } catch { /* tests will say */ }
     const r = spawnSync(testCmd, { shell: true, cwd: path.join(dir, 'wt'), timeout: 30 * 60000, encoding: 'utf8' })
     return { ok: r.status === 0, status: r.status, tail: String(r.stdout || '').split('\n').filter(Boolean).slice(-6).join('\n') + String(r.stderr || '').slice(-300) }
   } finally { try { git(code, 'worktree', 'remove', '--force', dir + '/wt') } catch { /* leave it */ } try { fs.rmSync(dir, { recursive: true, force: true }) } catch { /* ignore */ } }
@@ -104,11 +106,17 @@ function deploy(o) {
   }
   if (o.dryRun) { step('dry run: would fast-forward and ' + kind.action); out.result = 'dry-run'; return out }
   git(code, 'merge', '--ff-only', `${remote}/${branch}`)
+  // new dependencies go in before any bot is told to restart, or it restarts into a missing module (--no-install leaves it to a person)
+  if (kind.installNeeded && o.install !== false) {
+    const r = spawnSync(o.installCmd || 'npm install --no-audit --no-fund', { shell: true, cwd: code, timeout: 15 * 60000, encoding: 'utf8' })
+    step(r.status === 0 ? 'npm install done' : 'npm install FAILED (the bots are still told to restart; a missing module will show in join.log): ' + String(r.stderr || r.stdout || '').slice(-300))
+    out.install = r.status === 0
+  }
   const actions = notify(code, runtimes, kind.action, `${files.length} files changed: ${files.slice(0, 5).join(', ')}`, o)
   record(code, { event: 'deploy', from: from.slice(0, 9), to: to.slice(0, 9), files: files.length, action: kind.action, installNeeded: kind.installNeeded, runtimes, actions })
-  step(`deployed ${from.slice(0, 9)} -> ${to.slice(0, 9)}${kind.installNeeded ? ' (package files changed: run npm install, then restart)' : ''}; ${actions.join('; ') || 'no bot action needed'}`)
-  if (kind.installNeeded) notify(code, runtimes, 'restart', 'package files changed: npm install first', { ...o, restartCmd: null })
-  out.result = 'deployed'
+  step(`deployed ${from.slice(0, 9)} -> ${to.slice(0, 9)}${kind.installNeeded && o.install === false ? ' (package files changed: run npm install, then restart)' : ''}; ${actions.join('; ') || 'no bot action needed'}`)
+  if (kind.installNeeded && o.install === false) notify(code, runtimes, 'restart', 'package files changed: npm install first', { ...o, restartCmd: null })
+  out.result = 'deployed'; out.from = from; out.to = to; out.action = kind.action
   return out
 }
 
@@ -147,7 +155,7 @@ function parseArgs(argv) {
   for (let i = 1; i < argv.length; i++) {
     const a = argv[i], v = () => argv[++i]
     if (a === '--code') o.code = path.resolve(v()); else if (a === '--runtime') o.runtimes.push(path.resolve(v()))
-    else if (a === '--test-cmd') o.testCmd = v(); else if (a === '--no-tests') o.tests = false
+    else if (a === '--test-cmd') o.testCmd = v(); else if (a === '--no-tests') o.tests = false; else if (a === '--no-install') o.install = false
     else if (a === '--restart-cmd') o.restartCmd = v(); else if (a === '--dry-run') o.dryRun = true
     else if (a === '--min-minutes') o.minMinutes = +v(); else if (a === '--branch') o.branch = v(); else if (a === '--remote') o.remote = v()
   }

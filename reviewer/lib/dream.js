@@ -332,6 +332,20 @@ function rulesFor(bot) {
   for (const f of [path.join(bot.dir, 'brain', 'gate', 'rules.json'), path.join(__dirname, '..', '..', 'brain', 'gate', 'rules.json')]) { const j = readJson(f); if (j) { try { return rulesText(j) } catch { /* next */ } } }
   return []
 }
+// the incident snapshots a bot still has (it keeps the newest 30): id, time, flag kind and the step it was in. The files are large, so only the head
+// of each is parsed out with a pattern; a file that does not match is skipped.
+function snapshotIndex(bot, since = 0) {
+  const dir = path.join(stateDir(bot), 'snapshots'), out = []
+  let files = []; try { files = fs.readdirSync(dir).filter(f => /^s\d+-.*\.json$/.test(f)) } catch { return out }
+  for (const f of files) {
+    const m = /^s(\d+)-(.+)\.json$/.exec(f), t = Number(m[1]) * 1000
+    if (!(t >= since)) continue
+    let step = null
+    try { const fd = fs.openSync(path.join(dir, f), 'r'), buf = Buffer.alloc(4096); const n = fs.readSync(fd, buf, 0, 4096, 0); fs.closeSync(fd); const s = /"step":\s*"([^"]+)"/.exec(buf.toString('utf8', 0, n)); step = s ? s[1] : null } catch { /* unreadable */ }
+    out.push({ id: f.slice(0, -5), at: new Date(t).toISOString(), kind: m[2], step })
+  }
+  return out
+}
 // where the bot lives now, from what it told its last brief (it has moved base before: a fact about a far place is history)
 function whereLine(bot) {
   const req = readJson(path.join(memDir(bot), 'brief-request.json')), s = req && req.state
@@ -360,7 +374,7 @@ async function dreamBot(cfg, bot, { ask, now, log, force = false, dryRun = false
   const otherFacts = others.flatMap(o => buildFacts(recentDays(o, now, 2), { prefix: `${o.id.toUpperCase()}`, max: 30, label: `${o.name}: ` }))
   const ev24 = days.flatMap(d => d.events).filter(e => Date.parse(e.at) >= now - DAY_MS)
   const roll24 = rollup(ev24)
-  const cands = orders.candidates({ rollup: roll24, events: ev24, findings: openFindings })
+  const cands = orders.candidates({ rollup: roll24, events: ev24, findings: openFindings, snapshots: snapshotIndex(bot, now - DAY_MS) })
   const commits = orders.botCommits(bot)
 
   const calls = [], prompts = [], dropped = []
@@ -504,4 +518,4 @@ async function runDream(cfg, { ask, now = Date.now(), log = () => {}, force = fa
   return { ok: out.every(b => b.ok !== false), dryRun: dryRun || undefined, bots: out }
 }
 
-module.exports = { runDream, dreamBot, buildFacts, noIds, numbered, applyOps, correctOps, cutOps, demoteOps, fillOps, handoffDecisions, memoryPrompt, recentDays, LIMITS, CORRECT, CUT, DEMOTE, FILL, HANDOFF }
+module.exports = { runDream, dreamBot, buildFacts, noIds, snapshotIndex, numbered, applyOps, correctOps, cutOps, demoteOps, fillOps, handoffDecisions, memoryPrompt, recentDays, LIMITS, CORRECT, CUT, DEMOTE, FILL, HANDOFF }

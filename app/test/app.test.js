@@ -177,8 +177,15 @@ test('memory loop tab: jobs, ranked work orders, each bot\'s memory and last che
   lib.runs.append({ loopDir }, 'dream', { ok: true, summary: 'OzoGo444: 2 calls' }, Date.parse('2026-11-10T22:56:00Z'))
   const asked = []
   const s = await loopState({ lib, loopDir, bots: [{ id: 'ozo', name: 'OzoGo444', dir: ozo }, { id: 'smeo', name: 'Smeo444', dir: path.join(root, 'none') }], status: async (j) => { asked.push(j.name); return { installed: j.id === 'review' } }, running: { dream: true } })
-  assert.strictEqual(s.available, true); assert.deepStrictEqual(asked, ['MC-Player Bot Dream', 'MC-Player Bot Reviewer'])
-  assert.deepStrictEqual(s.jobs.map(j => [j.id, j.taskName, j.minutes, j.running, j.task.installed]), [['dream', 'MC-Player Bot Dream', 120, true, false]]); assert.deepStrictEqual(JOB_IDS, ['dream'])
+  assert.strictEqual(s.available, true); assert.deepStrictEqual(asked, ['MC-Player Bot Dream', 'MC-Player Bot Deployer', 'MC-Player Bot Digest', 'MC-Player Bot Reviewer'])
+  assert.deepStrictEqual(s.jobs.map(j => [j.id, j.taskName, j.minutes, j.running, j.task.installed]), [['dream', 'MC-Player Bot Dream', 120, true, false], ['deploy', 'MC-Player Bot Deployer', 30, false, false], ['digest', 'MC-Player Bot Digest', 60, false, false]])
+  assert.deepStrictEqual(JOB_IDS, ['dream', 'deploy', 'digest']); assert.ok(s.jobs.every(j => j.about))
+  assert.deepStrictEqual(s.code, { dir: null, isClone: false, hasDeployer: false, last: [] }); assert.strictEqual(s.digest, null)
+  // with a code folder and a digest on disk
+  const code = path.join(root, 'code'); fs.mkdirSync(path.join(code, '.git'), { recursive: true }); fs.mkdirSync(path.join(code, 'tools')); fs.writeFileSync(path.join(code, 'tools', 'deployer.js'), ''); fs.writeFileSync(path.join(code, 'deploys.jsonl'), JSON.stringify({ t: 1, event: 'deploy', to: 'abc' }) + '\n')
+  fs.mkdirSync(path.join(loopDir, 'digest')); fs.writeFileSync(path.join(loopDir, 'digest', '2026-11-11.md'), '# digest')
+  const s2 = await loopState({ lib, loopDir, codeDir: code, bots: [], status: async () => ({ installed: false }) })
+  assert.deepStrictEqual([s2.code.isClone, s2.code.hasDeployer, s2.code.last[0].to], [true, true, 'abc']); assert.deepStrictEqual(s2.digest, { date: '2026-11-11', text: '# digest' })
   assert.strictEqual(s.reviewTask.task.installed, true)
   assert.deepStrictEqual(s.orders.map(o => [o.key, o.costMin, o.title]), [['step-b', 9, 'B'], ['step-a', 3, 'A']])
   assert.strictEqual(s.runs[0].summary, 'OzoGo444: 2 calls')

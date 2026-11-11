@@ -208,8 +208,8 @@ flowchart LR
 | 3 | Dawn brief | laptop, on the reviewer's Task Scheduler entry, when a bot has asked | a bot asks at an in-game dawn (at most hourly) and after a respawn | Haiku 5.5 | built |
 | 4 | Dream | laptop, its own Task Scheduler entry | every 2 h | Haiku 5.5 | built |
 | 5 | Fixer | laptop, Task Scheduler, a fresh session each time | every 3 h | Haiku 5.5 | new |
-| 6 | Deployer | laptop, Task Scheduler | every 30 min | none | exists, not scheduled |
-| 7 | Digest and memory upkeep | laptop, Task Scheduler | daily | Haiku 5.5 | digest exists, not scheduled |
+| 6 | Deployer | laptop, its own Task Scheduler entry | every 30 min | none | built |
+| 7 | Digest | laptop, its own Task Scheduler entry | checked hourly, written once a day after 07:00 | none | built (upkeep of the project's own memory is not: see below) |
 
 **Everything runs on the laptop** (Walter, 2026-11-11). Every job uses the reviewer's pattern: a Task Scheduler entry installed and removed with a button in the Bot Dashboard app, a tab in the app that shows its runs, and the Claude Agent SDK on Walter's Claude login with no API key. Model, effort and cadence for all of them live in one config file. Bot data never leaves the laptop: journals and memory stay in each bot's folder, and the loop's own files (work orders, run logs, the fixer's working copy of the code) live under AppData beside the app's settings. The only thing that goes to GitHub is a fixer PR to MC-Player. There is no private repo and no sync job.
 
@@ -273,7 +273,7 @@ How it differs from the first design, and why:
 - The model only says whether a candidate is a bug and writes the problem statement. Code opens at most four new orders per dream, most costly first. A "not a bug" is remembered for a day.
 - An order holds its key, title, problem, where to look, the numbers and commonest alarm causes per bot, linked reviewer findings, its cost history and its life (opened, reopened, closed; later PR, deploy, verdict). The same events go to the ledger.
 - An order nobody has seen for six dreams of a running bot closes with a reason that names the commit the bot moved to. If it comes back it is reopened and the reopen is counted.
-- Not built yet: snapshot ids on an order (the fixer needs them to rebuild a scene).
+- An order lists the incident snapshots captured during that step or for that flag kind, with the bot whose folder holds them, so the fixer can rebuild the scene with `tools/snapshot-rebuild.js`.
 
 **5. Fixer.** A fresh session each time, on the laptop, in its own working copy of the code under AppData. It takes the top open work order and follows the debug loop Walter already approved:
 1. Rebuild the snapshot on the trial server and show the scenario failing.
@@ -283,10 +283,16 @@ How it differs from the first design, and why:
 
 One work order per run. After two failed attempts the order is parked with what was tried, which is memory for the next attempt. It never changes the rules, `CLAUDE.md` or the free-time slot. A question of taste goes to the digest.
 
-**6. Deployer.** `tools/deployer.js deploy` and `judge` as they are. It pulls `main`, hot-reloads or restarts the bots, compares weighted flags per hour with the same bot's hours before, reverts a change that made it worse, and writes the verdict into the work order.
+**6. Deployer.** Built: `reviewer/lib/deploy.js` (`node run.js --deploy`) calls `tools/deployer.js` of the clone the live bots run from (set on the Memory loop tab, by default `Downloads\MC-Player-live`).
+- Each run judges the last deploy first. While that deploy is inside its 40 minutes of waiting, nothing new is deployed, so a verdict is about one change.
+- Then it deploys: fetch `main`, run the tests on the candidate, fast-forward the clone, run `npm install` if `package.json` changed, hot-reload or restart the bots.
+- Restart is now real. The bots' supervisor (`run.js`) watches its folder for the deployer's `restart-needed.json`, keeps it as `restart-done.json` and restarts the bot on the new code. A bot has to be started once on code that has this before it works.
+- A work order whose PR is in a deploy gets a deploy event. When that deploy is judged, the order gets the verdict: ok marks it fixed (and it is reopened, and counted, if the journal shows the problem again), worse leaves it open after the old code is back.
+- It refuses a clone with local changes, as before. On Windows the test worktree now links `node_modules` with a junction (a plain directory link needs admin rights).
 
 **7. Digest and memory upkeep.**
-- Posts the digest `tools/digest.js` already builds: phase progress, top lost minutes, what was fixed and what reverted itself, and at most one question.
+- Built: `reviewer/lib/digest.js` (`node run.js --digest`). One page a day in the loop folder, shown at the top of the Memory loop tab: what each bot asked Walter for in its own words, deaths and stalled minutes, the most costly work orders and what was opened, fixed, reopened or closed, deploys and reverts, which jobs failed, and at most one question (`digest-question.txt`, asked once). No model.
+- Not built, and it cannot be a laptop job: the upkeep of the project's own `MEMORY.md` below. That file lives in the Claude app's project memory, which a Task Scheduler job cannot reach. It stays with the threads, or with a scheduled task in the app if Walter wants one.
 - Then does for the maintainer what the dream does for the bot: checks each `MEMORY.md` line against the repo and the work orders, rewrites the file as a dashboard, and moves history into topic files.
 - Reads the day's threads and merged PRs for new preferences from Walter and files each one as a rules entry to propose.
 
@@ -333,7 +339,7 @@ Each phase is useful alone, is one or two PRs, and ships switched on.
 | 0 | Journal and rollup (built). The memory folder with caps and its git history (built). `global.md` seeded from `strategy.md` and corrected to today's rules (built). Rule text generated from `rules.json` (built). Deployer and digest put on a schedule. | A searchable record. Deploys without hands. |
 | 1 | Dawn brief for Ozo, with the picker hook and a real free-time step. Findings feed the brief. (Built.) | Memory has a reader. Review findings reach the bot within the hour. |
 | 2 | Dream job, work orders, the ledger, and findings that close with a reason. The Memory loop tab in the app: install, remove and run buttons, work orders, each bot's memory, runs. (Built.) | Memory is checked. Bugs are ranked by cost. |
-| 3 | The fixer and the daily upkeep job, each with its button and runs tab in the Bot Dashboard app. | Walter is out of the bug loop. |
+| 3 | The deployer and the digest on a schedule, each with its button on the Memory loop tab (built). The fixer. | Walter is out of the bug loop. |
 | 4 | Tune the schedules from the measures above. Add Smeo. Use the same model call when the watchdog escalates past its first fix, instead of a blind kick. | |
 
 The build-inspection sense being added in the thread "Teach bots to see broken builds" plugs in as one more source of journal events and findings. It needs no special path.

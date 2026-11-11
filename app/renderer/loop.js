@@ -9,7 +9,17 @@ const when = (iso) => iso ? new Date(iso).toLocaleString() : 'never'
 const mins = (n) => `${Math.round((n || 0) * 10) / 10} min`
 const money = (n) => (typeof n === 'number' && n > 0 ? `$${n.toFixed(3)}` : '')
 
-function jobCard(j) {
+function codeRow(code) {
+  const dir = el('input', { type: 'text', value: code.dir || '' })
+  const save = el('button', { textContent: 'Save' })
+  save.onclick = async () => { const x = await window.botApp.loopCodeDir(dir.value); if (!x.ok) alert('Could not save: ' + x.error); if (x.state) render(x.state) }
+  const last = (code.last || []).slice(-1)[0]
+  const state = !code.isClone ? 'This folder is not a git clone, so the deployer has nothing to update.' : !code.hasDeployer ? 'This clone has no tools/deployer.js yet: pull main into it once by hand.'
+    : last ? `Last record: ${last.event}${last.to ? ` to ${last.to}` : ''}${last.why ? ` (${last.why})` : ''}${last.verdict ? ` ${last.verdict}` : ''}, ${when(last.t)}.` : 'No deploy recorded yet.'
+  return el('div', {}, el('div', { className: 'row', style: 'margin-top:8px' }, el('label', {}, 'Code folder the live bots run from: ', dir), save), el('div', { className: 'muted', textContent: state }))
+}
+
+function jobCard(j, s) {
   const t = j.task || {}
   const every = el('input', { type: 'number', min: 10, max: j.maxMinutes, value: j.minutes })
   const install = el('button', { textContent: t.installed ? 'Reinstall task' : 'Install Task Scheduler job' })
@@ -23,7 +33,9 @@ function jobCard(j) {
     el('div', { className: 'muted', textContent: t.installed
       ? `Task "${j.taskName}": ${t.status || 'installed'}, next run ${t.nextRun || '?'}, last run ${t.lastRun || 'never'} (result ${t.lastResult ?? '?'}). Runs only while you are logged in, window hidden.`
       : t.unsupported ? 'Task Scheduler is Windows-only; "Run now" still works.'
-        : `Not installed. Install creates one Windows Task Scheduler job named "${j.taskName}" for your user account (no admin, no password). It runs Haiku 5.5 at xhigh on your Claude login, a few short calls per bot, and skips a bot whose journal has nothing new. "Run now" takes about five minutes per bot.` }))
+        : `Not installed. Install creates one Windows Task Scheduler job named "${j.taskName}" for your user account (no admin, no password).` }),
+    el('div', { className: 'muted', textContent: j.about || '' }),
+    j.id === 'deploy' && s.code ? codeRow(s.code) : '')
 }
 
 function orderCard(o) {
@@ -66,7 +78,10 @@ function render(s) {
   document.getElementById('jobs').replaceChildren(
     el('div', { className: 'card' }, el('div', {}, el('b', { textContent: rt.title || 'Review and dawn briefs' })),
       el('div', { className: 'muted', textContent: (rtask.installed ? `Task "${rt.taskName}": ${rtask.status || 'installed'}, last run ${rtask.lastRun || 'never'}.` : rtask.unsupported ? 'Task Scheduler is Windows-only.' : 'Not installed.') + ' The dawn brief is answered by this job. Install and remove it on the Claude reviews tab.' })),
-    ...s.jobs.map(jobCard))
+    ...s.jobs.map(j => jobCard(j, s)))
+  document.getElementById('digest').replaceChildren(s.digest
+    ? el('div', { className: 'card' }, el('details', { open: true }, el('summary', { textContent: `Digest of ${s.digest.date}` }), el('pre', { className: 'file', textContent: s.digest.text })))
+    : el('div', { className: 'muted', textContent: 'No digest yet. Install the digest job below, or press its Run now.' }))
   const open = s.orders.filter(o => o.status === 'open' || o.status === 'parked'), done = s.orders.filter(o => !(o.status === 'open' || o.status === 'parked')).slice(0, 8)
   document.getElementById('orders').replaceChildren(...(open.length || done.length ? [...open, ...done].map(orderCard)
     : [el('div', { className: 'muted', textContent: 'No work orders yet. The dream job opens one when the journal shows the same fault again and again.' })]))

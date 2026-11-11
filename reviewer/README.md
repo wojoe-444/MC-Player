@@ -103,6 +103,8 @@ Work orders live in the loop folder, beside the app's settings (`%APPDATA%/Bot D
 
 `node run.js --dream-dry-run` prints the candidates and every prompt without calling a model. `--dream --force` dreams even when the journal has nothing new.
 
+`node run.js --deploy` (entry "MC-Player Bot Deployer", every 30 minutes) and `node run.js --digest` (entry "MC-Player Bot Digest", checked hourly, one page a day after 07:00) are the other two loop jobs, installed from the same tab. Neither calls a model. The deployer wrapper (`lib/deploy.js`) calls `tools/deployer.js` of the clone the bots run from (`--code DIR`, the app's setting, or `~/Downloads/MC-Player-live`): judge first, deploy only when the last deploy has its verdict, and pass deploys and verdicts on to the work orders by PR number. The digest (`lib/digest.js`) writes `digest/<date>.md` in the loop folder.
+
 A finding now closes with a reason (`lib/findings.js`, `closeReason`): fixed by a named PR, went quiet after the bot moved to a named commit, closed by the reviewer, or went quiet with no code change in between.
 
 ## Prompt tuning (2026-11-10)
