@@ -26,7 +26,7 @@ const ORE: Record<string, RGB> = { coal: [30, 30, 30], iron: [216, 175, 147], co
 const METAL: Record<string, RGB> = { iron: [220, 220, 220], gold: [246, 208, 61], diamond: [98, 219, 213], emerald: [42, 203, 87], lapis: [31, 67, 140], redstone: [171, 27, 9], coal: [16, 16, 16], copper: [192, 107, 79], netherite: [66, 61, 63], amethyst: [133, 97, 191] }
 
 const SHAPE_SUFFIX = /_(slab|stairs|wall|fence_gate|fence|button|pressure_plate|wall_sign|hanging_sign|sign|pane)$/
-const ALIAS: Record<string, string> = { stone_brick: "stone_bricks", mossy_stone_brick: "mossy_stone_bricks", brick: "bricks", nether_brick: "nether_bricks", red_nether_brick: "red_nether_bricks", mud_brick: "mud_bricks", quartz: "quartz_block", smooth_quartz: "quartz_block", prismarine_brick: "prismarine_bricks", end_stone_brick: "end_stone_bricks", deepslate_brick: "deepslate_bricks", deepslate_tile: "deepslate_tiles", polished_blackstone_brick: "polished_blackstone_bricks", cut_sandstone: "sandstone", smooth_sandstone: "sandstone", cut_red_sandstone: "red_sandstone", smooth_red_sandstone: "red_sandstone", petrified_oak: "oak" }
+const ALIAS: Record<string, string> = { stone_brick: "stone_bricks", mossy_stone_brick: "mossy_stone_bricks", brick: "bricks", nether_brick: "nether_bricks", red_nether_brick: "red_nether_bricks", mud_brick: "mud_bricks", quartz: "quartz_block", smooth_quartz: "quartz_block", prismarine_brick: "prismarine_bricks", end_stone_brick: "end_stone_bricks", deepslate_brick: "deepslate_bricks", deepslate_tile: "deepslate_tiles", cracked_deepslate_bricks: "deepslate_bricks", cracked_deepslate_tiles: "deepslate_tiles", tuff_brick: "tuff_bricks", chiseled_tuff_bricks: "tuff_bricks", polished_blackstone_brick: "polished_blackstone_bricks", cut_sandstone: "sandstone", smooth_sandstone: "sandstone", cut_red_sandstone: "red_sandstone", smooth_red_sandstone: "red_sandstone", petrified_oak: "oak" }
 
 /** plants and other things drawn as crossed flat quads */
 export const isPlant = (name: string): boolean => /(grass|fern|bush|sapling|flower|tulip|dandelion|poppy|vine|lichen|cobweb|roots|sprouts|mushroom|azalea|berries|kelp|seagrass|allium|orchid|bluet|daisy|cornflower|lily|moss_carpet)/.test(name) && !/(block|leaves)$/.test(name)
@@ -89,6 +89,16 @@ export function styleOf(name: string): Style {
     case "deepslate_bricks": case "deepslate_tiles": return uniform(spec("bricks", [70, 70, 74], [48, 48, 52]))
     case "tuff": return uniform(spec("noise", [108, 109, 102]))
     case "granite": return uniform(spec("noise", [149, 103, 85]))
+    case "polished_granite": return uniform(spec("flat", [154, 107, 89]))
+    case "polished_diorite": return uniform(spec("flat", [193, 193, 195]))
+    case "polished_andesite": return uniform(spec("flat", [132, 135, 134]))
+    case "polished_deepslate": return uniform(spec("flat", [72, 72, 74]))
+    case "chiseled_deepslate": return uniform(spec("bricks", [60, 60, 63], [38, 38, 41]))
+    case "polished_tuff": return uniform(spec("flat", [98, 101, 93]))
+    case "chiseled_tuff": return uniform(spec("bricks", [104, 106, 98], [76, 78, 70]))
+    case "tuff_bricks": return uniform(spec("bricks", [101, 103, 95], [76, 78, 71]))
+    case "composter": return uniform(spec("planks", [122, 90, 48], [86, 62, 30]))
+    case "grindstone": return uniform(spec("noise", [146, 146, 150]))
     case "diorite": return uniform(spec("noise", [188, 188, 188]))
     case "andesite": return uniform(spec("noise", [136, 136, 136]))
     case "dirt": case "coarse_dirt": case "rooted_dirt": return uniform(spec("noise", [134, 96, 67]))

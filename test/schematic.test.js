@@ -174,3 +174,17 @@ test('the built-for-looks example: every block exact, stairs and fences and a do
   assert.ok(s.palette.some(e => e.scenery && e.block === 'grass_block'), 'the lawn is scenery'); assert.ok(!rows.some(r => r.key === 'grass_block'))
   const lib = S.load([S.LIBRARY], 'starter-hut'); assert.ok(lib && lib.mode === 'aesthetic', 'it ships in the library')
 })
+
+// ---- Sponge .schem import
+test('sponge import: varint cells, block states, air dropped, scenery marked; the bundled imports are in the library', () => {
+  const Sp = require('../brain/schematic/sponge')
+  assert.deepStrictEqual(Sp.parseState('minecraft:oak_stairs[facing=north,half=bottom]'), { name: 'minecraft:oak_stairs', props: { facing: 'north', half: 'bottom' } })
+  assert.deepStrictEqual(Array.from(Sp.decodeVarints(Buffer.from([0, 1, 0x80, 0x01, 2]), 4)), [0, 1, 128, 2])
+  const root = { Width: 2, Height: 1, Length: 2, Palette: { 'minecraft:air': 0, 'minecraft:stone_bricks': 1, 'minecraft:oak_fence[east=true,north=false,waterlogged=false]': 2, 'minecraft:stone': 3 }, BlockData: [1, 0, 2, 3], Metadata: { Name: 'Tiny' } }
+  const s = Sp.fromSimplified(root, { id: 'tiny', scenery: ['stone'] })
+  assert.strictEqual(s.mode, 'aesthetic'); assert.strictEqual(s.name, 'Tiny'); assert.deepStrictEqual(s.size, [2, 1, 2]); assert.strictEqual(F.cellsOf(s).length, 4)
+  const by = s.palette.map(e => e.block || e.role); assert.deepStrictEqual(by, ['any', 'stone_bricks', 'oak_fence', 'stone'])
+  assert.deepStrictEqual(s.palette[2].props, undefined, 'fence connections are noise'); assert.ok(s.palette[3].scenery && !s.palette[1].scenery)
+  assert.strictEqual(s.counts[0], 1, 'air is not kept')
+  for (const id of ['lithic-spire', 'lithic-spire-earthfill', 'walled-palace']) { const l = S.load([S.LIBRARY], id); assert.ok(l && l.v === 2 && l.mode === 'aesthetic' && F.cellsOf(l).length === l.size[0] * l.size[1] * l.size[2], id) }
+})
