@@ -1315,7 +1315,8 @@ module.exports = function plan(G, S, M, api, log) {
     })
     // A column comes down top first, so a block qualifies when what sits on it is passable (air, a torch, a plant) or is itself on the list. The old rule (nothing at all on
     // top) took one block off each pillar per pass and the rest stayed for good (Walter's screenshot, 2026-11-11).
-    return require('../leftovers/lib').topFirst(eligible, (x, y, z) => { const a = S.block(v(x, y, z)); return !a || a.boundingBox !== 'block' })
+    // (leaves and logs above do not hold a block up, as the cover check above counts them: a block under a canopy was never listed and stood for good)
+    return require('../leftovers/lib').topFirst(eligible, (x, y, z) => { const a = S.block(v(x, y, z)); return !a || a.boundingBox !== 'block' || /_leaves$|_log$/.test(a.name) })
   }
   tidyList.force = (p) => { for (const c of leftScaffold()) if ((c.cells || []).some(q => q[0] === p.x && q[1] === p.y && q[2] === p.z)) return true; return false }      // ledger-proven: ours, filler, placed by a bot (never anything a player placed)
   // over-lighting: the top-down map showed 240 torches in a tight grid around home. A torch the bot placed with another one within 3 blocks goes.
