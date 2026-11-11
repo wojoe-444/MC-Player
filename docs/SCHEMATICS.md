@@ -7,8 +7,9 @@ rebuild has a known target, and so the Bot Dashboard can show the build as a tex
 Every cell that is not `any` or `air` names **a specific block** (what the viewer draws and the bill counts) and **a role** (what the cell must do, which decides what else
 is allowed there). Walter 2026-11-11: blocks have generic roles, "but I still wanted *some* specific block to be shown when rendered".
 - `palette` entries: `{ role, block, props?, level?, alt?, scenery? }`; `palette[0]` is always `{ role: 'any' }`.
-  - role `solid`: a full opaque cube that blocks light, is not flammable, does not fall and does not glow. `block` is the one shown (cobblestone); any other solid block
-    passes the check (stone, deepslate ...).
+  - role `solid`: a full opaque cube that blocks light, is not flammable, does not fall and does not glow. `block` is always `stone`: a cell we are neutral about is drawn
+    and counted as plain stone (Walter 2026-11-11), whatever stood there when it was captured; any other solid block (cobblestone, deepslate, an ore ...) passes the check.
+    `F.neutral` / `F.upgrade` enforce it on every file read, so older files and bot captures follow the rule too (entries that become equal merge).
   - role `block`: exactly this block and these properties (slab type, trapdoor half and open, hopper facing, stairs facing), or one of `alt`.
   - role `water` / `lava` (with the level), role `air` (open), role `any` (not checked, not drawn).
   - `scenery: true`: the natural world around the build (terrain, trees), kept for the picture. Drawn when "Show surroundings" is on, never checked.
@@ -50,7 +51,8 @@ node tools/schematic.js world path/to/deep_node.schem --surface 70 --rock path/t
 
 ## The library
 - `mobfarm-forever2k27`: Smeo444's working surface mob farm from the earlier world (dark platform, cross of water channels, 2x2 drop of 22 blocks, slabs over hoppers into a
-  double chest). Captured from the save with each wall cell naming its block (cobblestone 926, stone 189, ores).
+  double chest). Trimmed 2026-11-11 to the farm itself: 1,118 neutral wall cells drawn as stone (they were cobblestone, stone and three stray ores), and the terrain, chests, vines,
+  crafting tables and torches that stood around it are gone. Same size and origin, and every functional cell is unchanged, so a build in progress keeps its target.
 - `starter-hut`: a built-for-looks example (oak hut, fenced yard, torches), `aesthetic` mode, from `tools/schematic.js hut`.
 - `lithic-spire`, `lithic-spire-earthfill`, `walled-palace`, `starter-base`, `starter-tower`, `walled-market-town`, `deep-node`, `deep-node-2` (288x84x288), `snow-glass-villa`: builds-for-looks, some big, builds-for-looks imported from Sponge `.schem` files (WorldEdit / Litematica exports) with
   `node tools/schematic.js import <file.schem> --id ... --kind ...` (`brain/schematic/sponge.js`). Aesthetic mode, every block exact; wall and fence connection flags are not

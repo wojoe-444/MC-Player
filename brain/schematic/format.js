@@ -7,7 +7,7 @@
 //     notes: [..] }
 //
 // EVERY cell that is not `any` or `air` names a specific block (`block`: what the viewer draws and the bill of materials counts), and a ROLE: what the cell must do.
-//   role solid    "a full, opaque, non-flammable cube": `block` is the one shown (cobblestone), any other solid block passes the check. Capture mode 'functional' (a farm, a mine).
+//   role solid    "a full, opaque, non-flammable cube": `block` is always stone (drawn and counted as plain stone), any solid block passes the check. Capture mode 'functional' (a farm, a mine).
 //   role block    exactly this block (and these properties), or one of `alt`. Everything that is not a plain wall, and every cell of an 'aesthetic' build (a house, a statue).
 //   role water / lava (with the level), role air (open), role any (not checked, not drawn).
 //   scenery: true on an entry: the surroundings (terrain, trees) kept for the picture; never checked.
@@ -137,16 +137,38 @@ function legend(s) {
 // A v1 file (roles only: `solid` had no block, the real blocks were only counted in `sources`) as v2. The wall block of each `solid` entry becomes its most common source;
 // per-cell blocks were never recorded, so every solid cell of that entry shows that one. Re-capture from the world to get the real ones.
 function upgrade(s) {
-  if (!s || s.v === 2) return s
+  if (!s) return s
+  if (s.v === 2) return neutral(s)
   if (s.v !== 1) return null
   const palette = s.palette.map((e, i) => {
-    if (e.role === 'solid' && !e.block) { const src = (s.sources && s.sources[i]) || {}, top = Object.entries(src).sort((a, b) => b[1] - a[1])[0]; return { ...e, block: top ? top[0] : 'stone' } }
+    if (e.role === 'solid' && !e.block) return { ...e, block: B.NEUTRAL }
     if (e.role === 'water' && !e.block) return { ...e, block: 'water' }
     if (e.role === 'lava' && !e.block) return { ...e, block: 'lava' }
     return e
   })
   const { sources, ...rest } = s
-  return { ...rest, v: 2, mode: rest.mode || 'functional', palette, notes: [...(s.notes || []), 'Upgraded from format 1: the wall blocks were not recorded cell by cell, so each wall cell shows the most common one.'] }
+  return neutral({ ...rest, v: 2, mode: rest.mode || 'functional', palette, notes: [...(s.notes || []), 'Upgraded from format 1: the wall blocks were not recorded, so every wall cell is plain stone.'] })
 }
 
-module.exports = { capture, cellsOf, entryAt, diff, legend, upgrade, getterOf, idx }
+// Walter 2026-11-11: a cell we are neutral about (role `solid`, any solid block passes) is drawn and counted as plain stone, whatever stood there when it was captured.
+// Every `solid` entry becomes { role: 'solid', block: 'stone' }; entries that are now equal merge (palette, counts and runs are rewritten). A file that is already
+// neutral is returned as it is.
+function neutral(s) {
+  if (!s || !Array.isArray(s.palette) || !s.palette.some(e => e && e.role === 'solid' && e.block !== B.NEUTRAL)) return s
+  const palette = [], seen = new Map(), map = []
+  s.palette.forEach((e, i) => {
+    const d = e && e.role === 'solid' ? { ...e, block: B.NEUTRAL } : e
+    const k = JSON.stringify(d)
+    if (!seen.has(k)) { seen.set(k, palette.length); palette.push(d) }
+    map[i] = seen.get(k)
+  })
+  const rle = [], counts = {}
+  for (let i = 0; i < s.rle.length; i += 2) {
+    const v = map[s.rle[i]], n = s.rle[i + 1]
+    if (rle.length && rle[rle.length - 2] === v) rle[rle.length - 1] += n; else rle.push(v, n)
+    counts[v] = (counts[v] || 0) + n
+  }
+  return { ...s, palette, rle, counts }
+}
+
+module.exports = { neutral, capture, cellsOf, entryAt, diff, legend, upgrade, getterOf, idx }
