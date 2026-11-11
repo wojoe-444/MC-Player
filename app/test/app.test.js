@@ -192,3 +192,23 @@ test('memory loop tab: jobs, ranked work orders, each bot\'s memory and last che
   assert.strictEqual(s.bots[0].memory, '# Now\nSmelt iron.\n'); assert.strictEqual(s.bots[0].brief.ask, 'A chest of my own?'); assert.strictEqual(s.bots[0].lastCheck.changes.length, 1)
   assert.deepStrictEqual([s.bots[1].memory, s.bots[1].brief, s.bots[1].lastCheck], [null, null, null])
 })
+
+test('dashboard process: only attaches to a server that serves the redesigned UI', async () => {
+  const http = require('http')
+  const { servesCurrentUi, startDashboard, UI_MARKER } = require('../lib/dashboard-process')
+  const serve = (html) => new Promise((resolve) => { const s = http.createServer((_q, r) => r.end(html)); s.listen(0, '127.0.0.1', () => resolve(s)) })
+  const fresh = await serve(`<head><meta ${UI_MARKER} content="2"></head>`)
+  const old = await serve('<title>old dashboard</title>')
+  const url = (s) => `http://127.0.0.1:${s.address().port}`
+  try {
+    assert.strictEqual(await servesCurrentUi(url(fresh)), true)
+    assert.strictEqual(await servesCurrentUi(url(old)), false)
+    assert.strictEqual(await servesCurrentUi('http://127.0.0.1:1'), false)
+    const d = await startDashboard({ port: fresh.address().port }, { repoRoot: __dirname, log: () => {} })
+    assert.deepStrictEqual([d.attached, d.url], [true, url(fresh)])
+    // an older dashboard on the port: the app must not attach (it would start its own on another port, which needs the real server, so only check it tried)
+    const logs = []
+    await assert.rejects(startDashboard({ port: old.address().port, ozoDir: tmp(), smeoDir: tmp(), codeDir: tmp() }, { repoRoot: path.join(tmp(), 'missing'), log: (m) => logs.push(m) }), /did not start|spare port/)
+    assert.ok(logs.some(m => /older version/.test(m)))
+  } finally { fresh.close(); old.close() }
+})

@@ -28,7 +28,6 @@
       "main.js",
       "preload.js",
       "lib/**",
-      "renderer/**",
       "build/icon.ico",
       "package.json"
     ],

@@ -1,5 +1,7 @@
 # Bot Dashboard design mockup
 
+**Shipped:** this design is now the real Bot Dashboard (`dashboard/web`, wired to the Electron app in `app/`, with the Memory loop page added). This folder stays as the standalone sample-data mockup.
+
 A redesign of the Bot Dashboard and the app's Claude reviews and Settings pages. It reuses the shipped panels (live view, inventory and items acquired, replay, behavior, structure, memory, logs, progress) unchanged in behavior and re-composes them in a new layout. Nothing in `app/` or `dashboard/` is modified.
 
 ## Where the pages went
