@@ -1,7 +1,7 @@
 // brain/bases/lib.js: pure helpers for the base record and the dug-block log (no bot, no timers). The dashboard reads the same files with
 // dashboard/basecast.js (no dependency on brain/), so the file shapes below are the contract.
 //
-//   bot-shared/bases.json   { worlds: { "<spawn x,z>": { bases: [ { id, name, x, y, z, radius, source, at } ] } } }
+//   bot-shared/bases.json   { worlds: { "<spawn x,z>": { bases: [ { id, name, x, y, z, radius, save, source, at } ] } } }
 //   bot-shared/base-dug/<base id>.jsonl   one JSON line per block a bot dug inside the base: [x, y, z, blockName, botName, epochMs]
 //
 // A base is a waypoint (Walter's, from Xaero or waypoints.json) that the code treats as a place the bots live and build around. "Inside the base" is
@@ -41,7 +41,7 @@ function mergeBase(file, world, base) {
   const i = w.bases.findIndex(b => b.id === base.id)
   if (i < 0) { w.bases.push(base); return { file: all, changed: true } }
   const old = w.bases[i]
-  const same = old.x === base.x && old.y === base.y && old.z === base.z && old.radius === base.radius && old.name === base.name
+  const same = old.x === base.x && old.y === base.y && old.z === base.z && old.radius === base.radius && old.name === base.name && (old.save || null) === (base.save || null)
   if (same) return { file: all, changed: false }
   w.bases[i] = { ...old, ...base, at: old.at || base.at }
   return { file: all, changed: true }

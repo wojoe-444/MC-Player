@@ -55,7 +55,7 @@ module.exports = function register(api) {
         const w = book.all(0).find(x => norm(x.name) === norm(name))
         if (!w) continue
         const y = typeof w.y === 'number' ? w.y : 64
-        const r = lib.mergeBase(f, world, { id: lib.baseId(w.name, world), name: w.name, x: w.x, y, z: w.z, radius: cfg.radius, source: 'waypoint', at: now() })
+        const r = lib.mergeBase(f, world, { id: lib.baseId(w.name, world), name: w.name, x: w.x, y, z: w.z, radius: cfg.radius, save: (book.xaeroWorld && book.xaeroWorld()) || null, source: 'waypoint', at: now() })
         f = r.file; changed = changed || r.changed
       }
       if (changed) {

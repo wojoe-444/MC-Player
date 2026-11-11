@@ -9,8 +9,10 @@
 //                   rebuilt from the registry record with brain/mobfarm/geometry.js when the code folder is available)
 //   farms           the bots' own state files: tree farm spots, animal pens, the crop plot
 //   placed blocks   bot-shared/placed-blocks.json: chests, crafting tables, furnaces, hoppers inside the base, shown as markers
-// Digs from before the dug log existed are not recoverable from records; shafts, rooms and farms stand in for them ("derived" cells), and every
-// cell says which of the two it is, so the page can show recorded digs differently.
+// Digs from before the dug log existed are not recoverable from records, so the open space itself comes from the world save (dashboard/worldcast.js):
+// the underground air connected to the shaft and rooms, inside the base circle. That is a view for Walter, read the way a map viewer reads the save;
+// nothing here reaches the bots. Where the save cannot be found the cast falls back to the registry's shafts, rooms and farms ("derived" cells).
+// Every cell says whether it is a recorded dig, so the page can show the live record on top of the world.
 //
 // The base list is bot-shared/bases.json (brain/bases writes it from the waypoints named in brain/bases/config.json). Until the bot has run that module,
 // the same waypoints are looked up here through the code folder's waypoint book, so the page works before the bot restarts.
@@ -25,7 +27,7 @@ const key = (x, y, z) => x + ',' + y + ',' + z
 const MAX_CELLS = 400000
 
 // Cell kinds, in the order that decides who wins when two parts claim one cell. The client keeps the same list.
-const KINDS = ['shaft', 'room', 'mobfarm', 'farm', 'tunnel']
+const KINDS = ['shaft', 'room', 'mobfarm', 'farm', 'tunnel', 'cave']
 
 const slug = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'base'
 
@@ -34,7 +36,7 @@ function basesFromFile(sharedDir) {
   const f = readJson(path.join(sharedDir, 'bases.json'))
   const out = []
   for (const [world, w] of Object.entries((f && f.worlds) || {})) {
-    for (const b of arr(w && w.bases)) if (b && Number.isFinite(b.x) && Number.isFinite(b.z) && b.radius > 0) out.push({ id: String(b.id), name: String(b.name || b.id), x: b.x, y: Number.isFinite(b.y) ? b.y : 64, z: b.z, radius: b.radius, world, source: b.source || 'waypoint' })
+    for (const b of arr(w && w.bases)) if (b && Number.isFinite(b.x) && Number.isFinite(b.z) && b.radius > 0) out.push({ id: String(b.id), name: String(b.name || b.id), x: b.x, y: Number.isFinite(b.y) ? b.y : 64, z: b.z, radius: b.radius, world, save: b.save || null, source: b.source || 'waypoint' })
   }
   return out
 }
@@ -53,7 +55,7 @@ function basesFromWaypoints({ codeDir, registry }) {
     const out = []
     for (const name of cfg.bases) {
       const w = book.all(0).find(x => slug(x.name) === slug(name))
-      if (w) out.push({ id: slug(w.name) + '-live', name: w.name, x: w.x, y: typeof w.y === 'number' ? w.y : 64, z: w.z, radius: cfg.radius || 110, world, source: 'waypoint (looked up here)' })
+      if (w) out.push({ id: slug(w.name) + '-live', name: w.name, x: w.x, y: typeof w.y === 'number' ? w.y : 64, z: w.z, radius: cfg.radius || 110, world, save: book.xaeroWorld() || null, source: 'waypoint (looked up here)' })
     }
     return out
   } catch { return [] }
@@ -125,7 +127,69 @@ function readDug(sharedDir, id) {
   return out
 }
 
-function buildCast({ base, sharedDir, registryFile, botDirs = [], codeDir = null, now = Date.now() }) {
+// ---------------------------------------------------------------- the world save
+const SAVE_CACHE = new Map()
+function defaultSavesDir() {
+  if (process.env.BOT_WORLD_SAVES) return process.env.BOT_WORLD_SAVES
+  return process.env.APPDATA ? path.join(process.env.APPDATA, '.minecraft', 'saves') : null
+}
+// The save folder holding the base: base.save when the record names one, else the most recently written save whose region files cover the base.
+function findSave(base, savesDir) {
+  const root = savesDir || defaultSavesDir()
+  if (!root) return null
+  const rx = Math.floor(base.x / 512), rz = Math.floor(base.z / 512)
+  const file = (name) => path.join(root, name, 'region', `r.${rx}.${rz}.mca`)
+  const m = (f) => { try { return fs.statSync(f).mtimeMs } catch { return null } }
+  if (base.save && m(file(base.save)) != null) return { name: base.save, regionDir: path.join(root, base.save, 'region'), mtime: m(file(base.save)) }
+  let best = null
+  try { for (const d of fs.readdirSync(root)) { const t = m(file(d)); if (t != null && (!best || t > best.mtime)) best = { name: d, regionDir: path.join(root, d, 'region'), mtime: t } } } catch { return null }
+  return best
+}
+
+// Underground open space connected to the base's own cells. Returns { list, open (Set of keys), work (Set of keys of bot-worked cells), save, savedAt, chunks } or null.
+function worldCells({ base, savesDir, cells, placed, worldKeys }) {
+  let wc
+  try { wc = require('./worldcast') } catch { return null }
+  const sv = findSave(base, savesDir)
+  if (!sv) return null
+  // cells the bots worked: what they dug (the recorded cells), and what they placed underground
+  const work = new Set(), seeds = []
+  for (const c of cells.values()) {
+    if (c.kind === 'shaft' || c.kind === 'room' || c.kind === 'mobfarm' || c.src === 'recorded') seeds.push([c.x, c.y, c.z])
+    if (c.src === 'recorded') work.add(key(c.x, c.y, c.z))
+  }
+  const BOT_THING = /^(torch|wall_torch|ladder|chest|crafting_table|furnace|hopper|barrel|[a-z_]*_bed|oak_door|oak_fence_gate|oak_sign|lantern)$/
+  for (const [wn, w] of Object.entries((placed && placed.worlds) || {})) {
+    if (worldKeys.size && !worldKeys.has(wn) && wn !== 'unknown') continue
+    for (const [k, r] of Object.entries(w)) {
+      if (!BOT_THING.test(String(r[0]))) continue
+      const [x, y, z] = k.split(',').map(Number)
+      if (!inCircle(base, x, z)) continue
+      work.add(k); seeds.push([x, y, z])
+    }
+  }
+  const ck = base.id + '|' + sv.regionDir + '|' + sv.mtime + '|' + base.radius
+  let hit = SAVE_CACHE.get(ck)
+  if (!hit) {
+    SAVE_CACHE.clear()
+    let scan
+    try { scan = wc.scanBase({ regionDir: sv.regionDir, x: base.x, z: base.z, radius: base.radius }) } catch { return null }
+    hit = { scan, at: Date.now() }
+    SAVE_CACHE.set(ck, hit)
+  }
+  if (!hit.scan.chunks) return null
+  const cav = wc.cavityFrom(hit.scan, seeds, { x: base.x, z: base.z, radius: base.radius })
+  if (!cav.count) return null
+  const b = hit.scan.box, list = [], open = new Set()
+  for (let gy = 0; gy < b.H; gy++) for (let gz = 0; gz < b.D; gz++) for (let gx = 0; gx < b.W; gx++) {
+    if (!cav.cells[gx + b.W * (gz + b.D * gy)]) continue
+    const x = gx + b.x0, y = gy + b.y0, z = gz + b.z0
+    list.push([x, y, z]); open.add(key(x, y, z))
+  }
+  return { list, open, work, save: sv.name, savedAt: sv.mtime, chunks: hit.scan.chunks }
+}
+
+function buildCast({ base, sharedDir, registryFile, botDirs = [], codeDir = null, savesDir = null, now = Date.now() }) {
   const registry = registryFile ? readJson(registryFile) : null
   const placed = readJson(path.join(sharedDir, 'placed-blocks.json'))
   const cells = new Map()                 // key -> { x, y, z, kind, part, src }
@@ -235,6 +299,27 @@ function buildCast({ base, sharedDir, registryFile, botDirs = [], codeDir = null
     }
   }
 
+  // ---- the open space itself, from the world save
+  const worldInfo = worldCells({ base, savesDir, cells, placed, worldKeys })
+  if (worldInfo) {
+    const open = worldInfo.open                                   // Set of keys of the underground cavity reachable from the base
+    let dropped = 0
+    for (const [k, c] of cells) if ((c.kind === 'shaft' || c.kind === 'room' || c.kind === 'mobfarm') && !open.has(k)) { cells.delete(k); dropped++ }
+    const work = worldInfo.work
+    const near = (x, y, z) => { for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) for (let dz = -2; dz <= 2; dz++) if (work.has(key(x + dx, y + dy, z + dz))) return true; return false }
+    const tun = [], cav = []
+    for (const [x, y, z] of worldInfo.list) { if (cells.has(key(x, y, z))) continue; (near(x, y, z) ? tun : cav).push([x, y, z]) }
+    parts.push({ id: 'world-tunnels', kind: 'tunnel', label: 'Tunnels and lit caves', by: null, at: null, src: 'world', detail: 'open space within 2 blocks of a dig, torch, ladder or chest a bot placed', cells: 0 })
+    parts.push({ id: 'world-caves', kind: 'cave', label: 'Natural caves joined to the base', by: null, at: null, src: 'world', detail: 'untouched cave connected to the shaft or a room', cells: 0 })
+    claim(tun, 'tunnel', 'world-tunnels', 'world'); claim(cav, 'cave', 'world-caves', 'world')
+    if (dropped) notes.push(`${dropped} cells of the registry's shaft, rooms and mob farm design are not open in the saved world (not built yet, or the save is older than the build) and are left out.`)
+    notes.push(`The open space is read from the world save "${worldInfo.save}" as Minecraft last wrote it (${new Date(worldInfo.savedAt).toISOString().slice(0, 16).replace('T', ' ')} UTC).`)
+  }
+  // part sizes follow what is left in the cast
+  const sizes = new Map()
+  for (const c of cells.values()) sizes.set(c.part, (sizes.get(c.part) || 0) + 1)
+  for (const p of parts) p.cells = sizes.get(p.id) || 0
+
   // ---- put together
   const all = [...cells.values()]
   let truncated = false
@@ -257,7 +342,7 @@ function buildCast({ base, sharedDir, registryFile, botDirs = [], codeDir = null
     cells: flat, cellStride: 5,
     parts, markers, notes,
     stats: { cells: all.length, recorded: bySrc.recorded, derived: bySrc.derived, digsRecorded: dug.size, placedInBase: placedCount, minY: all.length ? minY : null, maxY: all.length ? maxY : null, truncated },
-    sources: { registry: !!registry, placed: !!placed, dugLog: dug.size > 0 },
+    sources: { registry: !!registry, placed: !!placed, dugLog: dug.size > 0, world: worldInfo ? { save: worldInfo.save, savedAt: worldInfo.savedAt, chunks: worldInfo.chunks, openCells: worldInfo.list.length } : null },
   }
 }
 

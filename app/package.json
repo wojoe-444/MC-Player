@@ -82,6 +82,7 @@
           "server.js",
           "progress.js",
           "basecast.js",
+          "worldcast.js",
           "public/**",
           "web/dist/**"
         ]

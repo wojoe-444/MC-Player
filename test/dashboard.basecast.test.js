@@ -3,6 +3,7 @@ const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('fs'), os = require('os'), path = require('path'), net = require('net')
 const { spawn } = require('child_process')
+process.env.BOT_WORLD_SAVES = path.join(os.tmpdir(), 'basecast-no-saves')       // never read the laptop's real saves from a test
 const bc = require('../dashboard/basecast')
 
 const REPO = path.join(__dirname, '..')
