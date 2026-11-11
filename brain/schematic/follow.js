@@ -161,7 +161,8 @@ function recipe(entry, cell, ctx) {
   const have = ctx.have
   const pick = (names) => { if (!have) return names[0]; return names.find(n => (have[n] || 0) > 0) || names[0] }
   if (entry.role === 'water') { const d = ['down', 'north', 'south', 'east', 'west', 'up'].find(against); return d ? out('water_bucket', d, { fluid: true }) : null }
-  if (entry.role === 'solid') { const item = pick([entry.block, ...FILLER].filter(n => n && B.isSolid(n))); const d = ['down', 'north', 'south', 'east', 'west', 'up'].find(against); return d ? out(item, d) : null }
+  // the entry shows stone, but any solid block is right: cobblestone first (what the bot has), stone only when it is in the bag
+  if (entry.role === 'solid') { const item = pick([...new Set([...FILLER, entry.block])].filter(n => n && B.isSolid(n))); const d = ['down', 'north', 'south', 'east', 'west', 'up'].find(against); return d ? out(item, d) : null }
   if (entry.role !== 'block') return null
   const blk = B.strip(entry.block), p = entry.props || {}
   const item = pick([blk, ...(entry.alt || []).map(B.strip)])

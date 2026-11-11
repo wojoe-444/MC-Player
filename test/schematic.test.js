@@ -16,7 +16,7 @@ test('roles: any solid, light-blocking, non-flammable cube is "solid"; wood, gla
   for (const n of ['oak_planks', 'birch_log', 'glass', 'glowstone', 'cobblestone_slab', 'cobblestone_stairs', 'sand', 'gravel', 'white_wool', 'ice', 'spawner', 'hay_block', 'slime_block', 'cobblestone_wall']) assert.notStrictEqual(B.describe(n).role, 'solid', n)
   assert.deepStrictEqual(B.describe('hopper', { facing: 'down', enabled: 'true' }), { role: 'block', block: 'hopper', props: { facing: 'down' } }, 'noise properties are dropped')
   assert.deepStrictEqual(B.describe('water', { level: '3' }), { role: 'water', block: 'water', level: '3' })
-  assert.deepStrictEqual(B.describe('minecraft:cobblestone'), { role: 'solid', block: 'cobblestone' }, 'a wall cell keeps the specific block it shows')
+  for (const n of ['cobblestone', 'deepslate', 'coal_ore', 'emerald_ore', 'dirt', 'stone_bricks']) assert.deepStrictEqual(B.describe('minecraft:' + n), { role: 'solid', block: 'stone' }, n + ': a cell we are neutral about is drawn and counted as plain stone')
   assert.deepStrictEqual(B.describeExact('cobblestone'), { role: 'block', block: 'cobblestone' }, 'an aesthetic build wants the block itself')
   assert.ok(B.matches({ role: 'solid' }, 'minecraft:deepslate') && !B.matches({ role: 'solid' }, 'oak_planks') && B.matches({ role: 'air' }, 'cave_air'))
   assert.ok(B.matches({ role: 'water', level: '0' }, 'water', { level: '0' }) && !B.matches({ role: 'water', level: '0' }, 'water', { level: '2' }))
@@ -37,10 +37,10 @@ const get = (m) => (x, y, z) => m.get(x + ',' + y + ',' + z) || null
 test('capture keeps open space, the shell and the exact pieces; deep rock is "any"; a tree outside the seeds is not the build; runs add up', () => {
   const m = world(), s = F.capture(get(m), box, { id: 't', seeds: [[3, 2, 3]], surround: 0 })
   const roles = s.palette.map(p => p.role + (p.block ? ':' + p.block : ''))
-  assert.deepStrictEqual(roles.slice().sort(), ['any', 'air', 'block:hopper', 'block:torch', 'solid:cobblestone', 'water:water', 'water:water'].sort())
+  assert.deepStrictEqual(roles.slice().sort(), ['any', 'air', 'block:hopper', 'block:torch', 'solid:stone', 'water:water', 'water:water'].sort())
   assert.ok(!roles.includes('block:oak_log'), 'the tree is not connected to the cavity')
   const cells = F.cellsOf(s); assert.strictEqual(cells.length, 9 * 5 * 7)
-  const legend = F.legend(s); assert.ok(legend.find(l => l.role === 'solid' && l.block === 'cobblestone'), 'the wall is solid and shows cobblestone')
+  const legend = F.legend(s); assert.ok(legend.find(l => l.role === 'solid' && l.block === 'stone'), 'the wall is solid and shows stone')
   assert.strictEqual(legend.find(l => l.role === 'any').cells, 9 * 5 * 7 - legend.filter(l => l.role !== 'any').reduce((n, l) => n + l.cells, 0))
   // hopper at (3,0,3): kept as exact; rock in the corner (0,0,0) touches nothing open: any
   assert.strictEqual(s.palette[cells[F.idx(s.size, 0, 0, 0)]].role, 'any')
@@ -78,11 +78,12 @@ test('the library: the captured working farm loads, its runs add up, and what it
   const lib = S.list([S.LIBRARY]); const f = lib.find(e => e.schematic.id === 'mobfarm-forever2k27'); assert.ok(f, 'mobfarm-forever2k27 is in the library')
   const s = f.schematic; assert.strictEqual(F.cellsOf(s).length, s.size[0] * s.size[1] * s.size[2])
   assert.strictEqual(s.v, 2); assert.ok(!s.sources, 'format 2 has no per-entry source counts')
-  const leg = F.legend(s).filter(l => !l.scenery); assert.ok(leg.some(l => l.role === 'solid' && l.block === 'cobblestone') && leg.some(l => l.role === 'solid' && l.block === 'stone'), 'walls are role solid, each cell names its block')
+  const leg = F.legend(s).filter(l => !l.scenery); assert.deepStrictEqual(leg.filter(l => l.role === 'solid').map(l => [l.block, l.cells]), [['stone', 1118]], 'walls are role solid and all of them show plain stone')
+  assert.ok(!s.palette.some(e => /_ore$|^cobblestone$/.test(e.block || '')), 'no stray ores or cobblestone wall cells')
   assert.ok(s.palette.every(e => e.role === 'any' || e.role === 'air' || e.block), 'every cell that is not air or any names a specific block')
   assert.ok(leg.some(l => l.label.startsWith('hopper')) && leg.some(l => l.label.startsWith('water level 0')) && leg.some(l => /trapdoor/.test(l.label)) && leg.some(l => /cobblestone_slab/.test(l.label)))
   assert.ok(!leg.some(l => /leaves|cave_vines|spruce_log/.test(l.label)), 'the trees and vines around it are not part of it')
-  assert.ok(F.legend(s).some(l => l.scenery), 'the rock and the torches around it are kept as scenery')
+  assert.ok(!F.legend(s).some(l => l.scenery), 'the terrain, chests, vines and torches that stood around it are trimmed away')
 })
 
 test('store: later directories win; ids are safe file names', () => {
@@ -134,9 +135,20 @@ test('alt: an exact entry can name the blocks accepted in its place', () => {
 })
 test('upgrade: a format 1 file becomes format 2 with a block for every wall cell', () => {
   const v1 = { v: 1, id: 'old', size: [1, 1, 1], origin: [0, 0, 0], palette: [{ role: 'any' }, { role: 'solid' }, { role: 'water', level: '0' }], rle: [1, 1], counts: { 1: 1 }, sources: { 1: { stone: 3, cobblestone: 9 } } }
-  const u = F.upgrade(v1); assert.strictEqual(u.v, 2); assert.strictEqual(u.palette[1].block, 'cobblestone'); assert.strictEqual(u.palette[2].block, 'water'); assert.ok(!u.sources)
+  const u = F.upgrade(v1); assert.strictEqual(u.v, 2); assert.strictEqual(u.palette[1].block, 'stone'); assert.strictEqual(u.palette[2].block, 'water'); assert.ok(!u.sources)
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sch-v1-')); fs.writeFileSync(path.join(dir, 'old.json'), JSON.stringify(v1))
-  assert.strictEqual(S.load([dir], 'old').palette[1].block, 'cobblestone', 'the store upgrades what it reads')
+  assert.strictEqual(S.load([dir], 'old').palette[1].block, 'stone', 'the store upgrades what it reads')
+})
+test('neutral solid cells: every wall entry is plain stone, equal entries merge, runs and counts follow, the rest is untouched', () => {
+  const s = { v: 2, id: 'n', mode: 'functional', origin: [0, 0, 0], size: [6, 1, 1], palette: [{ role: 'any' }, { role: 'solid', block: 'cobblestone' }, { role: 'block', block: 'hopper', props: { facing: 'down' } }, { role: 'solid', block: 'coal_ore' }, { role: 'solid', block: 'stone' }],
+    rle: [1, 2, 2, 1, 3, 1, 4, 2], counts: { 1: 2, 2: 1, 3: 1, 4: 2 } }
+  const u = F.neutral(s)
+  assert.deepStrictEqual(u.palette, [{ role: 'any' }, { role: 'solid', block: 'stone' }, { role: 'block', block: 'hopper', props: { facing: 'down' } }])
+  assert.deepStrictEqual(u.rle, [1, 2, 2, 1, 1, 3]); assert.deepStrictEqual(u.counts, { 1: 5, 2: 1 })
+  assert.strictEqual(F.neutral(u), u, 'an already neutral file is returned as it is')
+  assert.deepStrictEqual(Array.from(F.cellsOf(u), c => u.palette[c].role + (u.palette[c].block || '')), ['solidstone', 'solidstone', 'blockhopper', 'solidstone', 'solidstone', 'solidstone'])
+  assert.deepStrictEqual(s.palette[1], { role: 'solid', block: 'cobblestone' }, 'the input is not changed')
+
 })
 test('bill of materials: one row per block, isolatable; raw materials in cobblestone, logs and smelting', () => {
   const BOM = require('../brain/schematic/bom')
@@ -160,9 +172,9 @@ test('dashboard schematiccast: index and detail of the library schematic', () =>
   assert.ok(idx.schematics.some(s => s.id === 'mobfarm-forever2k27' && s.mode === 'functional' && s.category === 'mobfarm' && Array.isArray(s.tags)), 'the catalog groups by category (the kind when none is named)')
   const d = sc.detail(o, 'mobfarm-forever2k27')
   assert.strictEqual(d.v, 2); assert.strictEqual(F.cellsOf(d).length, d.size[0] * d.size[1] * d.size[2])
-  const cobble = d.bom.find(r => r.key === 'cobblestone'); assert.ok(cobble && cobble.cells === 926 && /solid/.test(cobble.subs))
+  const stone = d.bom.find(r => r.key === 'stone'); assert.ok(stone && stone.cells === 1118 && /solid/.test(stone.subs)); assert.ok(!d.bom.some(r => /_ore$|^cobblestone$/.test(r.key)), 'no stray ores')
   assert.ok(d.bom.every(r => r.indices.every(i => d.palette[i] && !d.palette[i].scenery)))
-  assert.ok(d.raw.lines.find(l => l.id === 'cobblestone').amount > 900 && d.raw.lines.some(l => l.id === 'smelting'))
+  assert.ok(d.raw.lines.find(l => l.id === 'cobblestone').amount > 1100 && d.raw.lines.some(l => l.id === 'smelting'), 'stone is mined as cobblestone and smelted')
   assert.strictEqual(sc.detail(o, 'nope'), null)
 })
 
