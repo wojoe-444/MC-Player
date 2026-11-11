@@ -59,3 +59,17 @@ registry with the trial-server skill). Ports 25620 (game) and 25621 (RCON), `BEN
 
 The bot's walking, digging and crafting are driven by its own 20 Hz client loop and by real-time waits in the brain, so a faster server does not make it faster: see `tools/trial/README.md`
 (`/tick sprint` gave about 300x server ticks, bot speed in real time unchanged) and the measurement at the bottom of this file.
+
+## First results (2026-11-11, baseline brain at main `64e479b`, planner off, normal difficulty, one 60-minute run per arena)
+
+Same terrain in both arenas (seed 4106, centre -32,32, 95% land); only the forced biome differs.
+
+| arena | points (of 38) | deaths | stalled | milestones (first in the bag) | notes |
+|---|---|---|---|---|---|
+| plains-1 | 12, all by minute 8 | 23, all at night (13 in night 1 from 12:42, 10 from 55:00) | 46% (16 minutes motionless at 5 HP, from 39:00) | log 0:24, table 0:42, wooden pickaxe 0:45, cobblestone 1:22, furnace 2:43, stone pickaxe 4:17, stone sword 5:20, torch 6:44, food 8:14 | no bed, coal or iron; 480 items picked up, 239 blocks mined |
+| forest-1 | 13 | 2 (one by day at 23:60, one at 51:03) | 44% | log 0:27, wooden pickaxe 1:06, table 1:09, cobblestone 1:52, stone pickaxe 2:40, stone sword 2:58, furnace 3:04, food 4:19, torch 5:23, coal 11:39 | dug to y 23 by minute 42; 140+ cobblestone and 36 torches by minute 18; no bed, no iron; 790 items picked up, 785 blocks mined |
+
+Reading: phase 1 is quick in both (stone tools within 3 to 5 minutes), then nothing. Plains falls into a night-time death loop (it respawns at the arena spawn with an empty bag); the forest bot mostly survives but
+idles for about 44% of the hour and still never reaches a bed or iron. `points` is flat for the last 50 minutes in both.
+
+One 11-minute run in plains was cut short because the bot supervisor (`run.js`) was killed from outside (exit code -1, cause unknown, not reproduced in the two full runs since); the bench now restarts a dead supervisor (up to 5 times, noted in `result.json`).

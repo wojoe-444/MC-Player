@@ -241,7 +241,14 @@ async function run(id) {
       fs.appendFileSync(out, JSON.stringify({ t: +t.toFixed(1), ...(row || { pos: null, inv: {}, deaths: null }) }) + '\n')
       info.seconds = t
       if (t - lastPrint >= 120) { lastPrint = t; const inv = row ? Object.entries(row.inv).sort((x, y) => y[1] - x[1]).slice(0, 6).map(([k, v]) => k + ' ' + v).join(', ') : '(no entity)'; log(`${runId}: t=${Math.round(t / 60)}m hp ${row && row.hp} deaths ${row && row.deaths} pos ${row && row.pos && row.pos.map(Math.round).join(',')} bag: ${inv}`) }
-      if (bot.exitCode != null) { info.notes.push('bot process exited with ' + bot.exitCode); break }
+      // the supervisor (run.js) died: restart it like the live bots' supervisor would (same bot folder, state kept); give up after 5
+      if (bot.exitCode != null) {
+        info.botRestarts = (info.botRestarts || 0) + 1
+        info.notes.push(`bot supervisor exited with ${bot.exitCode} at ${Math.round(t)} s (restart ${info.botRestarts})`)
+        log(`${runId}: ${info.notes[info.notes.length - 1]}`)
+        if (info.botRestarts > 5) break
+        bot = startBot(botDir, { name, port: PORT })
+      }
     }
     return await finish('time up')
   } catch (e) { info.notes.push(String(e.message)); log('error:', e.message); await finish('error'); throw e }

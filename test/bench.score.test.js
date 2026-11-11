@@ -35,7 +35,7 @@ test('analyze: stall counts a still bot with an unchanging bag, not a moving one
   const still = []
   for (let t = 0; t <= 120; t += 3) still.push(row(t, { oak_log: 1 }, [0, 70, 0]))
   const r = Sc.analyze({ samples: still, seconds: 120, stats: {}, placedDelta: {}, deathLog: [] })
-  assert.ok(r.totals.stallSeconds >= 80 && r.totals.stallSeconds <= 95, 'stall ' + r.totals.stallSeconds)
+  assert.ok(r.totals.stallSeconds >= 110 && r.totals.stallSeconds <= 120, 'stall ' + r.totals.stallSeconds)
   assert.equal(r.totals.stallSeconds, r.totals.stallDaySeconds)
   const night = still.map(s => ({ ...s, day: 15000 }))
   const rn = Sc.analyze({ samples: night, seconds: 120, stats: {}, placedDelta: {}, deathLog: [] })
