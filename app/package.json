@@ -81,6 +81,7 @@
         "filter": [
           "server.js",
           "progress.js",
+          "basecast.js",
           "public/**",
           "web/dist/**"
         ]
