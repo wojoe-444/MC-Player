@@ -34,6 +34,8 @@ jobs:
       - name: Install reviewer dependencies
         working-directory: reviewer
         run: npm ci --omit=dev
+      - name: Built dashboard is complete
+        run: node tools/check-dist.js
       - name: App tests
         working-directory: app
         run: npm test

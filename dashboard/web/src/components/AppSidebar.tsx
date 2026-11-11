@@ -38,7 +38,7 @@ export const GROUPS: { label: string; items: Omit<Entry, "dot" | "badge">[] }[] 
 export function AppSidebar() {
   const { connected } = useData()
   const { update, reviewer, info } = useApp()
-  const openFindings = (reviewer?.bots ?? []).reduce((n, b) => n + (b.findings?.open.length ?? 0), 0)
+  const openFindings = (reviewer?.bots ?? []).reduce((n, b) => n + (b.findings?.open?.length ?? 0), 0)
   const updateDot = updatePending(update)
   return (
     <Sidebar collapsible="icon">

@@ -25,7 +25,7 @@ function BotCard({ b }: { b: BotReview }) {
         <CardAction><Badge variant={open.some((x) => x.severity === "high") ? "destructive" : open.length ? "warning" : "success"}>{open.length ? `${open.length} open` : "Clear"}</Badge></CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {tel?.last1min && <p className="rounded-lg bg-muted/60 p-3 font-mono text-xs text-muted-foreground">{`telemetry: ${tel.last1min.jumpsPerMin} jumps/min, ${tel.last1min.blocksWalked} blocks walked, ${tel.last1min.idleSeconds}s idle in the last minute; ${tel.flags.length} detector flag(s) active`}</p>}
+        {tel?.last1min && <p className="rounded-lg bg-muted/60 p-3 font-mono text-xs text-muted-foreground">{`telemetry: ${tel.last1min.jumpsPerMin} jumps/min, ${tel.last1min.blocksWalked} blocks walked, ${tel.last1min.idleSeconds}s idle in the last minute; ${tel.flags?.length ?? 0} detector flag(s) active`}</p>}
         {f?.summary && <p className="text-sm">{f.summary}</p>}
         {open.map((x) => (
           <div key={x.title} className="flex flex-col gap-3 rounded-xl border p-4">
