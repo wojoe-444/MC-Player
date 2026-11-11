@@ -102,13 +102,16 @@ test('runDigest: one a day after 07:00 local, the question is asked once, and th
 })
 
 test('jobs and settings: each loop job is its own Task Scheduler entry; the code folder comes from the flag, the app setting, then Downloads', () => {
-  assert.deepStrictEqual(Object.values(schedule.JOBS).map(j => [j.id, j.name, j.args[0], j.minutes]), [['review', 'MC-Player Bot Reviewer', '--once', 10], ['dream', 'MC-Player Bot Dream', '--dream', 120], ['deploy', 'MC-Player Bot Deployer', '--deploy', 30], ['digest', 'MC-Player Bot Digest', '--digest', 60]])
-  assert.strictEqual(new Set(Object.values(schedule.JOBS).map(j => j.vbs)).size, 4)
+  assert.deepStrictEqual(Object.values(schedule.JOBS).map(j => [j.id, j.name, j.args[0], j.minutes]), [['review', 'MC-Player Bot Reviewer', '--once', 10], ['dream', 'MC-Player Bot Dream', '--dream', 120], ['deploy', 'MC-Player Bot Deployer', '--deploy', 30], ['fix', 'MC-Player Bot Fixer', '--fix', 180], ['digest', 'MC-Player Bot Digest', '--digest', 60]])
+  assert.strictEqual(new Set(Object.values(schedule.JOBS).map(j => j.vbs)).size, 5)
   const home = path.join(tmp(), 'h')
   assert.strictEqual(resolveConfig({ argv: [], env: {}, home, exists: () => false }).codeDir, path.join(home, 'Downloads', 'MC-Player-live'))
   assert.strictEqual(resolveConfig({ argv: ['--code', '/c'], env: { BOT_CODE_DIR: '/e' }, home, exists: () => false }).codeDir, '/c')
-  const appCfg = path.join(home, '.config', 'Bot Dashboard', 'config.json'); fs.mkdirSync(path.dirname(appCfg), { recursive: true }); fs.writeFileSync(appCfg, JSON.stringify({ loop: { codeDir: '/from-app' } }))
+  const appCfg = path.join(home, '.config', 'Bot Dashboard', 'config.json'); fs.mkdirSync(path.dirname(appCfg), { recursive: true }); fs.writeFileSync(appCfg, JSON.stringify({ loop: { codeDir: '/from-app', fixMode: 'pr' } }))
   assert.strictEqual(resolveConfig({ argv: [], env: {}, home }).codeDir, '/from-app')
+  // the fixer's mode: the flag, the app setting, else merge (the plan Walter approved: open the pull request and merge it when every check passes)
+  assert.strictEqual(resolveConfig({ argv: [], env: {}, home }).fixMode, 'pr'); assert.strictEqual(resolveConfig({ argv: ['--fix-mode', 'local'], env: {}, home }).fixMode, 'local')
+  assert.strictEqual(resolveConfig({ argv: [], env: {}, home: path.join(home, 'none'), exists: () => false }).fixMode, 'merge')
 })
 
 test('the bot supervisor restarts the bot when the deployer leaves restart-needed.json, and keeps the request as restart-done.json', async () => {

@@ -19,6 +19,19 @@ function codeRow(code) {
   return el('div', {}, el('div', { className: 'row', style: 'margin-top:8px' }, el('label', {}, 'Code folder the live bots run from: ', dir), save), el('div', { className: 'muted', textContent: state }))
 }
 
+// the fixer's own settings and state: what it does with a checked fix, whether it could reach GitHub last time, where its working copy is
+const FIX_MODES = [['merge', 'open the pull request and merge it when every check passes'], ['pr', 'open the pull request, I merge it'], ['local', 'keep the fix on this computer']]
+function fixRow(fix) {
+  const sel = el('select', {}, ...FIX_MODES.map(([v, t]) => el('option', { value: v, textContent: t, selected: fix.mode === v })))
+  sel.onchange = async () => { const x = await window.botApp.loopFixMode(sel.value); if (!x.ok) alert('Could not save: ' + x.error); if (x.state) render(x.state) }
+  const gh = fix.gh ? (fix.gh.ok ? 'GitHub CLI was logged in on the last run.' : `GitHub: ${fix.gh.note}`) : 'It has not tried to reach GitHub yet. It needs the GitHub CLI logged in once (gh auth login, then gh auth setup-git).'
+  const last = fix.last ? `Last run ${when(fix.at)}: ${fix.last.note || fix.last.outcome}` : 'No run yet.'
+  return el('div', {}, el('div', { className: 'row', style: 'margin-top:8px' }, el('label', {}, 'With a checked fix: ', sel)),
+    el('div', { className: 'muted', textContent: `${last} ${gh}` }),
+    el('div', { className: 'muted', textContent: `Its copy of the code: ${fix.workDir}${fix.hasClone ? '' : ' (cloned from GitHub on the first run)'}. Session logs are beside it in fixer/sessions.` }))
+}
+const fixLine = (f) => !f ? '' : f.ready ? ` · fixer: checked fix waits on ${f.ready.branch} (${f.ready.why})` : f.waiting ? ` · fixer: waits on ${f.waiting.on === 'merge' ? 'a merge' : f.waiting.on === 'deploy' ? 'the deployer' : 'the deploy verdict'}` : f.attempts ? ` · fixer: ${f.attempts} failed attempt(s)` : ''
+
 function jobCard(j, s) {
   const t = j.task || {}
   const every = el('input', { type: 'number', min: 10, max: j.maxMinutes, value: j.minutes })
@@ -35,13 +48,13 @@ function jobCard(j, s) {
       : t.unsupported ? 'Task Scheduler is Windows-only; "Run now" still works.'
         : `Not installed. Install creates one Windows Task Scheduler job named "${j.taskName}" for your user account (no admin, no password).` }),
     el('div', { className: 'muted', textContent: j.about || '' }),
-    j.id === 'deploy' && s.code ? codeRow(s.code) : '')
+    j.id === 'deploy' && s.code ? codeRow(s.code) : '', j.id === 'fix' && s.fix ? fixRow(s.fix) : '')
 }
 
-function orderCard(o) {
+function orderCard(o, fix) {
   const open = o.status === 'open' || o.status === 'parked'
   const kids = [el('div', {}, el('span', { className: 'pill ' + (open ? 'cost' : 'closed'), textContent: open ? mins(o.costMin) : o.status }), el('b', { textContent: o.title }))]
-  kids.push(el('div', { className: 'muted', textContent: `${o.key} · ${o.kind} · ${o.status} · opened ${when(o.openedAt)} · seen in ${o.seenDreams} check(s)${o.reopens ? ` · reopened ${o.reopens}x` : ''}${o.pr ? ` · PR #${o.pr}` : ''}${o.closed ? ` · ${o.closed.reason}` : ''}` }))
+  kids.push(el('div', { className: 'muted', textContent: `${o.key} · ${o.kind} · ${o.status} · opened ${when(o.openedAt)} · seen in ${o.seenDreams} check(s)${o.reopens ? ` · reopened ${o.reopens}x` : ''}${o.pr ? ` · PR #${o.pr}` : ''}${o.closed ? ` · ${o.closed.reason}` : ''}${fixLine(fix)}` }))
   if (o.problem) kids.push(el('pre', { textContent: o.problem }))
   const lines = Object.entries(o.bots || {}).map(([b, n]) => `${b}: ${n.line} (${mins(n.costMin)} lost)` + (n.evidence || []).map(e => `\n    ${e}`).join(''))
   if (o.suggestion) lines.push(`Where to look: ${o.suggestion}`)
@@ -83,7 +96,7 @@ function render(s) {
     ? el('div', { className: 'card' }, el('details', { open: true }, el('summary', { textContent: `Digest of ${s.digest.date}` }), el('pre', { className: 'file', textContent: s.digest.text })))
     : el('div', { className: 'muted', textContent: 'No digest yet. Install the digest job below, or press its Run now.' }))
   const open = s.orders.filter(o => o.status === 'open' || o.status === 'parked'), done = s.orders.filter(o => !(o.status === 'open' || o.status === 'parked')).slice(0, 8)
-  document.getElementById('orders').replaceChildren(...(open.length || done.length ? [...open, ...done].map(orderCard)
+  document.getElementById('orders').replaceChildren(...(open.length || done.length ? [...open, ...done].map(o => orderCard(o, s.fix && s.fix.orders ? s.fix.orders[o.key] : null))
     : [el('div', { className: 'muted', textContent: 'No work orders yet. The dream job opens one when the journal shows the same fault again and again.' })]))
   document.getElementById('bots').replaceChildren(...s.bots.map(botCard))
   const rows = s.runs.map(r => el('tr', {}, el('td', { textContent: when(r.at) }), el('td', { textContent: r.job }), el('td', { className: r.ok === false ? 'err' : '', textContent: r.ok === false ? 'failed' : 'ok' }),

@@ -29,7 +29,7 @@ function parseArgs(argv) {
     const t = argv[i]
     if (!t.startsWith('--')) continue
     const k = t.slice(2)
-    if (['ozo', 'smeo', 'out', 'loop', 'code', 'model', 'effort', 'minutes', 'claude-path'].includes(k)) a.opts[k] = argv[++i]
+    if (['ozo', 'smeo', 'out', 'loop', 'code', 'model', 'effort', 'minutes', 'claude-path', 'only', 'fix-mode', 'fix-repo'].includes(k)) a.opts[k] = argv[++i]
     else a.flags.add(k)
   }
   return a
@@ -57,6 +57,10 @@ function resolveConfig({ argv = [], env = process.env, home = os.homedir(), exis
     loopDir: args.opts.loop || loopDirOf(env, home, exists),
     // the clone the live bots run from: the deployer keeps it on main (tools/deployer.js). Set on the app's Memory loop tab (loop.codeDir).
     codeDir: args.opts.code || env.BOT_CODE_DIR || (app && app.loop && app.loop.codeDir) || path.join(home, 'Downloads', 'MC-Player-live'),
+    // the fixer (lib/fixer.js): merge = open the pull request and merge it when every check passes, pr = open it and leave the merge to a person,
+    // local = keep the checked fix on its branch in the working copy. Set on the app's Memory loop tab (loop.fixMode).
+    fixMode: args.opts['fix-mode'] || env.FIXER_MODE || (app && app.loop && app.loop.fixMode) || 'merge',
+    fixRepo: args.opts['fix-repo'] || env.FIXER_REPO || (app && app.loop && app.loop.fixRepo) || undefined,
     model: args.opts.model || env.REVIEWER_MODEL || 'claude-haiku-5-5',
     effort: args.opts.effort || env.REVIEWER_EFFORT || 'xhigh',
     timeoutMs: Number(env.REVIEWER_TIMEOUT_MS) || 8 * 60000,

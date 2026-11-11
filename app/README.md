@@ -12,7 +12,7 @@ npm start          # or double-click start-app.bat
 
 Needs Node 18+ and, for the reviews, the `claude` CLI on PATH (run `claude` once to log in).
 
-On launch the app starts `dashboard/server.js` on port 8765 (or attaches if a dashboard is already running there) and opens it in a window. The window has a tab bar across the top: **Dashboard**, **Claude reviews**, **Memory loop** and **Settings** (a dot on Settings means an update is available). Ctrl+1/2/3/4 and the App menu switch tabs too. The Memory loop tab installs and removes the Task Scheduler entries of the dream, deployer and digest jobs, runs each on demand, lets you set the code folder the live bots run from, and shows the day's digest, the ranked work orders, each bot's memory file with what the last check changed, and one line per run of every loop job. Its files stay in the app's settings folder, under `loop`.
+On launch the app starts `dashboard/server.js` on port 8765 (or attaches if a dashboard is already running there) and opens it in a window. The window has a tab bar across the top: **Dashboard**, **Claude reviews**, **Memory loop** and **Settings** (a dot on Settings means an update is available). Ctrl+1/2/3/4 and the App menu switch tabs too. The Memory loop tab installs and removes the Task Scheduler entries of the dream, fixer, deployer and digest jobs, runs each on demand, lets you set the code folder the live bots run from and what the fixer does with a checked fix (merge it, open the pull request only, or keep it on this computer), and shows the day's digest, the ranked work orders, each bot's memory file with what the last check changed, and one line per run of every loop job. Its files stay in the app's settings folder, under `loop`.
 
 ## Install as a normal Windows app
 

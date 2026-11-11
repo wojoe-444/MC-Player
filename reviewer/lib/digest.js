@@ -47,7 +47,7 @@ function buildDigest({ now = Date.now(), bots = [], orders: all = [], ledger = [
   if (open.length > 5) L.push(`- and ${open.length - 5} more`)
   const ev = ledger.filter(l => Date.parse(l.at) >= since)
   const names = (kind) => [...new Set(ev.filter(l => l.ev === kind && l.order).map(l => l.order))]
-  const moved = [['opened', 'Opened'], ['fixed', 'Fixed'], ['reopened', 'Came back after a fix'], ['closed', 'Went quiet'], ['parked', 'Parked']].map(([k, label]) => [label, names(k)]).filter(([, n]) => n.length)
+  const moved = [['opened', 'Opened'], ['pr', 'Pull request from the fixer'], ['ready', 'Checked fix that could not be pushed'], ['fixed', 'Fixed'], ['reopened', 'Came back after a fix'], ['closed', 'Went quiet'], ['parked', 'Parked']].map(([k, label]) => [label, names(k)]).filter(([, n]) => n.length)
   if (moved.length) L.push('', ...moved.map(([label, n]) => `- ${label}: ${n.join(', ')}`))
   L.push('')
 

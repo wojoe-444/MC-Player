@@ -177,9 +177,14 @@ test('memory loop tab: jobs, ranked work orders, each bot\'s memory and last che
   lib.runs.append({ loopDir }, 'dream', { ok: true, summary: 'OzoGo444: 2 calls' }, Date.parse('2026-11-10T22:56:00Z'))
   const asked = []
   const s = await loopState({ lib, loopDir, bots: [{ id: 'ozo', name: 'OzoGo444', dir: ozo }, { id: 'smeo', name: 'Smeo444', dir: path.join(root, 'none') }], status: async (j) => { asked.push(j.name); return { installed: j.id === 'review' } }, running: { dream: true } })
-  assert.strictEqual(s.available, true); assert.deepStrictEqual(asked, ['MC-Player Bot Dream', 'MC-Player Bot Deployer', 'MC-Player Bot Digest', 'MC-Player Bot Reviewer'])
-  assert.deepStrictEqual(s.jobs.map(j => [j.id, j.taskName, j.minutes, j.running, j.task.installed]), [['dream', 'MC-Player Bot Dream', 120, true, false], ['deploy', 'MC-Player Bot Deployer', 30, false, false], ['digest', 'MC-Player Bot Digest', 60, false, false]])
-  assert.deepStrictEqual(JOB_IDS, ['dream', 'deploy', 'digest']); assert.ok(s.jobs.every(j => j.about))
+  assert.strictEqual(s.available, true); assert.deepStrictEqual(asked, ['MC-Player Bot Dream', 'MC-Player Bot Fixer', 'MC-Player Bot Deployer', 'MC-Player Bot Digest', 'MC-Player Bot Reviewer'])
+  assert.deepStrictEqual(s.jobs.map(j => [j.id, j.taskName, j.minutes, j.running, j.task.installed]), [['dream', 'MC-Player Bot Dream', 120, true, false], ['fix', 'MC-Player Bot Fixer', 180, false, false], ['deploy', 'MC-Player Bot Deployer', 30, false, false], ['digest', 'MC-Player Bot Digest', 60, false, false]])
+  assert.deepStrictEqual(JOB_IDS, ['dream', 'fix', 'deploy', 'digest']); assert.ok(s.jobs.every(j => j.about))
+  // the fixer: merge mode unless set, no clone yet, and where each open order stands with it
+  assert.deepStrictEqual([s.fix.mode, s.fix.hasClone, s.fix.gh, s.fix.orders['step-b'].attempts], ['merge', false, null, 0]); assert.ok(s.fix.workDir.startsWith(loopDir))
+  lib.orders.record(loopDir, 'step-b', 'pr', { pr: 300, merged: false })
+  const s3 = await loopState({ lib, loopDir, fixMode: 'pr', bots: [], status: async () => ({ installed: false }) })
+  assert.deepStrictEqual([s3.fix.mode, s3.fix.orders['step-b'].waiting.on, s3.fix.orders['step-b'].waiting.pr], ['pr', 'merge', 300])
   assert.deepStrictEqual(s.code, { dir: null, isClone: false, hasDeployer: false, last: [] }); assert.strictEqual(s.digest, null)
   // with a code folder and a digest on disk
   const code = path.join(root, 'code'); fs.mkdirSync(path.join(code, '.git'), { recursive: true }); fs.mkdirSync(path.join(code, 'tools')); fs.writeFileSync(path.join(code, 'tools', 'deployer.js'), ''); fs.writeFileSync(path.join(code, 'deploys.jsonl'), JSON.stringify({ t: 1, event: 'deploy', to: 'abc' }) + '\n')

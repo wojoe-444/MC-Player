@@ -120,13 +120,14 @@ const loopBots = () => { const d = config.data.dashboard; return [{ id: 'ozo', n
 const loopDir = () => loopLib.config.loopDirOf()                      // the same folder the scheduled job resolves: beside this app's settings
 const loopRunning = {}
 const codeDir = () => (config.data.loop && config.data.loop.codeDir) || loopLib.config.resolveConfig({}).codeDir
-const getLoopState = () => loopState({ lib: loopLib, loopDir: loopLib ? loopDir() : null, codeDir: loopLib ? codeDir() : null, bots: loopBots(), status: (job) => loopLib.schedule.status(undefined, job), running: loopRunning })
+const fixMode = () => (config.data.loop && config.data.loop.fixMode) || 'merge'
+const getLoopState = () => loopState({ lib: loopLib, loopDir: loopLib ? loopDir() : null, codeDir: loopLib ? codeDir() : null, fixMode: fixMode(), bots: loopBots(), status: (job) => loopLib.schedule.status(undefined, job), running: loopRunning })
 function runLoopJob(id) {
   if (!loopLib || !JOB_IDS.includes(id) || loopRunning[id]) return false
   loopRunning[id] = true
   const d = config.data.dashboard
   const child = spawn(process.execPath, [path.join(REVIEWER_DIR, 'run.js'), ...loopLib.schedule.JOBS[id].args, '--force'], {
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', BOT_OZO_DIR: d.ozoDir, BOT_SMEO_DIR: d.smeoDir, LOOP_DIR: loopDir(), BOT_CODE_DIR: codeDir() }, windowsHide: true, stdio: 'ignore',
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', BOT_OZO_DIR: d.ozoDir, BOT_SMEO_DIR: d.smeoDir, LOOP_DIR: loopDir(), BOT_CODE_DIR: codeDir(), FIXER_MODE: fixMode() }, windowsHide: true, stdio: 'ignore',
   })
   const done = () => { loopRunning[id] = false; getLoopState().then(s => sendTo('loop', 'loop', s)) }
   child.once('exit', done); child.once('error', done)
@@ -205,6 +206,11 @@ app.whenReady().then(async () => {
     const v = String(dir || '').trim()
     if (v && !fs.existsSync(v)) return { ok: false, error: 'that folder does not exist', state: await getLoopState() }
     config.set('loop.codeDir', v || undefined)
+    return { ok: true, state: await getLoopState() }
+  })
+  ipcMain.handle('loop:fixMode', async (_e, mode) => {
+    if (!['merge', 'pr', 'local'].includes(String(mode))) return { ok: false, error: 'unknown mode', state: await getLoopState() }
+    config.set('loop.fixMode', String(mode))
     return { ok: true, state: await getLoopState() }
   })
   ipcMain.handle('loop:uninstall', async (_e, id) => {
