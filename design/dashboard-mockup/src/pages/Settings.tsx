@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { PageHeader } from "@/components/common"
+import { AppearanceCard } from "@/components/ThemePicker"
 import { useSim, type UpdateState } from "@/sim"
 
 const when = (iso?: string) => (iso ? new Date(iso).toLocaleString() : "")
@@ -30,7 +31,7 @@ export function Settings() {
   return (
     <>
       <PageHeader title="Settings" description={`Settings and reviews are stored in ${info.dataDir}. Dashboard: ${info.dashboardUrl}`} />
-      <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,40rem)]">
+      <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,40rem)_minmax(0,1fr)]">
         <Card>
           <CardHeader>
             <CardTitle>Updates</CardTitle>
@@ -49,6 +50,7 @@ export function Settings() {
             {u.notes && u.status === "available" && <pre className="max-h-40 overflow-auto rounded-lg border bg-muted/40 p-3 font-sans text-xs whitespace-pre-wrap text-muted-foreground">{u.notes}</pre>}
           </CardContent>
         </Card>
+        <AppearanceCard />
       </section>
     </>
   )

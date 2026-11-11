@@ -1,4 +1,3 @@
-import { useState } from "react"
 import { Route, Routes, useLocation } from "react-router-dom"
 import { MoonIcon, SunIcon } from "lucide-react"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
@@ -17,6 +16,7 @@ import { Settings } from "@/pages/Settings"
 import { useFresh } from "@/components/BotParts"
 import { Badge } from "@/components/ui/badge"
 import { BOT_IDS } from "@/types"
+import { ThemeProvider, ThemeSelect, useTheme } from "@/components/ThemePicker"
 
 const PER_BOT = ["/progress", "/live", "/inventory", "/replay", "/behavior", "/structure", "/memory"]
 
@@ -36,17 +36,11 @@ function Pill({ id }: { id: "ozo" | "smeo" }) {
 }
 
 function Shell() {
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"))
+  const { dark, setDark } = useTheme()
   const { pathname } = useLocation()
   const { bot, setBot } = useBotSelection()
   const group = GROUPS.find((g) => g.items.some((i) => i.to === pathname))
   const page = group?.items.find((i) => i.to === pathname)
-  const toggle = () => {
-    const next = !dark
-    document.documentElement.classList.toggle("dark", next)
-    localStorage.setItem("mock-theme", next ? "dark" : "light")
-    setDark(next)
-  }
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -68,7 +62,8 @@ function Shell() {
             </ToggleGroup>
           )}
           <BotStatusPills />
-          <Button variant="outline" size="icon" onClick={toggle} aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}>{dark ? <SunIcon /> : <MoonIcon />}</Button>
+          <ThemeSelect />
+          <Button variant="outline" size="icon" onClick={() => setDark(!dark)} aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}>{dark ? <SunIcon /> : <MoonIcon />}</Button>
         </header>
         <main className="mx-auto flex w-full min-w-0 max-w-[96rem] flex-col gap-8 p-6 lg:p-8">
           <Routes>
@@ -94,6 +89,7 @@ function Shell() {
 export default function App() {
   return (
     <TooltipProvider>
+      <ThemeProvider>
       <DashboardProvider>
         <BotSelectionProvider>
           <SimProvider>
@@ -101,6 +97,7 @@ export default function App() {
           </SimProvider>
         </BotSelectionProvider>
       </DashboardProvider>
+      </ThemeProvider>
     </TooltipProvider>
   )
 }
