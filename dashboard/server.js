@@ -396,6 +396,7 @@ function progress() {
 // Bases page: the ant-farm cast of a base (dashboard/basecast.js). The base list and the dug-block log live next to the registry in bot-shared/.
 const basecast = require('./basecast');
 const schematiccast = require('./schematiccast');
+const arenacast = require('./arenacast');
 const castCache = new Map();
 function castOpts() { return { sharedDir: path.dirname(REGISTRY), registryFile: REGISTRY, botDirs: Object.values(BOTS), codeDir: CODE }; }
 // The schematic agent (dashboard/schematicagent.js): its queue lives in bot-shared/schematic-agent, shared with the bots. Finished requests drop the catalog caches so the new
@@ -478,6 +479,10 @@ http.createServer((req, res) => {
     const cast = castCached('base:' + sm[1], () => basecast.baseCast(castOpts(), sm[1]));
     return cast ? send(res, 200, JSON.stringify(cast), 'application/json') : send(res, 404, 'no such base');
   }
+  // speedrun bench (tools/bench): test arenas, their previews, scored runs. Read-only.
+  if (p === '/api/arenas') return send(res, 200, JSON.stringify(arenacast.index(CODE)), 'application/json');
+  if ((sm = p.match(/^\/api\/arenas\/([\w.-]+)\/preview$/))) { const pv = arenacast.preview(CODE, sm[1]); return pv ? send(res, 200, JSON.stringify(pv), 'application/json') : send(res, 404, 'no preview'); }
+  if ((sm = p.match(/^\/api\/arena-runs\/([\w.-]+)$/))) { const r = arenacast.run(CODE, sm[1]); return r ? send(res, 200, JSON.stringify(r), 'application/json') : send(res, 404, 'no such run'); }
   if (p === '/api/schematics') return send(res, 200, JSON.stringify(castCached('schematics', () => schematiccast.index(castOpts()))), 'application/json');
   if ((sm = p.match(/^\/api\/schematics\/([\w.-]+)$/))) {
     const variant = u.searchParams.get('variant') || '';

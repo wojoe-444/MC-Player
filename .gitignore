@@ -69,3 +69,6 @@ Thumbs.db
 # throwaway trial server (jar, world, logs)
 .trial-server/
 tools/scenarios/results/
+
+# bench worlds, snapshots, runs (rebuildable with tools/bench/bench.js make)
+.bench/

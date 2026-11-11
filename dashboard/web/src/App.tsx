@@ -13,6 +13,7 @@ import { DashboardProvider, useData } from "@/DashboardContext"
 import { AppProvider, useApp } from "@/botapp"
 import { Behavior, Dashboard, Inventory, Live, Logs, Memory, Progress, Replay, Structure } from "@/pages/Monitor"
 import { Loop } from "@/pages/Loop"
+import { Arenas } from "@/pages/Arenas"
 import { Reviews } from "@/pages/Reviews"
 import { Settings } from "@/pages/Settings"
 import { useFresh } from "@/components/BotParts"
@@ -95,6 +96,7 @@ function Shell() {
             <Route path="/progress" element={<Progress />} />
             <Route path="/bases" element={<Suspense fallback={<BasesFallback />}><Bases /></Suspense>} />
             <Route path="/schematics" element={<Suspense fallback={<BasesFallback />}><Schematics /></Suspense>} />
+            <Route path="/arenas" element={<Arenas />} />
             <Route path="/logs" element={<Logs />} />
             <Route path="/live" element={<Live />} />
             <Route path="/inventory" element={<Inventory />} />
