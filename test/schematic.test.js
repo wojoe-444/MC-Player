@@ -157,7 +157,7 @@ test('dashboard schematiccast: index and detail of the library schematic', () =>
   const sc = require('../dashboard/schematiccast')
   const o = { sharedDir: path.join(os.tmpdir(), 'nonexistent-shared'), botDirs: [] }
   const idx = sc.index(o)
-  assert.ok(idx.schematics.some(s => s.id === 'mobfarm-forever2k27' && s.mode === 'functional'))
+  assert.ok(idx.schematics.some(s => s.id === 'mobfarm-forever2k27' && s.mode === 'functional' && s.category === 'mobfarm' && Array.isArray(s.tags)), 'the catalog groups by category (the kind when none is named)')
   const d = sc.detail(o, 'mobfarm-forever2k27')
   assert.strictEqual(d.v, 2); assert.strictEqual(F.cellsOf(d).length, d.size[0] * d.size[1] * d.size[2])
   const cobble = d.bom.find(r => r.key === 'cobblestone'); assert.ok(cobble && cobble.cells === 926 && /solid/.test(cobble.subs))

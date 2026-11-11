@@ -8,7 +8,8 @@ const BOM = require('../brain/schematic/bom')
 function dirsOf({ sharedDir, botDirs = [] }) {
   return S.dirsFor({ sharedDir }).concat(botDirs.map(b => path.join(b.dir || b, 'brain', 'state', 'schematics')))
 }
-const summary = (s) => ({ id: s.id, name: s.name, kind: s.kind, mode: s.mode || 'functional', purpose: s.purpose || '', size: s.size, origin: s.origin, world: (s.source && s.source.world) || null, capturedAt: (s.source && s.source.capturedAt) || null, by: (s.source && s.source.by) || null })
+// `category` (optional on a schematic) groups the catalog; without one the kind does. `tags` (optional) are searchable.
+const summary = (s) => ({ id: s.id, name: s.name, kind: s.kind, category: s.category || s.kind || 'build', tags: Array.isArray(s.tags) ? s.tags.map(String) : [], mode: s.mode || 'functional', purpose: s.purpose || '', size: s.size, origin: s.origin, world: (s.source && s.source.world) || null, capturedAt: (s.source && s.source.capturedAt) || null, by: (s.source && s.source.by) || null })
 function index(opts) {
   return { generatedAt: new Date().toISOString(), schematics: S.list(dirsOf(opts)).map(({ schematic }) => summary(schematic)) }
 }
