@@ -28,6 +28,7 @@ Every event has `at` (ISO time, UTC) and `k` (kind). `day` is the in-game day wh
 | `flag` | `kind`, `sev`, `msg`, `id`, `data` | `telemetry/flags.jsonl` (the raw excerpt stays there) | the first high flag of a kind in six hours |
 | `items` | `items: { name: count }`, one event per 10 minutes | `acquired.jsonl` | |
 | `first` | `what` (`item` or `step`), `id` | the first time this bot got that item or ran that step | always |
+| `trample` | `pos`, `by` (`bot` or `unknown`), `how` (`jump`, `drop`, `hop`, `none`), `dist`, `fall`, `space`, `step`, `task`, `held`, `ledger` | `telemetry`: a farmland block within 4 blocks of the bot's feet became dirt, and the ledger shows the bot did not dig, hoe or build on it | `by` is `bot`: the bot jumped, dropped or hopped onto it just before |
 | `gate` | `rule`, `packet`, `blocked`, `n`, `why`, `owner`, `site` | `gate-log.json` | a packet was blocked |
 | `commit` | `commit`, `subject`, `same` (a restart on the same code) | `runlog/commits.jsonl` | |
 | `registry` | `added`, `removed` | the shared `registry.json` | always |
@@ -40,7 +41,7 @@ Another module can add an event with `bot._journal.add(kind, fields, { sal })`.
 
 ## Rollup
 
-`steps[id]`: `runs`, `minutes`, `ok`, `fail`, `timeout`, `other`, `alarms`, `stalledMin`. `alarms`: raised, cleared, stalled minutes, worst fix level, by type. `flags` by kind and `flagsHigh`. `deaths`, `items`, `firsts`, `gate`, `commits` (distinct), `starts`, `chat`, `reflexes`, `notes`. `salient`: up to 80 one-line summaries. `gameDays[day]`: the same in brief, per in-game day.
+`steps[id]`: `runs`, `minutes`, `ok`, `fail`, `timeout`, `other`, `alarms`, `stalledMin`. `alarms`: raised, cleared, stalled minutes, worst fix level, by type. `flags` by kind and `flagsHigh`. `trampled`: `n`, `byHow`, `bySpace`, `byStep`, `last` (only those where `by` is `bot`). `deaths`, `items`, `firsts`, `gate`, `commits` (distinct), `starts`, `chat`, `reflexes`, `notes`. `salient`: up to 80 one-line summaries. `gameDays[day]`: the same in brief, per in-game day.
 
 ## Reading it
 

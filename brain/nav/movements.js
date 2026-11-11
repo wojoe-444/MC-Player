@@ -5,6 +5,8 @@
 //   - closed hand-operable doors/gates are planned as passable (the DoorTender opens them) but only along their axis
 //   - a closed trapdoor right above the top of a ladder climb is planned as a hatch (descending through one is NOT planned:
 //     in the physics engine a bot dropping into a hatch shaft bobs against the trapdoor panel instead of sliding down)
+//   - farmland is not landed on: a drop or a parkour jump that ends on farmland costs `farmlandDropCost` extra, because in vanilla any landing with a fall
+//     of more than half a block can turn it back into dirt (Walter 2026-11-11: "a bot lands on farmland and turns it back into regular dirt")
 // configure() patches the instance in place and returns { restore(), index, ... } so tests (and stop()) can undo it.
 const { Vec3 } = require('vec3')
 const B = require('./blocks')
@@ -14,6 +16,7 @@ const KEY = (x, y, z) => `${x},${y},${z}`
 function configure(bot, mv, opts = {}) {
   const reg = bot.registry
   const maxFall = opts.maxFall ?? 3
+  const farmlandDropCost = opts.farmlandDropCost ?? B.FARMLAND_LANDING_COST
   const idsOf = (names) => names.map(n => reg.blocksByName[n] && reg.blocksByName[n].id).filter(id => id !== undefined)
   const restore = []
   // patch(obj, 'name', (orig) => replacement): `orig` is whatever the instance had (the stock method, or an earlier override such as join.js's)
@@ -59,6 +62,8 @@ function configure(bot, mv, opts = {}) {
       return doorCells.size
     }
   }
+
+  const stats = { farmlandDropsPriced: 0 }
 
   // ---- hazard proximity costs (cached; cleared whenever the world changes) ----
   let costCache = new Map()
@@ -147,9 +152,20 @@ function configure(bot, mv, opts = {}) {
     const b = bot.blockAt(new Vec3(Math.floor(n.x), Math.floor(n.y), Math.floor(n.z)))
     return !b || b.liquid || (b.name || '').includes('water') || trapdoorIds.has(b.type)   // swimming up out of water, or up through a hatch above the ladder, is not this
   }
+  // A move that ends on farmland through the air (a drop, or a parkour jump over a gap) lands with a fall of 1 or more blocks. That is not forbidden, since a
+  // farm with only one way in must still be enterable, but it costs more than a long detour, so the planner walks onto farmland from level ground instead.
+  const farmlandId = reg.blocksByName.farmland && reg.blocksByName.farmland.id
+  const landsHardOnFarmland = (node, n) => {
+    if (farmlandId === undefined) return false
+    if (!(n.y < node.y || Math.max(Math.abs(n.x - node.x), Math.abs(n.z - node.z)) >= 2)) return false
+    const f = bot.blockAt(new Vec3(n.x, n.y - 1, n.z))
+    return !!f && f.type === farmlandId
+  }
   patch(mv, 'getNeighbors', (orig) => function (node) {
     const all = orig.call(mv, node)
-    return all.filter(n => noAirRise(node, n) && (!doorCells.size || doorOk(node, n)))
+    const out = all.filter(n => noAirRise(node, n) && (!doorCells.size || doorOk(node, n)))
+    if (farmlandDropCost > 0) for (const n of out) if (landsHardOnFarmland(node, n)) { n.cost += farmlandDropCost; stats.farmlandDropsPriced++ }
+    return out
   })
 
   // Hatch contexts for the two vertical moves.
@@ -170,7 +186,7 @@ function configure(bot, mv, opts = {}) {
   })
 
   return {
-    index, nearCost, doorCells,
+    index, nearCost, doorCells, stats,
     clearCaches() { costCache.clear() },
     restore() { while (restore.length) { try { restore.pop()() } catch { /* ignore */ } } }
   }

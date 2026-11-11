@@ -115,6 +115,50 @@ module.exports = function register(api) {
     if (m.event === 'failed') addEvent({ k: 'fail', t: now(), what: 'taskFailed', note: m.task.name })
   }
 
+  // ---- farmland turned to dirt near the bot (Walter 2026-11-11: a bot that lands on farmland turns it back into dirt) ----
+  // Vanilla does it for a landing after a fall of more than half a block (a jump is ~1.25), and for a solid block placed on top. The ledger (brain/ledger) says whether
+  // the bot itself dug, tilled or built on that cell a moment ago, which is not a trample. What is left within FARM_NEAR blocks of the feet becomes a `trample` event for the
+  // detector (farmland_trampled) and a salient journal event for the memory loop; `by` is 'bot' when the bot was airborne, jumped or dropped just before and stands on it.
+  const FARM_NEAR = 4, FARM_ON = 1.3, FARM_AIR_MS = 1500, trampleSeen = new Map()
+  let trampleStats = { bot: 0, unknown: 0, ours: 0, covered: 0 }
+  function recentIntent(L, kind, x, y, z) {
+    try { const it = L && L._tick && L._tick.intents && L._tick.intents(); const v = it && it.get(`${kind}:${x},${y},${z}`); return !!v && now() - v.t < 6000 } catch { return false }
+  }
+  function onFarmUpdate(oldB, newB) {
+    if (!oldB || !newB || oldB.name !== 'farmland' || newB.name !== 'dirt' || !newB.position) return
+    const p = pos(); if (!p) return
+    const { x, y, z } = newB.position, t = now()
+    const dh = Math.hypot(p.x - (x + 0.5), p.z - (z + 0.5)), dy = p.y - (y + 1)
+    if (dh > FARM_NEAR || Math.abs(dy) > 3) return
+    const L = bot._ledger
+    // the bot's own work on that cell: digging it, hoeing it, placing a block on it (a solid block on farmland turns it to dirt too)
+    if (recentIntent(L, 'dig', x, y, z) || recentIntent(L, 'place', x, y, z) || recentIntent(L, 'place', x, y + 1, z)) { trampleStats.ours++; return }
+    try { const a = L && L.at && L.at({ x, y: y + 1, z }); if (a && a.op === 'p' && a.by === bot.username && t - a.t < 6000) { trampleStats.ours++; return } } catch {}
+    try { const up = bot.blockAt(newB.position.offset(0, 1, 0)); if (up && up.boundingBox === 'block') { trampleStats.covered++; return } } catch {}      // something solid sits on it now
+    const key = `${x},${y},${z}`
+    if (t - (trampleSeen.get(key) || 0) < 10000) return
+    trampleSeen.set(key, t); if (trampleSeen.size > 100) trampleSeen.delete(trampleSeen.keys().next().value)
+    const recent = D.since(samples, t - FARM_AIR_MS)
+    const air = recent.some(s => !s.g)
+    const peak = recent.length ? Math.max(...recent.map(s => s.y)) : p.y
+    const fall = Math.max(0, +(peak - p.y).toFixed(2))
+    const jumpAgo = events.filter(e => e.k === 'jump').reduce((m, e) => Math.min(m, t - e.t), Infinity)
+    const onIt = dh <= FARM_ON && Math.abs(dy) <= 2
+    const how = !onIt ? 'none' : jumpAgo <= FARM_AIR_MS ? 'jump' : fall >= 0.9 ? 'drop' : air ? 'hop' : 'none'
+    const by = how === 'none' ? 'unknown' : 'bot'
+    trampleStats[by]++
+    let space = null, ledger = null
+    try { space = L && L.spaceAt ? L.spaceAt({ x, y, z }) : null } catch {}
+    try { if (L && L.whoMade) { const w = L.whoMade({ x, y, z }, 'dirt'); ledger = { verdict: w.verdict, by: w.by || null } } } catch {}
+    const step = (bot._ap && bot._ap.G && bot._ap.G.lastStep) || null
+    const ev = { k: 'trample', t, x, y, z, by, how, dist: +dh.toFixed(1), fall, space, step, tk: curTask || '' }
+    addEvent(ev)
+    api.log('telemetry', `farmland at ${x},${y},${z} became dirt${by === 'bot' ? ` after a ${how}` : ' (not clearly the bot)'}${space ? ` in ${space}` : ''}`)
+    try { if (bot._journal && bot._journal.add) bot._journal.add('trample', { pos: [x, y, z], by, how, dist: ev.dist, fall, space, step, task: curTask || null, held: bot.heldItem ? bot.heldItem.name : null, ledger }, { sal: by === 'bot' }) } catch {}
+    if (by === 'bot') { clearTimeout(trampleSoon); trampleSoon = setTimeout(() => { try { analyze() } catch {} }, 300) }       // the flag should not wait for the next 15 s pass
+  }
+  let trampleSoon = null
+
   // ---- rule state: what is worn (checked every pass and the moment an armor slot changes), own chat lines ----
   const rulesFile = api.statePath('telemetry/rules.json')
   function farmDrops() { try { return JSON.parse(fs.readFileSync(rulesFile, 'utf8')).armorFarmDrops || [] } catch { return [] } }   // optional {"armorFarmDrops":["leather_boots"]} once a mob farm exists
@@ -273,7 +317,7 @@ module.exports = function register(api) {
     name: 'telemetry',
     start() {
       started = now()
-      bot.on('physicsTick', onPhysics); bot.on('entitySwingArm', onSwing); bot.on('blockPlaced', onPlaced)
+      bot.on('physicsTick', onPhysics); bot.on('blockUpdate', onFarmUpdate); bot.on('entitySwingArm', onSwing); bot.on('blockPlaced', onPlaced)
       bot.on('diggingCompleted', onDug); bot.on('diggingAborted', onDigAbort); bot.on('path_update', onPathUpdate); bot.on('playerCollect', onCollect); bot.on('windowOpen', onWindow); bot.on('chat', onOwnChat)
       try { bot.inventory.on('updateSlot', onSlot) } catch {}
       if (api.events) api.events.on('task', onTask)
@@ -282,7 +326,7 @@ module.exports = function register(api) {
     },
     stop() {
       clearInterval(timer); clearInterval(analyzeTimer)
-      bot.removeListener('physicsTick', onPhysics); bot.removeListener('entitySwingArm', onSwing); bot.removeListener('blockPlaced', onPlaced)
+      bot.removeListener('physicsTick', onPhysics); bot.removeListener('blockUpdate', onFarmUpdate); clearTimeout(trampleSoon); bot.removeListener('entitySwingArm', onSwing); bot.removeListener('blockPlaced', onPlaced)
       bot.removeListener('diggingCompleted', onDug); bot.removeListener('diggingAborted', onDigAbort); bot.removeListener('path_update', onPathUpdate); bot.removeListener('playerCollect', onCollect); bot.removeListener('windowOpen', onWindow); bot.removeListener('chat', onOwnChat)
       try { bot.inventory.removeListener('updateSlot', onSlot) } catch {}; clearTimeout(armorSoon)
       if (api.events) api.events.removeListener('task', onTask)
@@ -290,7 +334,7 @@ module.exports = function register(api) {
     },
     status() { const s = summary(); return { samples: s.samples, flags: s.flags.map(f => `${f.sev} ${f.kind}`), jumpsPerMin: s.last1min.jumpsPerMin } },
     // for tests and the dashboard's eval channel
-    _tick: { sample, analyze, summary, samples: () => samples, events: () => events },
+    _tick: { trampleStats: () => trampleStats, sample, analyze, summary, samples: () => samples, events: () => events },
   }
 }
 module.exports.meta = require('./meta.json')

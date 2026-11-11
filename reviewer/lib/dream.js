@@ -444,11 +444,11 @@ async function dreamBot(cfg, bot, { ask, now, log, force = false, dryRun = false
 
   // --- hand off: every bot with a journal ---
   let sync = { opened: [], reopened: [], updated: [], closed: [] }
-  // outcome candidates (a build that produces nothing, a blocked precondition) arrive with their own problem statement: no model is asked, the order is opened in code
+  // outcome candidates (a build that produces nothing, a blocked precondition) and trampled farmland arrive with their own problem statement: no model is asked, the order is opened in code
   const autos = cands.filter(c => c.auto)
   const ask5 = (dryRun ? cands.filter(c => { const o = orders.load(cfg.loopDir, c.key); return !(o && o.status === 'open') }) : orders.undecided(cfg.loopDir, cands, now)).filter(c => !c.auto)
   let decided = {}
-  for (const c of autos) decided[c.key] = { ...c.auto, why: 'measured by brain/outcome, not judged' }
+  for (const c of autos) decided[c.key] = { why: 'measured by code from the journal, not judged', ...c.auto }
   if (!cands.length) skippedSteps.handoff = 'the journal shows no candidate'
   else if (!ask5.length) skippedSteps.handoff = 'every candidate already has an order or a recent decision'
   else {
