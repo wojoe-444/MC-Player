@@ -6,6 +6,7 @@
 'use strict'
 const fs = require('fs')
 const path = require('path')
+const F = require('./format')
 
 const LIBRARY = path.join(__dirname, 'library')
 const safeId = (id) => String(id || '').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^[-_]+|[-_]+$/g, '').slice(0, 64)
@@ -17,7 +18,7 @@ function list(dirs) {
   const byId = new Map()
   for (const d of dirs) {
     let files = []; try { files = fs.readdirSync(d).filter(f => f.endsWith('.json')) } catch { continue }
-    for (const f of files) { const s = readJson(path.join(d, f)); if (s && s.v === 1 && s.id && Array.isArray(s.rle)) byId.set(s.id, { file: path.join(d, f), schematic: s }) }
+    for (const f of files) { const s = readJson(path.join(d, f)); const u = s && (s.v === 1 || s.v === 2) && s.id && Array.isArray(s.rle) ? F.upgrade(s) : null; if (u) byId.set(u.id, { file: path.join(d, f), schematic: u }) }
   }
   return [...byId.values()]
 }
