@@ -96,4 +96,4 @@ function attach(bot, log = () => {}) {
   return api
 }
 
-module.exports = { attach, FILE, naturalChange }
+module.exports = { attach, FILE, naturalChange, SOFT, NOT_BUILDS }

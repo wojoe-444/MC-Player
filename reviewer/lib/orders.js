@@ -12,6 +12,7 @@
 const fs = require('fs')
 const path = require('path')
 
+const OUTCOME_MIN_PER_H = 5               // a build that should produce and does not costs this many minutes per hour in range (flat, like DEATH_MIN)
 const DEATH_MIN = 10                       // what one death is counted as: the walk back and the lost bag. A constant, not a measurement.
 const MIN_LOSS = 10, MIN_FAILS = 5, MIN_ALARMS = 5, MIN_DEATHS = 2, MIN_FLAGS = 10, MIN_FINDING_RUNS = 6
 const QUIET_DREAMS = 6                     // an order nobody has seen for this many dreams of a running bot closes as "went quiet" (12 h at one dream per 2 h)
@@ -61,6 +62,22 @@ function candidates({ rollup, events = [], findings = [], snapshots = [] }) {
     if (n < MIN_FLAGS) continue
     const last = events.filter(e => e.k === 'flag' && e.kind === kind).slice(-2).map(e => `${String(e.at).slice(11, 16)}Z ${cut(e.msg, 120)}`)
     out.push({ key: `flag-${slug(kind)}`, type: 'flag', step: null, costMin: 0, counts: { flags: n }, line: `flag ${kind}: raised ${n} times`, evidence: last, snapshots: snaps(s2 => s2.kind === kind) })
+  }
+  // outcome verdicts (brain/outcome): a build that could have worked for hours and made nothing, or one a precondition blocks. These carry their own problem
+  // statement, written by code from numbers, so no model has to notice or phrase them (`auto`: the dream opens the order itself). The cost is a flat
+  // OUTCOME_MIN_PER_H lost minutes per hour the build was in range, capped at a day; a blocked build waits for a person, so its order is kind 'human'.
+  const lastOutcome = new Map()
+  for (const e of events) if (e && e.k === 'outcome' && e.build) lastOutcome.set(e.build, e)
+  for (const [build, e] of lastOutcome) {
+    if (e.state !== 'blocked' && e.state !== 'overdue') continue
+    const h = Math.min(Number(e.liveH) || 0, 24), human = e.who === 'human'
+    out.push({
+      key: `outcome-${slug(build)}`, type: 'outcome', step: null, costMin: round1(h * OUTCOME_MIN_PER_H), counts: { liveH: Number(e.liveH) || 0, got: Number(e.got) || 0 },
+      line: `${e.kindOf || 'build'} ${build} is ${e.state}: ${cut(e.why, 200)}`, evidence: [cut(`purpose: ${e.purpose || '?'}; output ${e.got || 0} ${e.unit || ''} in ${e.liveH || 0} h in range`, 200)],
+      auto: { isBug: true, kind: human ? 'human' : 'outcome', title: cut(`${build}: ${e.state === 'blocked' ? 'cannot work' : 'produces nothing'}`, 100),
+        problem: cut(`${build} (${e.kindOf || 'build'}) was in range for ${e.liveH || 0} h and produced ${e.got || 0} ${e.unit || 'output'}. ${e.why}`, 600),
+        suggestion: human ? 'A person has to change the setting named above; code cannot work around it. Tell Walter once, then stop spending the bot\'s time on this build.' : 'The blocks match the design, so look at what the build needs from the world: competition for spawns, the bot standing too close, a counter the output is never added to.' },
+    })
   }
   for (const f of findings || []) {
     if (!f || f.severity !== 'high' || !((f.seenRuns || 0) >= MIN_FINDING_RUNS)) continue

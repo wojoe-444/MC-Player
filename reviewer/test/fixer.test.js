@@ -51,6 +51,7 @@ test('pick takes the most costly open order that is not waiting and has attempts
   const list = [o('a', [{ ev: 'pr', pr: 7, merged: true }]), o('b', [{ ev: 'pr', pr: 7, merged: true }, { ev: 'deploy' }]), o('c', [{ ev: 'attempt' }, { ev: 'attempt' }]), o('d', [], 'parked'), o('e', [{ ev: 'ready', branch: 'x' }]),
     o('f', [{ ev: 'pr', pr: 7, merged: true }, { ev: 'deploy' }, { ev: 'verdict', verdict: 'reverted', why: 'more stalls' }]), o('g', [])]
   assert.equal(fixer.pick(list).key, 'f')
+  assert.equal(fixer.pick([{ key: 'outcome-mob-farm', type: 'outcome', kind: 'human', status: 'open', history: [] }, { key: 'x', type: 'step', kind: 'human', status: 'open', history: [] }]), null, 'what a person has to change is not the fixer\'s')
   const p = fixer.progress(list[5])
   assert.equal(p.waiting, null); assert.equal(p.attempts.length, 1); assert.match(p.attempts[0].why, /PR #7 was deployed and judged reverted/)
   assert.deepEqual(fixer.progress(list[0]).waiting.on, 'deploy'); assert.equal(fixer.progress(list[1]).waiting.on, 'verdict')
@@ -116,9 +117,12 @@ test('a "fix" whose test passes on main is not believed: one repair session, the
   assert.equal(r.outcome, 'no-fix'); assert.match(r.summary, /passes on main without the change/)
   assert.equal(calls.length, 2); assert.match(calls[1], /did not pass the checks[\s\S]*passes on main without the change/)
   assert.equal(git(w.wc, 'status', '--porcelain'), '', 'the working copy is clean again')
+  const first = git(w.wc, 'branch', '--format=%(refname:short)').split('\n').filter(b => b.startsWith('fix/'))
   const r2 = await fixer.runFix(w.cfg, { agent: lazy, now: NOW + 3 * 3600000, words: [] })
   assert.match(calls[2], /Earlier attempts at this order[\s\S]*failed-checks[\s\S]*Tried: changed a comment/)
   assert.equal(r2.outcome, 'parked')
+  const second = git(w.wc, 'branch', '--format=%(refname:short)').split('\n').filter(b => b.startsWith('fix/'))
+  assert.equal(second.length, 1); assert.notEqual(second[0], first[0], 'the branch of the earlier attempt is gone')
   const o = orders.load(w.cfg.loopDir, 'step-iron')
   assert.equal(o.status, 'parked'); assert.equal(o.history.filter(h => h.ev === 'attempt').length, 2)
   assert.equal((await fixer.runFix(w.cfg, { agent: lazy, now: NOW + 6 * 3600000 })).skipped, true)

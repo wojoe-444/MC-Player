@@ -8,6 +8,7 @@
 //   shaft = { id, by, entry:[x,y,z] (the top cell, feet level), wall:[dx,dz] (the ladder hangs on this side), bottom:[x,y,z], at, levels:[] }
 //   room  = { id, type:'storage'|'mining-storage'|'farm'|..., by, shaft, box:{x0,x1,y0,y1,z0,z1}, chests:[[x,y,z],...], at }
 const fs = require('fs'), path = require('path')
+const scope = require('../ledger/scope')
 const FILE = process.env.BOT_REGISTRY || path.join(__dirname, '..', '..', '..', 'bot-shared', 'registry.json')
 
 module.exports = function ladder(bot, S, goals, v, log) {
@@ -215,7 +216,9 @@ module.exports = function ladder(bot, S, goals, v, log) {
   }
 
   // dig a new laddered shaft down from entry (the bot's feet cell at the top) to targetY. Returns the shaft record (also saved).
-  L.dig = async (entry, targetY, { wall = null, by = bot.username, into = null } = {}) => {
+  // every block of the shaft is filed under its id in the provenance ledger (brain/ledger/scope.js)
+  L.dig = (entry, targetY, o = {}) => scope.within({ id: (o.into && o.into.id) || `${o.by || bot.username}-${entry.x},${entry.z}`, kind: 'shaft', label: 'Shaft' }, () => L._dig(entry, targetY, o))
+  L._dig = async (entry, targetY, { wall = null, by = bot.username, into = null } = {}) => {
     // the ladder wall: a solid side all the way is checked as we go; start with the first solid side of the entry's column
     const sides = [[1, 0], [0, 1], [-1, 0], [0, -1]]
     wall = wall || sides.find(([dx, dz]) => solid(entry.offset(dx, -1, dz))) || [1, 0]

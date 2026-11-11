@@ -65,6 +65,15 @@ function buildInspections(sd) {
   return out
 }
 
+// brain/outcome writes outcome.json: per registered build, whether it produces what it is for (state, hours in range, output, why). The one view of a build's
+// PURPOSE; buildInspections above is the view of its blocks, and a build can pass the second and fail the first (the mob farm on a Peaceful world).
+function buildOutcomes(sd) {
+  const o = readJson(path.join(sd, 'outcome.json'))
+  if (!o || !o.builds) return 'the outcome check has not run on this bot yet'
+  const ageMin = Math.round((Date.now() - Date.parse(o.updatedAt || 0)) / 60000)
+  return { ageMin, difficulty: (o.env && o.env.difficulty) || 'unknown', builds: Object.fromEntries(Object.entries(o.builds).map(([id, b]) => [id, { state: b.state, hoursInRange: b.liveH, output: b.got, unit: b.unit, why: b.why }])) }
+}
+
 function collectBot(bot, { now = Date.now(), staleMin = 5, since = 0, maxFlags = 6 } = {}) {
   const sd = stateDir(bot)
   const exists = fs.existsSync(bot.dir)
@@ -90,6 +99,7 @@ function collectBot(bot, { now = Date.now(), staleMin = 5, since = 0, maxFlags =
     idleLogTail: tailText(path.join(bot.dir, 'idle.log'), 3500),
     lessonsTail: tailText(path.join(sd, 'lessons.md'), 1200),
     buildInspections: buildInspections(sd),
+    buildOutcomes: buildOutcomes(sd),
     hurtLifetimeTotals: readJson(path.join(sd, 'hurt.json')),
     joinLogTail: tailText(path.join(bot.dir, 'join.log'), 1200),
   }

@@ -98,12 +98,13 @@ function progress(o) {
 // the order this run takes: open, not waiting, attempts left; most costly first (orders.list is already in that order)
 function pick(list, { only = null } = {}) {
   if (only) return list.find(o => o.key === only) || null
-  return list.find(o => { if (o.status !== 'open') return false; const p = progress(o); return !p.waiting && !p.ready && p.attempts.length < MAX_ATTEMPTS }) || null
+  // (an outcome order is a build that makes nothing or a setting a person has to change: the world's problem, not a fault in the code)
+  return list.find(o => { if (o.status !== 'open' || o.type === 'outcome' || o.kind === 'human') return false; const p = progress(o); return !p.waiting && !p.ready && p.attempts.length < MAX_ATTEMPTS }) || null
 }
 
 // ---------- the working copy ----------
 
-function prepare(cfg, branch, run = sh) {
+function prepare(cfg, branch, run = sh, keep = []) {
   const dir = workDir(cfg), repo = cfg.fixRepo || REPO
   if (!fs.existsSync(path.join(dir, '.git'))) {
     fs.mkdirSync(path.dirname(dir), { recursive: true })
@@ -115,6 +116,8 @@ function prepare(cfg, branch, run = sh) {
   r = run('git', ['checkout', '--quiet', '--force', '-B', branch, 'origin/main'], { cwd: dir })
   if (r.code !== 0) return { ok: false, error: `could not start ${branch}: ${cut(r.out, 200)}` }
   run('git', ['clean', '-fdq'], { cwd: dir })
+  // branches of earlier attempts go, except a checked fix that still waits to be pushed
+  for (const b of run('git', ['branch', '--format=%(refname:short)'], { cwd: dir }).out.split('\n').map(x => x.trim())) if (/^fix\//.test(b) && b !== branch && !keep.includes(b)) run('git', ['branch', '-D', b], { cwd: dir })
   // the borrowed node_modules is a link, which the repository's "node_modules/" ignore rule (folders only) does not cover
   try { const ex = path.join(dir, '.git', 'info', 'exclude'), cur = fs.existsSync(ex) ? fs.readFileSync(ex, 'utf8') : ''; if (!/^node_modules$/m.test(cur)) { fs.mkdirSync(path.dirname(ex), { recursive: true }); fs.appendFileSync(ex, `\nnode_modules\n${SCRATCH}/\n`) } } catch { /* check() would refuse the change */ }
   const deps = linkModules(cfg, dir, run)
@@ -483,7 +486,7 @@ async function runFix(cfg, { agent = null, ask = null, run = sh, now = Date.now(
     if (dryRun) { const ev = { dir: path.join(fixDir(cfg), 'evidence', orders.slug(o.key)), files: ['ORDER.md'] }; return { ok: true, dryRun: true, order: o.key, branch, mode: modeOf(cfg), system: SYSTEM, prompt: taskPrompt({ o, evidence: ev, attempts: p.attempts }) } }
     if (!agent) return row({ ok: false, order: o.key, summary: 'no agent to run the session with' })
     // 3, 4. working copy and evidence
-    const wc = prepare(cfg, branch, run)
+    const wc = prepare(cfg, branch, run, orders.list(cfg.loopDir).map(x => progress(x).ready).filter(Boolean).map(r => r.branch))
     if (!wc.ok) return row({ ok: false, order: o.key, summary: wc.error })
     const evidence = writeEvidence(cfg, o, now)
     log(`fix ${o.key}: attempt ${p.attempts.length + 1} on ${branch} (${wc.deps} dependencies)`)

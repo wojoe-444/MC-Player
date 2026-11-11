@@ -182,4 +182,4 @@ function summarise(findings, stats, grid) {
   return { ok: faults.length === 0, faults: faults.length, warns: warns.length, findings, stats, headline: faults.concat(warns).slice(0, 4).map(f => f.msg.length > 200 ? f.msg.slice(0, 197) + '...' : f.msg) }
 }
 
-module.exports = { layoutOfRoom, check, pads }
+module.exports = { layoutOfRoom, check, pads, summarise }
