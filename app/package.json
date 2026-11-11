@@ -28,7 +28,6 @@
       "main.js",
       "preload.js",
       "lib/**",
-      "renderer/**",
       "build/icon.ico",
       "package.json"
     ],
@@ -52,6 +51,28 @@
         "filter": [
           "sandbox.js",
           "detectors.js"
+        ]
+      },
+      {
+        "from": "../brain/memory",
+        "to": "brain/memory",
+        "filter": [
+          "store.js"
+        ]
+      },
+      {
+        "from": "../brain/journal",
+        "to": "brain/journal",
+        "filter": [
+          "rollup.js"
+        ]
+      },
+      {
+        "from": "../brain/gate",
+        "to": "brain/gate",
+        "filter": [
+          "rules-text.js",
+          "rules.json"
         ]
       },
       {

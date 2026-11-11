@@ -29,10 +29,19 @@ function parseArgs(argv) {
     const t = argv[i]
     if (!t.startsWith('--')) continue
     const k = t.slice(2)
-    if (['ozo', 'smeo', 'out', 'model', 'effort', 'minutes', 'claude-path'].includes(k)) a.opts[k] = argv[++i]
+    if (['ozo', 'smeo', 'out', 'loop', 'code', 'model', 'effort', 'minutes', 'claude-path'].includes(k)) a.opts[k] = argv[++i]
     else a.flags.add(k)
   }
   return a
+}
+
+// The memory loop's own files (work orders, the ledger, run logs) live beside the Bot Dashboard app's settings, so they stay on this computer
+// (docs/MEMORY-LOOP.md: bot data never leaves the laptop). With no app settings file yet they go to ~/.mc-player/loop.
+function loopDirOf(env = process.env, home = os.homedir(), exists = fs.existsSync) {
+  if (env.LOOP_DIR) return env.LOOP_DIR
+  // the app's settings folder exists from its first start, the settings file only once a setting was changed: either one places the loop folder
+  for (const f of appConfigCandidates(env, home)) if (exists(f) || exists(path.dirname(f))) return path.join(path.dirname(f), 'loop')
+  return path.join(home, '.mc-player', 'loop')
 }
 
 function resolveConfig({ argv = [], env = process.env, home = os.homedir(), exists = fs.existsSync } = {}) {
@@ -45,6 +54,9 @@ function resolveConfig({ argv = [], env = process.env, home = os.homedir(), exis
   return {
     bots, args,
     outDir: args.opts.out || env.REVIEWER_DIR || path.join(home, '.mc-player', 'reviewer'),
+    loopDir: args.opts.loop || loopDirOf(env, home, exists),
+    // the clone the live bots run from: the deployer keeps it on main (tools/deployer.js). Set on the app's Memory loop tab (loop.codeDir).
+    codeDir: args.opts.code || env.BOT_CODE_DIR || (app && app.loop && app.loop.codeDir) || path.join(home, 'Downloads', 'MC-Player-live'),
     model: args.opts.model || env.REVIEWER_MODEL || 'claude-haiku-5-5',
     effort: args.opts.effort || env.REVIEWER_EFFORT || 'xhigh',
     timeoutMs: Number(env.REVIEWER_TIMEOUT_MS) || 8 * 60000,
@@ -54,4 +66,4 @@ function resolveConfig({ argv = [], env = process.env, home = os.homedir(), exis
   }
 }
 
-module.exports = { resolveConfig, parseArgs, BOT_DEFS, appConfigCandidates }
+module.exports = { resolveConfig, parseArgs, BOT_DEFS, appConfigCandidates, loopDirOf }

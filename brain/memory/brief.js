@@ -35,6 +35,15 @@ function digest(r) {
   }
 }
 
+// What the two-hourly memory check (the dream, reviewer/lib/dream.js) changed in global.md since the bot last planned, in words the bot can act on.
+// The memory is the bot's: it is told about every edit somebody else made, with the reason, so it can put a line back. report = <memory>/dream/last.json
+function checkSummary(report, sinceMs = 0) {
+  const ch = report && report.memory && Array.isArray(report.memory.changes) ? report.memory.changes : []
+  if (!ch.length || !(Date.parse(report.at) > sinceMs)) return null
+  const one = (c) => (c.op === 'remove' ? `removed "${cut(c.from, 110)}"` : c.op === 'add' ? `added "${cut(c.to, 150)}"` : `changed "${cut(c.from, 70)}" to "${cut(c.to, 150)}"`) + (c.why ? ` because: ${cut(c.why, 160)}` : '')
+  return { at: report.at, changes: ch.slice(0, 8).map(one) }
+}
+
 // the in-game clock in words: a model reads "1900" as an hour of the evening
 function clock(tod) {
   if (!Number.isFinite(tod)) return null
@@ -44,12 +53,12 @@ function clock(tod) {
   return `${part}${left ? `, about ${left} real minutes of daylight left` : ', dark until sunrise'} (a full in-game day is 20 real minutes)`
 }
 
-function buildRequest({ id, at, reason, bot, role, day, timeOfDay, steps = [], state = {}, rules = [], global = '', notes = [], since = null, lastBrief = null, refused = [], findings = [], roadmap = null }) {
+function buildRequest({ id, at, reason, bot, role, day, timeOfDay, steps = [], state = {}, rules = [], global = '', notes = [], since = null, lastBrief = null, refused = [], findings = [], roadmap = null, lastCheck = null }) {
   return {
     v: 1, id, at, reason, bot, role, day, clock: clock(timeOfDay),
     steps: steps.filter(s => typeof s === 'string'), cannotHold: [...UNHOLDABLE].filter(s => steps.includes(s) || s === 'whimsy'),
     freeTimeChoices: WHIMSY, limits: { focus: LIMITS.focus, holds: LIMITS.holds, holdDays: LIMITS.holdDays },
-    rules, memory: { global, notes },
+    rules, memory: { global, notes, ...(lastCheck ? { lastCheck } : {}) },
     lastBrief: lastBrief ? { at: lastBrief.at, day: lastBrief.day, intent: lastBrief.intent, focus: lastBrief.focus, holds: lastBrief.holds, freeTime: lastBrief.freeTime } : null,
     refusedLastTime: refused.slice(0, 6),
     sinceLastBrief: since,
@@ -106,4 +115,4 @@ function active(brief, { now = Date.now(), day = null } = {}) {
   return { id: brief.id || null, focus, holds, held: new Set(holds.map(h => h.step)), freeTime: { choice, note: (brief.freeTime && brief.freeTime.note) || '' } }
 }
 
-module.exports = { buildRequest, digest, validate, active, clock, SURVIVAL, UNHOLDABLE, WHIMSY, LIMITS }
+module.exports = { buildRequest, digest, validate, active, clock, checkSummary, SURVIVAL, UNHOLDABLE, WHIMSY, LIMITS }

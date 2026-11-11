@@ -354,7 +354,8 @@ module.exports = function createFarm({ bot, say, goals, config: C, state: S, sav
     const have = logs === null ? eng.countWhere(n => !!T.logSpecies(n)) : logs
     if (!has()) return { natural: true, farm: false, why: 'no tree farm yet: build one (tree_farm build) so natural trees can be kept' }
     const grown = farms().reduce((n, f) => n + L.summarize(f, get).trees, 0)
-    if (grown > 0) return { natural: false, farm: true, grown, why: `the tree farm has ${grown} grown tree(s): harvest those (tree_farm harvest); natural trees are kept` }
+    // 4 grown trees, not 1: one or two young oak give 4 to 6 logs a harvest, and both bots sat at 0 and 9 logs for hours with the natural trees protected
+    if (grown >= (o.minGrownToKeepNatural || 4)) return { natural: false, farm: true, grown, why: `the tree farm has ${grown} grown tree(s): harvest those (tree_farm harvest); natural trees are kept` }
     if (have >= o.bootstrapLogs) return { natural: false, farm: true, grown, why: `already ${have} logs on me and the farm is still growing: natural trees are kept` }
     return { natural: true, farm: true, grown, why: 'bootstrap wood while the farm grows' }
   }

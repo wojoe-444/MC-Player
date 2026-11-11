@@ -225,7 +225,7 @@ test('the laptop job: answers a fresh unanswered request once with the reviewer\
   const dry = await job.runBriefs(cfg, { now, dryRun: true })
   assert.match(dry.prompts[0].system, /^You are OzoGo444/); assert.match(dry.prompts[0].system, /Use only what is in this message/); assert.match(dry.prompts[0].prompt, /a new in-game day began/); assert.match(dry.prompts[0].prompt, /# Policies/); assert.match(dry.prompts[0].prompt, /stalls \(12 lines\)/)
   const r = await job.runBriefs(cfg, { ask, now })
-  assert.deepStrictEqual(r.briefs, [{ bot: 'ozo', id: 'r7', ok: true, error: null }])
+  assert.deepStrictEqual(r.briefs, [{ bot: 'ozo', id: 'r7', ok: true, error: null, costUsd: 0.01, durationMs: 50000 }])
   assert.deepStrictEqual([calls[0].model, calls[0].effort, calls[0].schema.required.includes('memory')], ['claude-haiku-5-5', 'xhigh', true])
   const ans = JSON.parse(fs.readFileSync(path.join(mem, 'brief-answer.json'), 'utf8')); assert.deepStrictEqual([ans.id, ans.ok, ans.data.intent], ['r7', true, ANSWER.intent])
   await job.runBriefs(cfg, { ask, now }); assert.strictEqual(calls.length, 1, 'an answered request is not asked again')
@@ -248,4 +248,23 @@ test('wiring: memory is a registered module after journal, whimsy is loaded into
   const { childEnv } = require('../reviewer/lib/claude')
   const e = childEnv({ PATH: '/x', ANTHROPIC_API_KEY: 'k', CLAUDE_MEMORY_STORES: '[]', CLAUDE_COWORK_MEMORY_PATH_OVERRIDE: '/m' }); assert.deepStrictEqual(Object.keys(e).sort(), ['CLAUDE_AGENT_SDK_CLIENT_APP', 'PATH'])
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'reviewer', 'lib', 'claude.js'), 'utf8'), /settings: \{ autoMemoryEnabled: false \}/)
+})
+
+test('the bot is told what the memory check changed in its file, once, and the brief prompt says the file is its own to put right', () => {
+  const report = { at: '2026-11-10T22:55:00.000Z', memory: { changes: [
+    { step: 'correct', op: 'replace', from: 'Iron pays below y 0 | 14 iron | iron per trip', to: 'Iron pays below y 0 | 0 iron on 11-10 | iron per trip', why: 'the day shows no iron', cites: ['E5: x'] },
+    { step: 'cut', op: 'remove', from: 'My bag holds 96 cobblestone', to: null, why: 'state: it can see its bag', cites: [] },
+    { step: 'fill', op: 'add', from: null, to: 'Lava by the shaft at y 46', why: 'a pattern across days', cites: [] },
+  ] } }
+  const lastCheck = B.checkSummary(report, Date.parse('2026-11-10T22:00:00Z'))
+  assert.deepStrictEqual(lastCheck.changes.map(c => c.split(' "')[0]), ['changed', 'removed', 'added'])
+  assert.strictEqual(B.checkSummary(report, Date.parse('2026-11-10T23:00:00Z')), null)
+  assert.strictEqual(B.checkSummary({ at: report.at, memory: { changes: [] } }, 0), null); assert.strictEqual(B.checkSummary(null, 0), null)
+  const req = B.buildRequest({ id: 'r1', at: '2026-11-10T23:00:00.000Z', reason: 'dawn', bot: 'OzoGo444', steps: STEPS, global: store.seed(), lastCheck })
+  assert.strictEqual(req.memory.lastCheck.changes.length, 3)
+  assert.ok(!('lastCheck' in B.buildRequest({ id: 'r2', steps: STEPS }).memory))
+  const prompt = job.userPrompt(req)
+  assert.match(prompt, /## memory\.lastCheck \(2026-11-10T22:55:00\.000Z\)\n- changed "Iron pays below y 0/); assert.match(prompt, /- removed "My bag holds 96 cobblestone" because: state: it can see its bag/)
+  assert.doesNotMatch(job.userPrompt(B.buildRequest({ id: 'r2', steps: STEPS })), /lastCheck/)
+  assert.match(job.systemPrompt(req), /The file is yours: if a change is wrong, put the line back/)
 })

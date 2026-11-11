@@ -12,7 +12,7 @@ npm start          # or double-click start-app.bat
 
 Needs Node 18+ and, for the reviews, the `claude` CLI on PATH (run `claude` once to log in).
 
-On launch the app starts `dashboard/server.js` on port 8765 (or attaches if a dashboard is already running there) and opens it in a window. The window has a tab bar across the top: **Dashboard**, **Claude reviews** and **Settings** (a dot on Settings means an update is available). Ctrl+1/2/3 and the App menu switch tabs too.
+On launch the app starts `dashboard/server.js` on port 8765 (or attaches if a dashboard is already running there) and opens it in a window. The window is the dashboard web app (`../dashboard/web`, the redesigned layout with a sidebar). Its **Claude reviews**, **Memory loop** and **Settings** pages talk to the app's main process through `window.botApp` (`preload.js`), which is only exposed to the dashboard page itself; in a plain browser those pages say to open the app. A dot on Settings in the sidebar means an update is available. Ctrl+1/2/3/4 and the App menu switch pages too. The color scheme (28 of them, light and dark, default Sand & Ink) is picked in the top bar or on the Settings page and remembered. The Memory loop page installs and removes the Task Scheduler entries of the dream, deployer and digest jobs, runs each on demand, lets you set the code folder the live bots run from, and shows the day's digest, the ranked work orders, each bot's memory file with what the last check changed, and one line per run of every loop job. Its files stay in the app's settings folder, under `loop`.
 
 ## Install as a normal Windows app
 
@@ -26,7 +26,7 @@ This builds `dist/Bot-Dashboard-Setup-<version>.exe` (build it on Windows: embed
 
 ## Updating the installed app
 
-The **Settings** tab has **Check for updates** (the app also checks quietly 20 seconds after start and every 6 hours; that only puts a dot on the tab). If a newer version exists, **Update and restart** downloads it, stops the dashboard server, runs the installer silently and relaunches the app. Nothing is downloaded or installed until you press it, and settings and reviews in `%APPDATA%` are kept.
+The **Settings** page has **Check for updates** (the app also checks quietly 20 seconds after start and every 6 hours; that only puts a dot on Settings in the sidebar). If a newer version exists, **Update and restart** downloads it, stops the dashboard server, runs the installer silently and relaunches the app. Nothing is downloaded or installed until you press it, and settings and reviews in `%APPDATA%` are kept.
 
 How it works: `.github/workflows/release-app.yml` builds the Windows installer on GitHub Actions and publishes it as a release (`v0.1.<run number>`, with `latest.yml`) whenever `app/`, `dashboard/` or `reviewer/` change on `main` (or run it by hand from the Actions tab). The installed app uses `electron-updater` (`lib/updater.js`) to compare its version with the latest release of `wojoe-444/MC-Player` (public repo, no token needed). So an update is available a few minutes after a merge to `main`, once the workflow finishes. Running from source (`npm start`) shows "updates only work in the installed app"; there, use `git pull`. A local `build-installer.bat` build is version 0.1.0 and never touches the releases.
 

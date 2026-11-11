@@ -6,12 +6,13 @@ Jobs 3 and "Memory on disk" of `docs/MEMORY-LOOP.md`. The journal is the record;
 
 | File | What | Written by |
 | --- | --- | --- |
-| `global.md` | What the bot wants to know every morning. At most 60 lines, five sections: Now, Policies, Traps, My own projects and wishes, How I use this folder. | the bot's brief; later the dream corrects Policies and Traps |
+| `global.md` | What the bot wants to know every morning. At most 60 lines, five sections: Now, Policies, Traps, My own projects and wishes, How I use this folder. | the bot's brief; the dream (`reviewer/lib/dream.js`) corrects Policies and Traps, citing the journal |
 | `notes/<topic>.md` | Detail, read on demand. At most 10 files of 150 lines. | the same |
 | `brief-request.json` | What the bot hands the laptop job when it wants a brief. | `brain/memory` |
 | `brief-answer.json`, `brief-history.jsonl` | The model's answer, and one line per call. | `reviewer/lib/brief.js` |
 | `brief.json` | The checked brief the step picker reads. | `brain/memory` |
 | `brief-state.json` | Which request is waiting, and what code refused last time. | `brain/memory` |
+| `dream/last.json`, `dream/<time>.md` | What the last memory check changed and why, with the journal facts it cited. The next brief request carries it as `memory.lastCheck`, so the bot can put a line back. | `reviewer/lib/dream.js` |
 
 The folder is a small local git repo. Every accepted write is a commit.
 

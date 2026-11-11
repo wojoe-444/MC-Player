@@ -224,3 +224,54 @@ test('control endpoint: up to date and unsupported do nothing; port in use is no
   const src = new UpdateManager({ autoUpdater: null, currentVersion: '0.1.1', isPackaged: false })
   assert.strictEqual((await src.apply()).status, 'unsupported')
 })
+
+test('memory loop tab: jobs, ranked work orders, each bot\'s memory and last check, and the run log, all read from this computer', async () => {
+  const { loopState, loadLib, JOB_IDS } = require('../lib/loop')
+  const lib = loadLib(path.join(__dirname, '..', '..', 'reviewer'))
+  assert.ok(lib && lib.schedule.JOBS.dream, 'the reviewer package is next to the app')
+  assert.deepStrictEqual(await loopState({ lib: null }), { available: false })
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loop-')), loopDir = path.join(root, 'loop'), ozo = path.join(root, 'ozo'), mem = path.join(ozo, 'brain', 'state', 'memory')
+  fs.mkdirSync(path.join(mem, 'dream'), { recursive: true })
+  fs.writeFileSync(path.join(mem, 'global.md'), '# Now\nSmelt iron.\n')
+  fs.writeFileSync(path.join(mem, 'brief.json'), JSON.stringify({ at: '2026-11-10T22:31:00Z', day: 55, intent: 'Iron today.', focus: ['iron-smelt'], holds: [], freeTime: { choice: 'vantage', note: '' }, ask: 'A chest of my own?', until: 1 }))
+  fs.writeFileSync(path.join(mem, 'dream', 'last.json'), JSON.stringify({ at: '2026-11-10T22:55:00Z', memory: { changes: [{ step: 'cut', op: 'remove', from: 'x', why: 'y', cites: [] }] }, calls: [{ step: 'cut', ok: true }], skippedSteps: { demote: 'short' }, costUsd: 0.01, dropped: [] }))
+  const cand = (key, costMin) => ({ key, type: 'step', step: key, costMin, counts: {}, line: key, evidence: [] })
+  lib.orders.sync(loopDir, { bot: 'ozo', cands: [cand('step-a', 3), cand('step-b', 9)], decided: { 'step-a': { isBug: true, title: 'A', problem: 'p' }, 'step-b': { isBug: true, title: 'B', problem: 'p' } }, now: Date.parse('2026-11-10T22:55:00Z') })
+  lib.runs.append({ loopDir }, 'dream', { ok: true, summary: 'OzoGo444: 2 calls' }, Date.parse('2026-11-10T22:56:00Z'))
+  const asked = []
+  const s = await loopState({ lib, loopDir, bots: [{ id: 'ozo', name: 'OzoGo444', dir: ozo }, { id: 'smeo', name: 'Smeo444', dir: path.join(root, 'none') }], status: async (j) => { asked.push(j.name); return { installed: j.id === 'review' } }, running: { dream: true } })
+  assert.strictEqual(s.available, true); assert.deepStrictEqual(asked, ['MC-Player Bot Dream', 'MC-Player Bot Deployer', 'MC-Player Bot Digest', 'MC-Player Bot Reviewer'])
+  assert.deepStrictEqual(s.jobs.map(j => [j.id, j.taskName, j.minutes, j.running, j.task.installed]), [['dream', 'MC-Player Bot Dream', 120, true, false], ['deploy', 'MC-Player Bot Deployer', 30, false, false], ['digest', 'MC-Player Bot Digest', 60, false, false]])
+  assert.deepStrictEqual(JOB_IDS, ['dream', 'deploy', 'digest']); assert.ok(s.jobs.every(j => j.about))
+  assert.deepStrictEqual(s.code, { dir: null, isClone: false, hasDeployer: false, last: [] }); assert.strictEqual(s.digest, null)
+  // with a code folder and a digest on disk
+  const code = path.join(root, 'code'); fs.mkdirSync(path.join(code, '.git'), { recursive: true }); fs.mkdirSync(path.join(code, 'tools')); fs.writeFileSync(path.join(code, 'tools', 'deployer.js'), ''); fs.writeFileSync(path.join(code, 'deploys.jsonl'), JSON.stringify({ t: 1, event: 'deploy', to: 'abc' }) + '\n')
+  fs.mkdirSync(path.join(loopDir, 'digest')); fs.writeFileSync(path.join(loopDir, 'digest', '2026-11-11.md'), '# digest')
+  const s2 = await loopState({ lib, loopDir, codeDir: code, bots: [], status: async () => ({ installed: false }) })
+  assert.deepStrictEqual([s2.code.isClone, s2.code.hasDeployer, s2.code.last[0].to], [true, true, 'abc']); assert.deepStrictEqual(s2.digest, { date: '2026-11-11', text: '# digest' })
+  assert.strictEqual(s.reviewTask.task.installed, true)
+  assert.deepStrictEqual(s.orders.map(o => [o.key, o.costMin, o.title]), [['step-b', 9, 'B'], ['step-a', 3, 'A']])
+  assert.strictEqual(s.runs[0].summary, 'OzoGo444: 2 calls')
+  assert.strictEqual(s.bots[0].memory, '# Now\nSmelt iron.\n'); assert.strictEqual(s.bots[0].brief.ask, 'A chest of my own?'); assert.strictEqual(s.bots[0].lastCheck.changes.length, 1)
+  assert.deepStrictEqual([s.bots[1].memory, s.bots[1].brief, s.bots[1].lastCheck], [null, null, null])
+})
+
+test('dashboard process: only attaches to a server that serves the redesigned UI', async () => {
+  const http = require('http')
+  const { servesCurrentUi, startDashboard, UI_MARKER } = require('../lib/dashboard-process')
+  const serve = (html) => new Promise((resolve) => { const s = http.createServer((_q, r) => r.end(html)); s.listen(0, '127.0.0.1', () => resolve(s)) })
+  const fresh = await serve(`<head><meta ${UI_MARKER} content="2"></head>`)
+  const old = await serve('<title>old dashboard</title>')
+  const url = (s) => `http://127.0.0.1:${s.address().port}`
+  try {
+    assert.strictEqual(await servesCurrentUi(url(fresh)), true)
+    assert.strictEqual(await servesCurrentUi(url(old)), false)
+    assert.strictEqual(await servesCurrentUi('http://127.0.0.1:1'), false)
+    const d = await startDashboard({ port: fresh.address().port }, { repoRoot: __dirname, log: () => {} })
+    assert.deepStrictEqual([d.attached, d.url], [true, url(fresh)])
+    // an older dashboard on the port: the app must not attach (it would start its own on another port, which needs the real server, so only check it tried)
+    const logs = []
+    await assert.rejects(startDashboard({ port: old.address().port, ozoDir: tmp(), smeoDir: tmp(), codeDir: tmp() }, { repoRoot: path.join(tmp(), 'missing'), log: (m) => logs.push(m) }), /did not start|spare port/)
+    assert.ok(logs.some(m => /older version/.test(m)))
+  } finally { fresh.close(); old.close() }
+})

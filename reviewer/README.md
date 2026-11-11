@@ -80,6 +80,33 @@ node run.js --no-brief          a review pass without the briefs
 
 Every call now runs with ambient memory shut out (`settings: { autoMemoryEnabled: false }`, and `CLAUDE_*MEMORY*` variables removed from the child's environment), so a job judges from its prompt alone.
 
+## 6. The dream job and work orders (`lib/dream.js`, `lib/orders.js`, docs/MEMORY-LOOP.md job 4)
+
+`node run.js --dream` checks each bot's memory against its journal and hands what memory cannot fix to the work orders. It has its own Task Scheduler entry, "MC-Player Bot Dream", every 2 hours, installed and removed from the Memory loop tab of the Bot Dashboard app (or `--install-task --dream`, `--uninstall-task --dream`).
+
+- Up to five short calls per bot (Haiku 5.5 at xhigh, no tools): correct, cut, demote, fill gaps, hand off. A call is skipped when code can see it has nothing to do, and the whole dream is skipped when the journal has no new events.
+- Code builds numbered facts from `brain/state/journal/` and checks every answer: a change must cite a fact that exists, the caps of `brain/memory/store.js` hold, at most four corrections, three cuts, two additions and four new orders per dream, and a line the dream changed rests for 12 hours.
+- It writes only the Policies and Traps sections of `brain/state/memory/global.md` and notes, through the same store the bot uses. "Now" and "My own projects and wishes" are the bot's.
+- Each dream leaves `memory/dream/last.json` and a dated `.md` report. The bot's next brief shows what changed and why (`memory.lastCheck`).
+- A bot with a journal and no memory folder (the assistant) gets the hand-off step only.
+
+Work orders live in the loop folder, beside the app's settings (`%APPDATA%/Bot Dashboard/loop`, or `~/.mc-player/loop` when the app has never run; `--loop DIR` or `LOOP_DIR` override it):
+
+| File | What |
+| --- | --- |
+| `work-orders/<key>.json` | one problem: title, problem, where to look, numbers per bot, cost in lost minutes over 24 h, linked findings, history |
+| `WORK-ORDERS.md` | the open orders, most costly first (`node run.js --orders` prints it) |
+| `ledger.jsonl` | one line per event in an order's life |
+| `decisions.json` | candidates judged "not a bug", so they are not asked again for a day |
+| `runs/<job>.jsonl` | one line per run of the review, brief and dream jobs, shown in the app |
+| `dream/<bot>.json` | when each bot was last dreamed and which lines are resting |
+
+`node run.js --dream-dry-run` prints the candidates and every prompt without calling a model. `--dream --force` dreams even when the journal has nothing new.
+
+`node run.js --deploy` (entry "MC-Player Bot Deployer", every 30 minutes) and `node run.js --digest` (entry "MC-Player Bot Digest", checked hourly, one page a day after 07:00) are the other two loop jobs, installed from the same tab. Neither calls a model. The deployer wrapper (`lib/deploy.js`) calls `tools/deployer.js` of the clone the bots run from (`--code DIR`, the app's setting, or `~/Downloads/MC-Player-live`): judge first, deploy only when the last deploy has its verdict, and pass deploys and verdicts on to the work orders by PR number. The digest (`lib/digest.js`) writes `digest/<date>.md` in the loop folder.
+
+A finding now closes with a reason (`lib/findings.js`, `closeReason`): fixed by a named PR, went quiet after the bot moved to a named commit, closed by the reviewer, or went quiet with no code change in between.
+
 ## Prompt tuning (2026-11-10)
 The first live run (OzoGo444 and Smeo444, 04:43Z) mostly restated detector flags under `<bot>-detector-<kind>` keys, rated six things high, read lifetime hurt totals as live evidence and an old window as the present, and said nothing about armor or progress. `lib/prompt.js` now orders attention (rules, loops and stalls, progress, mess, code faults in logs), lists the rules in force and the roadmap phases, asks for one finding per root cause with at most 2 high and 5 total, and says what not to trust. The model also gets `previousReview` (last summary and bag) and the bag and worn armor in `telemetrySummary.now`, so it can judge progress. `examples/replay-before.json` and `replay-after.json` are the old and new prompt run on the same reconstructed 04:48Z input.
 

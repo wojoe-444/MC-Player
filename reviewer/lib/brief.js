@@ -28,7 +28,8 @@ Your memory is the file in "memory.global". It exists so that tomorrow's you kno
 3. Write "memory.now": two to four short lines (separate them with line breaks) on where you stand and what this plan is for. This replaces the Now section.
 4. Add a policy only when the record supports it, and say how you know (numbers and times from the journal) and how you would check it later. If you have not tested it, say "untested". Keep the rule under 150 characters, the evidence under 190 and the check under 110; longer text is cut. A policy is something you can act on from here, through focus, holds and free time, or a reason behind those choices. How a step's code should behave is not a policy: hold the step and say why. Add a trap when something keeps going wrong in a specific place or step.
 5. Remove lines that are wrong, stale, or that you could read off your own state. The file is capped at 60 lines; an addition that would pass the cap is refused ("refusedLastTime" lists what was refused last time and why).
-6. "memory.projects" is yours alone: your own projects and wishes. Set it to the full new text of that section when it changes, or null to leave it as it is.
+6. If "memory.lastCheck" is there, a separate check compared your file with the journal since your last plan and changed the lines it lists, each with its reason. The file is yours: if a change is wrong, put the line back (addPolicies or addTraps) and say what you know that the check did not.
+7. "memory.projects" is yours alone: your own projects and wishes. Set it to the full new text of that section when it changes, or null to leave it as it is.
 Do not store your bag, your position or chest contents: you can see those.
 
 "reviewerFindings" are notes from a spectator who watches you every ten minutes. Use the ones that match the record. A problem that is a bug in a step (it stalls the same way many times) is not yours to fix by trying harder: hold the step and say why.
@@ -70,6 +71,7 @@ function userPrompt(req) {
     '', '## rules', ...(rules || []),
     '', '## memory.global (your own file)', (memory && memory.global) || '(empty)',
     '', '## your notes', ((memory && memory.notes) || []).map(n => `${n.name} (${n.lines} lines)`).join(', ') || '(none)',
+    ...(memory && memory.lastCheck ? ['', `## memory.lastCheck (${memory.lastCheck.at})`, ...memory.lastCheck.changes.map(c => `- ${c}`)] : []),
     '', '## everything else (one field per line)', ...Object.entries(rest).filter(([k]) => !['v', 'id', 'at'].includes(k)).map(([k, v]) => `${k}: ${JSON.stringify(v)}`),
   ].join('\n')
 }
@@ -107,7 +109,7 @@ async function runBriefs(cfg, { ask, now = Date.now(), log = () => {}, dryRun = 
       fs.writeFileSync(f + '.tmp', JSON.stringify(ans, null, 1)); fs.renameSync(f + '.tmp', f)
       try { fs.appendFileSync(path.join(memDir(bot), 'brief-history.jsonl'), JSON.stringify({ id: ans.id, at: ans.at, reason: req.reason, ok: ans.ok, error: ans.error, costUsd: ans.costUsd, durationMs: ans.durationMs, intent: ans.data && ans.data.intent }) + '\n') } catch {}
       log(`brief ${bot.id} ${req.id} (${req.reason}): ${ans.ok ? 'ok' : 'failed: ' + ans.error}${ans.durationMs ? ` in ${Math.round(ans.durationMs / 1000)}s` : ''}${ans.costUsd ? ` $${ans.costUsd.toFixed(3)}` : ''}`)
-      briefs.push({ bot: bot.id, id: req.id, ok: ans.ok, error: ans.error })
+      briefs.push({ bot: bot.id, id: req.id, ok: ans.ok, error: ans.error, costUsd: ans.costUsd, durationMs: ans.durationMs })
     }
   } finally { dropLock(cfg) }
   return { ok: briefs.every(b => b.ok), briefs }
