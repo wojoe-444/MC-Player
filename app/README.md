@@ -30,6 +30,22 @@ The **Settings** tab has **Check for updates** (the app also checks quietly 20 s
 
 How it works: `.github/workflows/release-app.yml` builds the Windows installer on GitHub Actions and publishes it as a release (`v0.1.<run number>`, with `latest.yml`) whenever `app/`, `dashboard/` or `reviewer/` change on `main` (or run it by hand from the Actions tab). The installed app uses `electron-updater` (`lib/updater.js`) to compare its version with the latest release of `wojoe-444/MC-Player` (public repo, no token needed). So an update is available a few minutes after a merge to `main`, once the workflow finishes. Running from source (`npm start`) shows "updates only work in the installed app"; there, use `git pull`. A local `build-installer.bat` build is version 0.1.0 and never touches the releases.
 
+## Letting Claude update the app (local control endpoint)
+
+So a Claude session on the laptop (e.g. a Remote Control bot thread) can bring the app up to date after a release lands, the app listens on **127.0.0.1:8766** (setting `control.port`; `control.enabled: false` turns it off). It only offers update actions: status, check, and "check, then download, install and restart" (the Settings buttons, without the clicking).
+
+Security: loopback only; every request needs `Authorization: Bearer <token>` (random, created on first start, stored in `control.json` in the app's data folder and in `~/.mc-player/app-control.json`); requests with an `Origin` header (web pages) or an unexpected `Host` header (DNS rebinding) are refused. It can't read files, run commands or change settings. Anything running as Walter on the laptop can read the token file, which is the same trust level as running the app itself.
+
+From a repo checkout, no extra setup:
+
+```
+node tools/app-update.js status          # app version + update state
+node tools/app-update.js check           # ask GitHub for a newer release
+node tools/app-update.js apply --wait    # check; if newer: download, install, restart; wait until the new version answers
+```
+
+Routes: `GET /v1/status`, `POST /v1/update/check`, `POST /v1/update/apply`. The first version that has the endpoint must be installed by hand (download the installer from the release, or `npm run dist`); after that, later versions can be pulled in by Claude. `apply` quits and relaunches the app, so use it when nobody is mid-way through something in the window.
+
 ## Settings
 
 `config.json` in the app's data folder (under `%APPDATA%`; the app menu has no shortcut yet, so look for the `Bot Dashboard` or `mc-player-app` folder there) (created on first change; defaults shown):

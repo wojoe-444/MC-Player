@@ -8,6 +8,7 @@ const { startDashboard } = require('./lib/dashboard-process')
 const { TriggerManager } = require('./lib/triggers')
 const { createReviewTrigger, listReviews } = require('./lib/review')
 const { UpdateManager } = require('./lib/updater')
+const { startControlServer } = require('./lib/control')
 
 // Packaged: electron-builder copies dashboard/ into resources/. From source: the repo root is one level up.
 const REPO_ROOT = app.isPackaged ? process.resourcesPath : path.join(__dirname, '..')
@@ -18,7 +19,7 @@ try { schedule = require(path.join(REVIEWER_DIR, 'lib', 'schedule')) } catch (e)
 const ICON = path.join(__dirname, 'build', 'icon.ico')
 let config, dash, triggers, reviewsDir
 let mainWin = null
-let updates
+let updates, control
 
 const log = (...a) => console.log(new Date().toISOString(), ...a)
 
@@ -177,6 +178,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('update:state', () => updates.state())
   ipcMain.handle('update:check', () => updates.check())
   ipcMain.handle('update:install', () => { updates.install().catch(() => {}); return updates.state() })
+  // Local control endpoint (127.0.0.1 + token file): lets a Claude session on this laptop check/download/install updates. See lib/control.js.
+  if (config.data.control.enabled) control = await startControlServer({ updates, info: () => ({ version: app.getVersion(), packaged: app.isPackaged }), dataDir: userData, port: config.data.control.port, log })
   ipcMain.handle('tabs:state', () => tabsState())
   ipcMain.handle('tabs:select', (_e, id) => { selectTab(String(id)); return tabsState() })
   ipcMain.handle('app:info', () => ({ version: app.getVersion(), packaged: app.isPackaged, dataDir: userData, dashboardUrl: dash.url }))
@@ -190,4 +193,4 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => app.quit())
-app.on('before-quit', () => { if (triggers) triggers.stop(); if (dash) dash.stop() })
+app.on('before-quit', () => { if (triggers) triggers.stop(); if (dash) dash.stop(); if (control) control.close() })
