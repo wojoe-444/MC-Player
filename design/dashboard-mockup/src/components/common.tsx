@@ -2,7 +2,6 @@ import type { ReactNode } from "react"
 import { ArrowDownRightIcon, ArrowUpRightIcon } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
-import type { Item } from "@/data"
 
 export function PageHeader({ title, description, children }: { title: string; description: string; children?: ReactNode }) {
   return (
@@ -54,21 +53,4 @@ export function Meter({ value, max, tone = "primary", className }: { value: numb
       <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${Math.min(100, (100 * value) / max)}%` }} />
     </div>
   )
-}
-
-// Item tile drawn as a coloured square with the first letters; the real app loads Minecraft textures.
-export function ItemTile({ item, size = "md" }: { item: Item | null; size?: "sm" | "md" }) {
-  const box = size === "sm" ? "size-8 text-[10px]" : "size-12 text-xs"
-  if (!item) return <div className={cn(box, "rounded-md border border-dashed bg-muted/40")} />
-  const initials = item.n.split(" ").map((w) => w[0]).join("").slice(0, 2)
-  return (
-    <div className={cn(box, "relative flex items-center justify-center rounded-md border bg-muted/60 font-semibold")} title={`${item.n} × ${item.c}`}>
-      <span className="flex size-[70%] items-center justify-center rounded-[4px] text-white shadow-sm" style={{ background: item.color }}>{initials}</span>
-      {item.c > 1 && <span className="absolute right-0.5 bottom-0 font-mono text-[10px] font-semibold text-foreground [text-shadow:0_0_3px_var(--card)]">{item.c}</span>}
-    </div>
-  )
-}
-
-export function Swatch({ color }: { color: string }) {
-  return <span className="inline-block size-5 rounded-[5px] shadow-sm ring-1 ring-black/10" style={{ background: color }} />
 }

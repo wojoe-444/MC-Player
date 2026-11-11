@@ -1,19 +1,31 @@
 # Bot Dashboard design mockup
 
-A standalone mockup of the Bot Dashboard pages in a new look. It is **not** the shipped app: it does not talk to the bots, uses sample data (`src/data.ts`), and nothing in `app/` or `dashboard/` was changed.
+A redesign of the Bot Dashboard and the app's Claude reviews and Settings pages. It reuses the shipped panels (live view, inventory and items acquired, replay, behavior, structure, memory, logs, progress) unchanged in behavior and re-composes them in a new layout. Nothing in `app/` or `dashboard/` is modified.
 
-Pages: Dashboard, Progress (roadmap, builds, per-day numbers), Inventory (with Items acquired), Claude reviews, Settings.
+## Where the pages went
+| Shipped | Mockup |
+|---|---|
+| Overview | Dashboard (new KPI row from `/api/progress`, both bot cards) |
+| Progress, Logs, Memory and data | Same pages; Progress and Memory follow the bot picker in the top bar |
+| Per-bot Live, Inventory (with Items acquired), Replay, Behavior, Structure | Sidebar group "Selected bot"; one bot picker in the top bar replaces the two repeated sidebar groups |
+| App tab "Claude reviews" | Automation > Claude reviews (behavior reviewer, per-bot findings, triggers, recent reviews) |
+| App tab "Settings" (updates, dot when an update is available) | System > Settings; the dot moved to the sidebar item |
 
-Design choices
-- shadcn/ui components (the same set the dashboard already uses), Tailwind v4, Radix, Lucide.
-- MUI-style rhythm: 8px spacing (`p-2/4/6`, 24px grid gutters and card padding), 64px app bar, 256px drawer, grouped navigation with an active-item highlight.
-- Palette: ink-navy chrome, indigo primary, emerald / amber / rose / sky for status, light and dark themes (toggle in the app bar). Tokens are in `src/index.css`.
+Claude reviews and Settings talk to the Electron main process in the real app. The mockup has no main process, so `src/sim.tsx` simulates their state and actions (Review now, Run now, check and install update) with sample data.
+
+## Data
+`serve.mjs` GET-proxies `/api`, `/img` and `/tex` to the running dashboard (`DASHBOARD_URL`, default `http://localhost:8765`), so the pages show live bot data and real item textures. If the dashboard is down it answers from `fixtures/` (a local, git-ignored snapshot; refresh with `node snapshot.mjs` while the dashboard is up). Nothing is ever written back.
+
+## Design
+- shadcn/ui components (same set as the dashboard), Tailwind v4, Radix, Lucide.
+- MUI-style rhythm: 8px spacing (24px card padding and grid gutters), 64px app bar, 256px drawer, grouped navigation with an active highlight.
+- Palette: ink-navy chrome, indigo primary, emerald / amber / rose / sky for status, light and dark (toggle in the app bar). Tokens are in `src/index.css`.
 - Inter for text, JetBrains Mono for coordinates and ids.
 
-Run it
+## Run
 ```
 npm install
 npm run build
 node serve.mjs 8472      # http://localhost:8472  (or start-mockup.bat)
 ```
-`npm run dev` serves with hot reload on 8472 too. Port 8472 avoids the dashboard's 8765 and the Minecraft LAN port.
+Port 8472 avoids the dashboard's 8765 and the Minecraft LAN port.
