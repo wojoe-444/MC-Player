@@ -8,14 +8,29 @@
     "plains-1": {
       "name": "Plains",
       "biome": "minecraft:plains",
-      "seed": 4101,
+      "seed": 4106,
       "want": {
         "minLand": 0.92,
         "minTrees": 0,
         "maxTrees": 0.04,
         "maxRelief": 22
       },
-      "note": "open grass, a few lone trees: wood is the bottleneck"
+      "note": "open grass, a few lone trees: wood is the bottleneck",
+      "center": [
+        -32,
+        32
+      ],
+      "spawn": [
+        -34,
+        70,
+        30
+      ],
+      "window": {
+        "land": 0.949,
+        "trees": 0.005,
+        "relief": 10,
+        "medianY": 68
+      }
     },
     "forest-1": {
       "name": "Forest",

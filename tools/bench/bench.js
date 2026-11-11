@@ -152,7 +152,7 @@ function prepareBot(botDir, { code, bot, arena }) {
 function startBot(botDir, { name, port }) {
   const out = fs.openSync(path.join(botDir, 'join.log'), 'a')
   const pre = path.join(__dirname, 'offline-preload.js')
-  const env = { ...process.env, MC_EMAIL: name, MC_PORT: String(port), BENCH_PORT: String(port), BENCH_NAME: name, NODE_OPTIONS: `--require "${pre}"`, BOT_DASHBOARD_PORT: '-1', VIEWER_PORT: '0', SKIP_HELLO: '1', SUPERVISOR_POLL_MS: '600000' }
+  const env = { ...process.env, MC_EMAIL: name, MC_PORT: String(port), BENCH_PORT: String(port), BENCH_NAME: name, NODE_OPTIONS: `--require "${pre.split(path.sep).join('/')}"`, BOT_DASHBOARD_PORT: '-1', VIEWER_PORT: '0', SKIP_HELLO: '1', SUPERVISOR_POLL_MS: '600000' }
   const child = cp.spawn(process.execPath, [path.join(botDir, 'run.js')], { cwd: botDir, env, stdio: ['ignore', out, out], windowsHide: true })
   return child
 }
@@ -173,6 +173,7 @@ async function sampleOnce(rc, name) {
 const DEATH_RE = (n) => new RegExp(`\\]: (${n} (was|drowned|died|hit|burned|fell|tried|suffocated|starved|walked|went|blew|experienced|withered|got|froze|discovered|fell|died).*)$`, 'gm')
 
 function finalize(runDir, info) {
+  if (!fs.existsSync(path.join(runDir, 'samples.jsonl'))) fs.writeFileSync(path.join(runDir, 'samples.jsonl'), '')
   const samples = fs.readFileSync(path.join(runDir, 'samples.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l))
   const world = path.join(runDir, 'server', 'world'), a = info.arena
   const logTxt = (() => { try { return fs.readFileSync(path.join(runDir, 'server', 'logs', 'latest.log'), 'utf8') } catch { return '' } })()
