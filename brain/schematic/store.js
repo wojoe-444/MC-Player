@@ -22,7 +22,14 @@ function list(dirs) {
   }
   return [...byId.values()]
 }
-function load(dirs, id) { const e = list(dirs).find(x => x.schematic.id === id); return e ? e.schematic : null }
+// a later directory wins; the file is normally named after the id, so only that one is read (list() parses every file, which is megabytes with the big imports)
+function load(dirs, id) {
+  const name = safeId(id) + '.json'
+  let found = null
+  for (const d of dirs) { const s = readJson(path.join(d, name)); const u = s && (s.v === 1 || s.v === 2) && s.id === id && Array.isArray(s.rle) ? F.upgrade(s) : null; if (u) found = u }
+  if (found) return found
+  const e = list(dirs).find(x => x.schematic.id === id); return e ? e.schematic : null
+}
 function save(dir, s) {
   fs.mkdirSync(dir, { recursive: true })
   const f = path.join(dir, safeId(s.id) + '.json'), tmp = f + '.tmp'

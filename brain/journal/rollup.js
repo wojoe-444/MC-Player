@@ -19,6 +19,8 @@ function salientLine(e) {
   else if (e.k === 'chat') o.what = `${e.from}: ${e.text}`
   else if (e.k === 'first') o.what = `first ${e.what}: ${e.id}`
   else if (e.k === 'registry') o.what = [e.added && e.added.length ? `added ${e.added.join(', ')}` : '', e.removed && e.removed.length ? `removed ${e.removed.join(', ')}` : ''].filter(Boolean).join('; ')
+  else if (e.k === 'outcome') o.what = `${e.build} (${e.kindOf || 'build'}) is ${e.state}${e.why ? ': ' + e.why : ''}`
+  else if (e.k === 'schematic') o.what = e.ev === 'state' ? `${e.id} (${e.kindOf || 'build'}) is ${e.state} at ${e.pct}%${e.off != null ? `, ${e.off} cells off` : ''}${e.wrong && e.wrong.length ? `; first off: ${e.wrong.slice(0, 2).join(' | ')}` : ''}` : e.ev === 'start' ? `started following ${e.id} at ${(e.at || []).join(',')}: ${e.reason || ''}` : `saved the schematic ${e.id}`
   else o.what = e.text || e.msg || ''
   if (o.what.length > 220) o.what = o.what.slice(0, 219) + '…'
   return o

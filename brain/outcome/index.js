@@ -35,7 +35,9 @@ module.exports = function register(api) {
       if (r.type !== 'mobfarm' || !r.box) continue
       let pads = null
       try { const L = require('../inspect/mobfarm').layoutOfRoom(r, (w.shafts || []).find(s => s.id === r.shaft) || null); if (L) pads = L.platform.pads.map(c => [c[0], c[1] + 1, c[2]]) } catch { /* no shading info */ }
-      out.push({ id: r.id, kind: 'mobfarm', near: [(r.box.x0 + r.box.x1) / 2, (r.box.z0 + r.box.z1) / 2], pads, get: () => ((gstate().mobFarm || {}).kills) || 0 })
+      // a farm that follows a schematic (brain/schematic) is only counted as able to work once the world matches the schematic: until then it is "building", not "overdue"
+      const sj = () => { try { const j = bot._schematic && bot._schematic.job(); return j && j.room === r.id ? { state: j.state, pct: j.pct, id: j.id } : (r.viaSchematic ? { state: 'complete', pct: 100, id: r.schematic } : null) } catch { return null } }
+      out.push({ id: r.id, kind: 'mobfarm', near: [(r.box.x0 + r.box.x1) / 2, (r.box.z0 + r.box.z1) / 2], pads, schematic: r.viaSchematic || sj() ? sj : null, get: () => ((gstate().mobFarm || {}).kills) || 0 })
     }
     const tf = readJson(api.statePath('treefarm-state.json'), null)
     if (tf && Array.isArray(tf.farms) && tf.farms.length) {
@@ -58,13 +60,15 @@ const d = bot.game && typeof bot.game.difficulty === 'string' ? bot.game.difficu
     const p = pos(), e = env(), verdicts = {}
     for (const b of builds()) {
       const m = mem.builds[b.id] = mem.builds[b.id] || { kind: b.kind, firstSeen: t, base: b.get(), liveMs: 0, shadedMs: 0 }
-      const inRange = p && (!b.near || Math.hypot(p[0] - b.near[0], p[2] - b.near[1]) < RANGE)
+      const sch = b.schematic ? b.schematic() : null
+      const building = !!sch && sch.state !== 'complete'
+      const inRange = p && !building && (!b.near || Math.hypot(p[0] - b.near[0], p[2] - b.near[1]) < RANGE)
       if (dt > 0 && p && inRange) {
         m.liveMs += dt
         if (b.pads && b.pads.length) { const inside = b.pads.filter(c => Math.hypot(c[0] + 0.5 - p[0], c[1] - p[1], c[2] + 0.5 - p[2]) <= SHADE).length; if (inside >= b.pads.length / 2) m.shadedMs += dt }
       }
       const got = Math.max(0, b.get() - (m.base || 0))
-      const v = E.evaluate({ id: b.id, kind: b.kind, liveMs: m.liveMs, got, shadedFrac: m.liveMs > 0 ? m.shadedMs / m.liveMs : null }, e)
+      const v = E.evaluate({ id: b.id, kind: b.kind, liveMs: m.liveMs, got, shadedFrac: m.liveMs > 0 ? m.shadedMs / m.liveMs : null, schematic: sch }, e)
       v.since = new Date(m.firstSeen).toISOString()
       verdicts[b.id] = v
     }

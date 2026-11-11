@@ -1,8 +1,8 @@
 {
   "name": "schematic",
-  "version": 1,
+  "version": 2,
   "kind": "observer",
-  "summary": "Saves a schematic of a build the bot can see (generic block roles: 'solid, light-blocking, non-flammable' instead of cobblestone; exact blocks only where they matter: water levels, hoppers, slabs, trapdoors) and diffs a build against one, cell by cell. bot._schematic.capture / diff / list. brain/inspect uses the room's schematic for its exact check.",
+  "summary": "Saves a schematic of a build the bot can see (generic block roles: 'solid, light-blocking, non-flammable' instead of cobblestone; exact blocks only where they matter: water levels, hoppers, slabs, trapdoors) and diffs a build against one, cell by cell. bot._schematic.capture / diff / list. brain/inspect uses the room's schematic for its exact check. Since 2026-11-11 it also FOLLOWS a schematic for a big build: bot._schematic.startJob / verify / job / progress (brain/schematic/follow.js, loop.js; the hands are brain/autopilot/schematicbuild.js). The gate (loop.js) says when that is appropriate: the mob farm by default, anything else only when named on purpose, everyday jobs never. verify() reads the world, writes brain/state/schematic-job.json, a [schematic] lesson and a journal event, and registers the finished build as a room.",
   "requires": [],
   "provides": [],
   "claims": []

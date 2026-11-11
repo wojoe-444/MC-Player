@@ -13,6 +13,7 @@ const fs = require('fs')
 const path = require('path')
 
 const OUTCOME_MIN_PER_H = 5               // a build that should produce and does not costs this many minutes per hour in range (flat, like DEATH_MIN)
+const SCHEMATIC_STUCK_MIN = 30             // a stuck schematic build: a flat half hour (the executor worked on it for this long without one more cell right)
 const DEATH_MIN = 10                       // what one death is counted as: the walk back and the lost bag. A constant, not a measurement.
 const MIN_LOSS = 10, MIN_FAILS = 5, MIN_ALARMS = 5, MIN_DEATHS = 2, MIN_FLAGS = 10, MIN_FINDING_RUNS = 6
 const QUIET_DREAMS = 6                     // an order nobody has seen for this many dreams of a running bot closes as "went quiet" (12 h at one dream per 2 h)
@@ -77,6 +78,22 @@ function candidates({ rollup, events = [], findings = [], snapshots = [] }) {
       auto: { isBug: true, kind: human ? 'human' : 'outcome', title: cut(`${build}: ${e.state === 'blocked' ? 'cannot work' : 'produces nothing'}`, 100),
         problem: cut(`${build} (${e.kindOf || 'build'}) was in range for ${e.liveH || 0} h and produced ${e.got || 0} ${e.unit || 'output'}. ${e.why}`, 600),
         suggestion: human ? 'A person has to change the setting named above; code cannot work around it. Tell Walter once, then stop spending the bot\'s time on this build.' : 'The blocks match the design, so look at what the build needs from the world: competition for spawns, the bot standing too close, a counter the output is never added to.' },
+    })
+  }
+  // schematic builds (brain/schematic, the bot following a blueprint for a big build): a job that stopped making progress is the executor's fault, not the world's: it
+  // could not dig, place or reach cells the blueprint names. The journal event carries the first wrong cells (cell, what was wanted, what stands there), and the problem
+  // statement is written here from them, so no model has to find it. Walter 2026-11-11: following a schematic makes construction easy to check; the check feeds the loop.
+  const lastSchem = new Map()
+  for (const e of events) if (e && e.k === 'schematic' && e.ev === 'state' && e.id) lastSchem.set(e.id, e)
+  for (const [id, e] of lastSchem) {
+    if (e.state !== 'stuck') continue
+    const wrong = (e.wrong || []).slice(0, 4).map(w => cut(w, 90))
+    out.push({
+      key: `schematic-${slug(id)}`, type: 'schematic', step: null, costMin: SCHEMATIC_STUCK_MIN, counts: { off: Number(e.off) || 0 },
+      line: `schematic ${id} is stuck at ${e.pct}% (${e.off} cells off${e.counts ? ': ' + Object.entries(e.counts).map(([k, n]) => n + ' ' + k).join(', ') : ''})`, evidence: wrong,
+      auto: { isBug: true, kind: 'schematic', title: cut(`${id}: the build cannot get past ${e.pct}%`, 100),
+        problem: cut(`The bot followed schematic ${id} and the world stopped matching it more at ${e.pct}%: ${e.off} cells are still off. First off: ${wrong.join('; ') || 'not recorded'}.${e.foreign ? ` ${e.foreign} of the wrong cells hold blocks no bot of ours made.` : ''}`, 600),
+        suggestion: 'Look at why brain/autopilot/schematicbuild.js cannot do those cells: the placement recipe for that block (brain/schematic/follow.js recipe), a spot with a line of sight, a supply it lacks, or a cell that is not ours to dig (the ledger). The diff is the test: reproduce the cells from the journal event and make a test for the recipe.' },
     })
   }
   for (const f of findings || []) {

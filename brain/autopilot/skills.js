@@ -446,7 +446,7 @@ module.exports = function makeSkills({ bot, api, log }) {
   // ---------- placing ----------
   // torches: at least two blocks between any two (Walter 2026-11-10: torch-air-air-torch is the closest allowed spacing)
   S.torchCrowded = (p) => { try { return bot.findBlocks({ matching: (b) => b && /^(torch|wall_torch)$/.test(b.name), point: p, maxDistance: 4, count: 12 }).some(t => !t.equals(p) && Math.abs(t.x - p.x) <= 2 && Math.abs(t.y - p.y) <= 2 && Math.abs(t.z - p.z) <= 2) } catch { return false } }
-  S.placeAgainst = async (ref, face, itemName) => {
+  S.placeAgainst = async (ref, face, itemName, opts = {}) => {
     if (/^torch$/.test(itemName || '') && ref && ref.position && face && S.torchCrowded(ref.position.plus(face))) return false
     if (/^torch$/.test(itemName || '') && ref && ref.position && face && S.isShaftCell && S.isShaftCell(ref.position.plus(face))) return false
     // never a torch on the mob farm's spawning platform: one torch lights the whole 17-wide room and nothing spawns there (see S.noTorchAt)
@@ -463,7 +463,7 @@ module.exports = function makeSkills({ bot, api, log }) {
     try { await bot.lookAt(v(ref.position.x + 0.5 + face.x * 0.5, ref.position.y + 0.5 + face.y * 0.5, ref.position.z + 0.5 + face.z * 0.5), true) } catch {}
     if (!bot.heldItem || bot.heldItem.name !== itemName) return false
     // forced look (placeBlock's default turns the head over several ticks)
-    try { if (typeof bot._placeBlockWithOptions === 'function') await bot._placeBlockWithOptions(ref, face, { forceLook: true, swingArm: 'right' }); else await bot.placeBlock(ref, face); return true } catch (e) { log('PLACE_FAIL', `${itemName}: ${e.message}`); return false }
+    try { if (typeof bot._placeBlockWithOptions === 'function') await bot._placeBlockWithOptions(ref, face, { forceLook: true, swingArm: 'right', ...(opts.half ? { half: opts.half } : {}) }); else await bot.placeBlock(ref, face); return true } catch (e) { log('PLACE_FAIL', `${itemName}: ${e.message}`); return false }
   }
   // Find an open floor cell next to the bot and place `itemName` there. Returns the placed block or null.
   S.placeNear = async (itemName) => {

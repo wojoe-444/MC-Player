@@ -39,7 +39,7 @@ module.exports = function register(api) {
     const reg = readJson(registryFile, null), out = []
     if (!reg || !reg.worlds) return out
     for (const w of Object.values(reg.worlds)) for (const r of (w.rooms || [])) {
-      if (r.type !== 'mobfarm') continue
+      if (r.type !== 'mobfarm' && !r.viaSchematic) continue
       out.push({ room: r, shaft: (w.shafts || []).find(s => s.id === r.shaft) || null })
     }
     return out
@@ -68,7 +68,29 @@ module.exports = function register(api) {
     if (a.foreign.length) res.findings.push({ id: 'foreign-block', sev: 'note', zone: 'box', count: a.foreign.length, cells: sample(a.foreign), msg: `${a.foreign.length} made block(s) in the build that no bot recorded placing (${[...new Set(a.foreign.map(f => f.block))].slice(0, 4).join(', ')}): not our work, check before relying on them` })
   }
 
+  // A room that was built by following a schematic (brain/schematic, room.viaSchematic) has no geometry design behind it, only its blueprint: the check is the cell by
+  // cell diff, and the finding that matters is the percent that is right. (Walter 2026-11-11: following a schematic makes checking "much easier and more reliable".)
+  async function inspectSchematicRoom({ room }) {
+    const dirs = SC.dirsFor({ sharedDir: path.dirname(registryFile), stateDir: path.dirname(api.statePath('x')) })
+    const schem = room.schematic ? SC.load(dirs, room.schematic) : null
+    if (!schem) return { id: room.id, skipped: `the room's schematic "${room.schematic}" is not in the catalog` }
+    const at = room.origin || schem.origin
+    const box = { x0: at[0], y0: at[1], z0: at[2], x1: at[0] + schem.size[0] - 1, y1: at[1] + schem.size[1] - 1, z1: at[2] + schem.size[2] - 1 }
+    const g = await grid.fromBot(bot, box, 0, { yieldEvery: true, sleep })
+    if (!g) return { id: room.id, skipped: 'the chunks around the room are not loaded' }
+    const ex = exact.check(schem, at, g, { fault: true })
+    const res = { findings: [...ex.findings], stats: { exact: ex.stats } }
+    provenance(res, room, box, g)
+    const sum = mobfarm.summarise(res.findings, res.stats, g)
+    const sig = sum.findings.filter(f => f.sev !== 'note').map(f => f.id + ':' + f.count).join('|')
+    const pct = ex.stats.pct
+    const headline = sum.headline.length ? sum.headline : [`every checked cell of ${schem.id} matches (${ex.stats.checked} cells)`]
+    return { id: room.id, type: room.type, at: new Date(now()).toISOString(), ok: sum.ok, faults: sum.faults, warns: sum.warns, stats: { ...sum.stats, percentRight: pct, schematic: schem.id }, headline,
+      findings: sum.findings, render: { lightPlan: `${schem.id}: ${pct}% of ${ex.stats.checked} checked cells match`, along: '', across: '' }, box, signature: sig }
+  }
+
   async function inspectRoom({ room, shaft }, opt = {}) {
+    if (room.viaSchematic) return inspectSchematicRoom({ room, shaft })
     const L = mobfarm.layoutOfRoom(room, shaft)
     if (!L) return { id: room.id, skipped: 'cannot rebuild the design from the registry record (shaft or platform level missing)' }
     const g = await grid.fromBot(bot, L.box, MARGIN, { yieldEvery: true, sleep })
