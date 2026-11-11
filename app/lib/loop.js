@@ -23,7 +23,7 @@ function journalOf(b) {
   } catch { return null }
 }
 
-const JOB_IDS = ['dream', 'fix', 'deploy', 'digest']          // jobs this tab installs; the review job (which also answers the dawn briefs) keeps its buttons on the Claude reviews tab
+const JOB_IDS = ['dream', 'fix', 'deploy', 'digest', 'audit']          // jobs this tab installs; the review job (which also answers the dawn briefs) keeps its buttons on the Claude reviews tab
 
 // bots: [{ id, name, dir }]. status(job) -> the Task Scheduler state of one job (injected: it shells out to schtasks)
 async function loopState({ lib, loopDir, bots, status, running = {}, codeDir = null, fixMode = null }) {

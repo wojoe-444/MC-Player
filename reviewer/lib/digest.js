@@ -20,9 +20,12 @@ const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`
 
 // Pure: what was gathered -> markdown.
 // data: { now, bots: [{ name, online, rollup, asks: [{ at, text }], brief, memoryLines, memoryChanges, roadmap }], orders: [..], ledger: [..], deploys: [..], runs: [..], question }
-function buildDigest({ now = Date.now(), bots = [], orders: all = [], ledger = [], deploys = [], runs: runRows = [], question = null } = {}) {
+function buildDigest({ now = Date.now(), bots = [], orders: all = [], ledger = [], deploys = [], runs: runRows = [], question = null, audit = null } = {}) {
   const since = now - DAY_MS
   const L = [`# Memory loop digest, ${localDate(now)}`, '', '_The last 24 hours. Written by code from the journals, the work orders and the run log on this computer._', '']
+
+  // the loop's own review, six-hourly (lib/audit.js): the verdict first, because it says whether the rest of this page can be trusted to be enough
+  if (audit && audit.verdict) { L.push(`## Loop health: ${audit.verdict}`, '', cut(audit.summary, 400), ''); for (const n of (audit.needsWalter || []).slice(0, 4)) L.push(`- Needs you: ${cut(n, 220)}`); if ((audit.needsWalter || []).length) L.push('') }
 
   const asks = bots.flatMap(b => (b.asks || []).map(a => ({ bot: b.name, ...a })))
   if (asks.length) { L.push('## The bots ask', ''); for (const a of asks.slice(-4)) L.push(`- **${a.bot}** (${String(a.at).slice(11, 16)}Z): ${cut(a.text, 260)}`); L.push('') }
@@ -90,7 +93,7 @@ function gather(cfg, now) {
     }
   })
   let question = null; try { question = fs.readFileSync(path.join(cfg.loopDir, 'digest-question.txt'), 'utf8').split('\n').map(s => s.trim()).find(Boolean) || null } catch { /* none */ }
-  return { now, bots, orders: orders.list(cfg.loopDir), ledger: orders.readLedger(cfg.loopDir, 400), deploys: deployLog(cfg.codeDir, 100), runs: runRows, question }
+  return { now, bots, orders: orders.list(cfg.loopDir), ledger: orders.readLedger(cfg.loopDir, 400), audit: require('./audit').latest(cfg.loopDir), deploys: deployLog(cfg.codeDir, 100), runs: runRows, question }
 }
 
 // At most one digest per local day, the first run after 07:00 (force writes one now). -> { ok, skipped?, file? }

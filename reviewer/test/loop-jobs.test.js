@@ -102,8 +102,8 @@ test('runDigest: one a day after 07:00 local, the question is asked once, and th
 })
 
 test('jobs and settings: each loop job is its own Task Scheduler entry; the code folder comes from the flag, the app setting, then Downloads', () => {
-  assert.deepStrictEqual(Object.values(schedule.JOBS).map(j => [j.id, j.name, j.args[0], j.minutes]), [['review', 'MC-Player Bot Reviewer', '--once', 10], ['dream', 'MC-Player Bot Dream', '--dream', 120], ['deploy', 'MC-Player Bot Deployer', '--deploy', 30], ['fix', 'MC-Player Bot Fixer', '--fix', 180], ['digest', 'MC-Player Bot Digest', '--digest', 60]])
-  assert.strictEqual(new Set(Object.values(schedule.JOBS).map(j => j.vbs)).size, 5)
+  assert.deepStrictEqual(Object.values(schedule.JOBS).map(j => [j.id, j.name, j.args[0], j.minutes]), [['review', 'MC-Player Bot Reviewer', '--once', 10], ['dream', 'MC-Player Bot Dream', '--dream', 120], ['deploy', 'MC-Player Bot Deployer', '--deploy', 30], ['fix', 'MC-Player Bot Fixer', '--fix', 180], ['audit', 'MC-Player Bot Loop Audit', '--audit', 360], ['digest', 'MC-Player Bot Digest', '--digest', 60]])
+  assert.strictEqual(new Set(Object.values(schedule.JOBS).map(j => j.vbs)).size, 6)
   const home = path.join(tmp(), 'h')
   assert.strictEqual(resolveConfig({ argv: [], env: {}, home, exists: () => false }).codeDir, path.join(home, 'Downloads', 'MC-Player-live'))
   assert.strictEqual(resolveConfig({ argv: ['--code', '/c'], env: { BOT_CODE_DIR: '/e' }, home, exists: () => false }).codeDir, '/c')
