@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect } from "react"
 import { Route, Routes, useLocation, useNavigate } from "react-router-dom"
-import { MoonIcon, SunIcon } from "lucide-react"
+import { Loader2Icon, MoonIcon, SunIcon } from "lucide-react"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -16,12 +16,25 @@ import { Loop } from "@/pages/Loop"
 import { Reviews } from "@/pages/Reviews"
 import { Settings } from "@/pages/Settings"
 import { useFresh } from "@/components/BotParts"
+import { PageHeader } from "@/components/common"
 import { Badge } from "@/components/ui/badge"
 import { BOT_IDS } from "@/types"
 import { ThemeProvider, ThemeSelect, useTheme } from "@/components/ThemePicker"
 
 // three.js is large: the Bases page loads on first visit
 const Bases = lazy(() => import("@/pages/Bases").then((m) => ({ default: m.Bases })))
+
+// Shown while the Bases page chunk downloads (heading first, so the page never sits empty)
+function BasesFallback() {
+  return (
+    <>
+      <PageHeader title="Bases" description="A base as a metal cast: the space the bots dug and built, with the solid world taken away, like casting metal into an ant colony. A base is a waypoint." />
+      <div className="dark flex h-[34rem] items-center justify-center rounded-xl bg-zinc-950 text-zinc-400 xl:h-[40rem]" role="status" aria-live="polite">
+        <Loader2Icon className="size-8 animate-spin" />
+      </div>
+    </>
+  )
+}
 
 const PER_BOT = ["/progress", "/live", "/inventory", "/replay", "/behavior", "/structure", "/memory"]
 
@@ -78,7 +91,7 @@ function Shell() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/progress" element={<Progress />} />
-            <Route path="/bases" element={<Suspense fallback={null}><Bases /></Suspense>} />
+            <Route path="/bases" element={<Suspense fallback={<BasesFallback />}><Bases /></Suspense>} />
             <Route path="/logs" element={<Logs />} />
             <Route path="/live" element={<Live />} />
             <Route path="/inventory" element={<Inventory />} />
