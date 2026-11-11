@@ -398,6 +398,22 @@ const basecast = require('./basecast');
 const schematiccast = require('./schematiccast');
 const castCache = new Map();
 function castOpts() { return { sharedDir: path.dirname(REGISTRY), registryFile: REGISTRY, botDirs: Object.values(BOTS), codeDir: CODE }; }
+// The schematic agent (dashboard/schematicagent.js): its queue lives in bot-shared/schematic-agent, shared with the bots. Finished requests drop the catalog caches so the new
+// schematic shows at once.
+const schematicAgent = require('./schematicagent').createService({
+  sharedDir: path.dirname(REGISTRY), dirs: () => require('../brain/schematic/store').dirsFor({ sharedDir: path.dirname(REGISTRY) }).concat(Object.values(BOTS).map(b => path.join(b.dir || b, 'brain', 'state', 'schematics'))),
+  onChange: () => castCache.clear(), log: (m) => console.log(m),
+});
+schematicAgent.start();
+// POST bodies are small JSON; a page on another origin cannot send application/json without a preflight this server does not answer, and a request that names another origin is refused too
+function readJsonBody(req, res, then) {
+  const origin = req.headers.origin;
+  if (origin) { try { if (new URL(origin).host !== req.headers.host) return send(res, 403, 'wrong origin'); } catch { return send(res, 403, 'wrong origin'); } }
+  if (!/^application\/json/i.test(req.headers['content-type'] || '')) return send(res, 415, 'send application/json');
+  let n = 0; const chunks = [];
+  req.on('data', (c) => { n += c.length; if (n > 65536) { send(res, 413, 'too big'); req.destroy(); } else chunks.push(c); });
+  req.on('end', () => { let b; try { b = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch { return send(res, 400, 'not JSON'); } then(b); });
+}
 function castCached(id, fn) {
   const c = castCache.get(id);
   if (c && Date.now() - c.at < 15000) return c.v;
@@ -464,8 +480,25 @@ http.createServer((req, res) => {
   }
   if (p === '/api/schematics') return send(res, 200, JSON.stringify(castCached('schematics', () => schematiccast.index(castOpts()))), 'application/json');
   if ((sm = p.match(/^\/api\/schematics\/([\w.-]+)$/))) {
-    const sc = castCached('schematic:' + sm[1], () => schematiccast.detail(castOpts(), sm[1]));
+    const variant = u.searchParams.get('variant') || '';
+    const sc = castCached('schematic:' + sm[1] + ':' + variant, () => schematiccast.detail(castOpts(), sm[1], variant || undefined));
     return sc ? send(res, 200, JSON.stringify(sc), 'application/json') : send(res, 404, 'no such schematic');
+  }
+  // the schematic agent: ask for a build in words (people here, the bots through bot-shared), watch the queue, cancel, and the bots' daily cap
+  if (p === '/api/schematic-agent' && req.method === 'GET') return send(res, 200, JSON.stringify(schematicAgent.info()), 'application/json');
+  if ((sm = p.match(/^\/api\/schematic-agent\/requests\/([\w-]+)$/)) && req.method === 'GET') {
+    const r = schematicAgent.get(sm[1]);
+    return r ? send(res, 200, JSON.stringify(r), 'application/json') : send(res, 404, 'no such request');
+  }
+  if (req.method === 'POST' && p.startsWith('/api/schematic-agent/')) {
+    return readJsonBody(req, res, (body) => {
+      let out;
+      if (p === '/api/schematic-agent/requests') out = schematicAgent.create(body);
+      else if (p === '/api/schematic-agent/config') out = { ok: true, config: schematicAgent.setConfig(body) };
+      else if ((sm = p.match(/^\/api\/schematic-agent\/requests\/([\w-]+)\/cancel$/))) out = schematicAgent.cancel(sm[1]);
+      else return send(res, 404, 'not found');
+      return send(res, out.ok ? 200 : 400, JSON.stringify(out), 'application/json');
+    });
   }
   if (p === '/api/progress') return send(res, 200, JSON.stringify(progress()), 'application/json');
   if (p === '/api/acquired') return send(res, 200, JSON.stringify(acquired(u.searchParams.get('window'))), 'application/json');

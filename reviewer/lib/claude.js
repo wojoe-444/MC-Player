@@ -56,6 +56,9 @@ async function runAgent(opts) {
   const ac = new AbortController()
   const timer = setTimeout(() => ac.abort(), opts.timeoutMs || 30 * 60000)
   const server = opts.server || 'fixer'
+  // opts.signal: the caller can stop the session (the Schematics page's Cancel); the error then says so instead of "timed out"
+  let cancelled = false
+  if (opts.signal) { const stop = () => { cancelled = true; ac.abort() }; if (opts.signal.aborted) stop(); else opts.signal.addEventListener('abort', stop, { once: true }) }
   // how long one of our own tools may take. Said twice (the server's own limit and the environment), because a MCP_TOOL_TIMEOUT of 60 s inherited
   // from the surrounding environment cut every test-suite run off in a trial on 2026-11-11, and the session spent its whole time retrying.
   const toolMs = opts.toolTimeoutMs || 35 * 60000
@@ -94,7 +97,7 @@ async function runAgent(opts) {
     let result = null
     for await (const m of q) if (m.type === 'result') result = m
     const base = { durationMs: Date.now() - started, calls, tools: names }
-    if (!result) return { ok: false, error: 'no result message from the SDK', ...base }
+    if (!result) return { ok: false, error: cancelled ? 'cancelled' : 'no result message from the SDK', cancelled, ...base }
     base.costUsd = result.total_cost_usd; base.turns = result.num_turns
     if (result.subtype !== 'success' || result.is_error) return { ok: false, error: hint(`${result.subtype}: ${(result.errors || []).join('; ') || result.result || 'failed'}`.slice(0, 500)), ...base }
     let data = result.structured_output
@@ -104,8 +107,8 @@ async function runAgent(opts) {
     if (!data) return { ok: false, error: 'the answer was not structured JSON', text: String(result.result || '').slice(0, 8000), ...base }
     return { ok: true, data, ...base }
   } catch (e) {
-    const msg = ac.signal.aborted ? `timed out after ${Math.round((opts.timeoutMs || 30 * 60000) / 60000)} min` : String(e && e.message || e)
-    return { ok: false, error: hint(msg), durationMs: Date.now() - started, calls }
+    const msg = cancelled ? 'cancelled' : ac.signal.aborted ? `timed out after ${Math.round((opts.timeoutMs || 30 * 60000) / 60000)} min` : String(e && e.message || e)
+    return { ok: false, error: hint(msg), durationMs: Date.now() - started, calls, cancelled }
   } finally { clearTimeout(timer) }
 }
 

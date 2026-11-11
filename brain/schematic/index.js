@@ -9,11 +9,15 @@
 //   bot._schematic.diff(id, at?)  -> brain/schematic/format.js diff against the loaded world
 //   bot._schematic.list()
 //   bot._schematic.progress(id, at?)      -> brain/schematic/follow.js progress(): percent right, the work still to do, per layer; unloaded cells are never counted wrong
-//   bot._schematic.startJob({ id?, kind, reason, at?, near?, explicit?, room? })  decide to FOLLOW a schematic for a build (loop.js says when that is appropriate),
+//   bot._schematic.startJob({ id?, variant?, kind, reason, at?, near?, explicit?, room? })  decide to FOLLOW a schematic for a build (loop.js says when that is appropriate),
 //        pick where it goes (findAt: least digging, never lava or a no-dig cell) and remember the job (brain/state/schematic-job.json). One job at a time.
 //   bot._schematic.verify()               -> check the world against the job now: percent, state (building | complete | stuck | abandoned), a lesson line and a journal event
 //        when the state changes; on completion the build is registered as a room whose blueprint is the schematic, so brain/inspect and brain/outcome take it from there
 //   bot._schematic.job() / .noteWork(ms) / .abandon(why)
+//   bot._schematic.request({ prompt, kind?: 'new' | 'variant', target?: { id, variant? } })  ask the schematic AGENT (a model, run by the Bot Dashboard's server on Walter's
+//        login) to design a schematic from words and file it in the catalog. Capped (default 25 requests a day for both bots together, 3 waiting at once; the cap is in
+//        bot-shared/schematic-agent/config.json and on the Schematics page). A bot may ask for a NEW schematic or a new VARIANT of one, never for a change to an existing one.
+//        -> { ok, id, quota } | { ok: false, why }; the build is in the catalog when .requests() says `done` (minutes; it waits while the app is closed). .agentQuota() is today's use.
 // Every cell stores the specific block it shows AND a role (see blocks.js): a wall is `solid` (any solid, light-blocking, non-flammable block passes the check) shown as the block it was.
 // Walter 2026-11-11: the improvement loop needs to be able to save a schematic of a working build, and to check the next one against it.
 'use strict'
@@ -24,6 +28,8 @@ const S = require('./store')
 const grid = require('../inspect/grid')
 const FO = require('./follow')
 const LP = require('./loop')
+const AS = require('./agentstore')
+const V = require('./variants')
 
 module.exports = function register(api) {
   const { bot } = api
@@ -79,10 +85,10 @@ module.exports = function register(api) {
   const saveJob = () => { try { fs.writeFileSync(jobFile + '.tmp', JSON.stringify(job, null, 1)); fs.renameSync(jobFile + '.tmp', jobFile) } catch { /* the next verify writes it again */ } }
   const lesson = (m) => { try { fs.appendFileSync(lessonsFile, `- ${new Date(now()).toISOString().slice(0, 16).replace('T', ' ')} [schematic] ${m}\n`) } catch { /* ignore */ } }
   const boxOf = (s, at) => ({ x0: at[0], y0: at[1], z0: at[2], x1: at[0] + s.size[0] - 1, y1: at[1] + s.size[1] - 1, z1: at[2] + s.size[2] - 1 })
-  const loadSchem = (id) => S.load(dirs(), id)
+  const loadSchem = (id, variant) => S.load(dirs(), id, variant)
 
   function progress(id, at, opt = {}) {
-    const s = loadSchem(id); if (!s) return { ok: false, why: `no schematic "${id}"` }
+    const s = loadSchem(id, opt.variant); if (!s) return { ok: false, why: `no schematic "${id}"` }
     const a = at || s.origin
     if (!grid.columnsLoaded(bot, boxOf(s, a), 0)) return { ok: false, why: 'the chunks are not loaded: go there first' }
     const p = FO.progress(s, liveGet(), a, opt)
@@ -113,7 +119,7 @@ module.exports = function register(api) {
   function startJob(o = {}) {
     if (job && job.state === 'building') return { ok: false, why: `already following ${job.id} (${job.pct != null ? job.pct + '%' : 'just started'}): finish or abandon it first`, job }
     const dirsNow = dirs()
-    const pick = LP.choose({ kind: o.kind, id: o.id || null, explicit: !!o.explicit, dirs: dirsNow })
+    const pick = LP.choose({ kind: o.kind, id: o.id || null, explicit: !!o.explicit, dirs: dirsNow, variant: o.variant || null })
     if (!pick.ok) return { ok: false, why: pick.why }
     const s = pick.schematic
     let at = Array.isArray(o.at) && o.at.length >= 3 && o.at.slice(0, 3).every(Number.isFinite) ? o.at.slice(0, 3).map(Math.floor) : null
@@ -128,7 +134,7 @@ module.exports = function register(api) {
       if (!r.ok) return { ok: false, why: r.why }
       at = r.at; cost = r.cost
     }
-    job = { v: 1, id: s.id, name: s.name, kind: s.kind, at, reason: String(o.reason || pick.why).slice(0, 200), room: o.room || (s.kind + '-' + s.id).slice(0, 48), startedAt: now(), state: 'building', pct: null, off: null, bestOff: null, progressAt: now(), workedMs: 0, sinceProgressMs: 0, history: [], siteCost: cost, by: bot.username || null }
+    job = { v: 1, id: s.id, variant: s.variant || null, name: s.name, kind: s.kind, at, reason: String(o.reason || pick.why).slice(0, 200), room: o.room || (s.kind + '-' + s.id).slice(0, 48), startedAt: now(), state: 'building', pct: null, off: null, bestOff: null, progressAt: now(), workedMs: 0, sinceProgressMs: 0, history: [], siteCost: cost, by: bot.username || null }
     saveJob()
     lesson(`following ${s.id} at ${at.join(',')}${cost != null ? ` (about ${cost} dig and place steps)` : ''}: ${job.reason}`)
     try { if (bot._journal) bot._journal.add('schematic', { ev: 'start', id: s.id, kindOf: s.kind, at, reason: job.reason }, { sal: true }) } catch { /* observer */ }
@@ -142,7 +148,7 @@ module.exports = function register(api) {
       const key = bot.spawnPoint ? `spawn ${Math.floor(bot.spawnPoint.x)},${Math.floor(bot.spawnPoint.z)}` : null
       const world = (key && reg.worlds && reg.worlds[key]) || (reg.worlds && Object.values(reg.worlds)[0]); if (!world) return
       world.rooms = world.rooms || []
-      const rec = { id: job.room, type: s.kind, by: bot.username, box: boxOf(s, job.at), at: now(), schematic: s.id, viaSchematic: true, origin: job.at }
+      const rec = { id: job.room, type: s.kind, by: bot.username, box: boxOf(s, job.at), at: now(), schematic: s.id, schematicVariant: s.variant || null, viaSchematic: true, origin: job.at }
       const i = world.rooms.findIndex(r => r.id === rec.id); if (i >= 0) world.rooms[i] = { ...world.rooms[i], ...rec }; else world.rooms.push(rec)
       fs.writeFileSync(registryFile + '.tmp', JSON.stringify(reg, null, 1)); fs.renameSync(registryFile + '.tmp', registryFile)
     } catch { /* the job file still says it is complete */ }
@@ -171,7 +177,7 @@ module.exports = function register(api) {
   let lastVerifiedState = null
   function verify() {
     if (!job || job.state === 'abandoned') return null
-    const r = progress(job.id, job.at, { max: 4000 })
+    const r = progress(job.id, job.at, { max: 4000, variant: job.variant })
     if (!r.ok) return { ok: false, why: r.why }
     const t = now(), prevState = job.state
     job.pct = r.pct; job.off = r.off; job.unknown = r.unknown; job.lastVerifyAt = t; job.counts = r.counts; job.attribution = r.attribution || null
@@ -185,7 +191,7 @@ module.exports = function register(api) {
     else if (job.state === 'stuck' && job.sinceProgressMs < STUCK_MS) job.state = 'building'
     saveJob()
     if (job.state !== prevState || (lastVerifiedState == null && job.state !== 'building')) {
-      const s = loadSchem(job.id)
+      const s = loadSchem(job.id, job.variant)
       if (job.state === 'complete') { if (s) registerRoom(s); lesson(`${job.id}: complete, every checked cell matches (${r.checked} cells).`) }
       else if (job.state === 'stuck') lesson(`${job.id}: stuck at ${r.pct}% (${FO.summary(r)}); first off: ${job.lastWrong.slice(0, 3).join(' | ')}`)
       else lesson(`${job.id}: ${job.state} at ${r.pct}%.`)
@@ -206,8 +212,27 @@ module.exports = function register(api) {
   const clearJob = () => { if (job && (job.state === 'complete' || job.state === 'abandoned')) { job = null; try { fs.unlinkSync(jobFile) } catch { /* gone */ } return true } return false }
   const jobView = () => (job ? { ...job } : null)
 
+  // ---------------------------------------------------------------------------------------------------------------------------- asking the agent
+  function request(o = {}) {
+    const kind = o.kind === 'variant' ? 'variant' : 'new'
+    const target = kind === 'variant' ? { id: String((o.target && o.target.id) || o.id || '').slice(0, 64), variant: o.target && o.target.variant ? String(o.target.variant).slice(0, 40) : null } : null
+    if (kind === 'variant') {
+      const e = S.loadDoc(dirs(), target.id); if (!e) return { ok: false, why: `no schematic "${target.id}" to make a variant of` }
+      if (target.variant && !V.find(e.doc, target.variant)) return { ok: false, why: `"${target.id}" has no variant "${target.variant}"` }
+    }
+    const r = AS.create(sharedDir, { source: 'bot', by: bot.username || 'a bot', prompt: o.prompt, kind, target }, now())
+    if (!r.ok) return { ok: false, why: r.why, quota: r.quota }
+    try { if (bot._journal) bot._journal.add('schematic', { ev: 'request', request: r.request.id, kindOf: kind, target: target && target.id, prompt: String(r.request.prompt).slice(0, 160), left: r.quota.remaining }, { sal: true }) } catch { /* observer */ }
+    lesson(`asked the schematic agent (${kind}${target ? ' of ' + target.id : ''}): ${String(r.request.prompt).slice(0, 120)} [${r.quota.used} of ${r.quota.cap} today]`)
+    return { ok: true, id: r.request.id, quota: r.quota }
+  }
+  // this bot's most recent requests: { id, status: queued | running | done | failed | cancelled, prompt, result?: { schematicId, variantId, ... }, error? }
+  const requests = (limit = 8) => AS.list(sharedDir, { limit: 60 }).filter(r => r.source === 'bot' && r.by === (bot.username || 'a bot')).slice(0, limit)
+    .map(r => ({ id: r.id, status: r.status, kind: r.kind, target: r.target, prompt: r.prompt, createdAt: r.createdAt, result: r.result ? { schematicId: r.result.schematicId, variantId: r.result.variantId, name: r.result.name, size: r.result.size, summary: r.result.summary } : null, error: r.error || null }))
+  const agentQuota = () => AS.quota(sharedDir, now())
+
   let vtimer = null
-  bot._schematic = { v: 2, capture, diff, list, dirs, progress, startJob, verify, job: jobView, noteWork, abandon, clearJob, attribute, diggable, load: loadSchem, policy: LP.policy, candidates: (kind) => LP.candidates(kind, dirs()) }
+  bot._schematic = { v: 2, request, requests, agentQuota, capture, diff, list, dirs, progress, startJob, verify, job: jobView, noteWork, abandon, clearJob, attribute, diggable, load: loadSchem, policy: LP.policy, candidates: (kind) => LP.candidates(kind, dirs()) }
   return {
     name: 'schematic',
     start() { vtimer = setInterval(() => { if (job && job.state !== 'abandoned') { try { verify() } catch (e) { if (api.log) api.log('schematic', 'verify failed: ' + e.message) } } }, 5 * 60000); if (vtimer.unref) vtimer.unref() },
