@@ -615,6 +615,18 @@ module.exports = function think(G, S, M, api, log) {
     if (!r.ok) return fail(clean(r.why) || 'nothing lit', r.needs ? 'bring: ' + Object.entries(r.needs).map(([k, n]) => n + ' ' + k).join(', ') : undefined)
     return { ok: true, note: clean(`placed ${r.placed}, failed ${r.failed}, retreats ${r.retreats}; dark spots ${r.dark0} -> ${r.left ? r.left.dark : '?'}${r.left ? ' (' + r.left.sealed + ' sealed)' : ''}${r.why ? '; ' + r.why : ''}`) }
   })
+  def('save_schematic', '{action: capture|diff|list, id, room?, box?, seeds?} save a schematic of a build you can see, or check a build against one (Walter 2026-11-11: when something works, keep the blueprint; when something is built, diff it cell by cell). capture {id, room: <registered room id>} stores the room as ROLES (open air, "a solid light-blocking non-flammable block" instead of cobblestone, water at its level, exact hopper/slab/trapdoor) and names it as the room\'s blueprint; capture {id, box: {x0,y0,z0,x1,y1,z1}, seeds?: [[x,y,z]]} for anything else. diff {id} lists the cells that differ. The chunks must be loaded: stand near it first.', async (a) => {
+    const act = clean(a.action).toLowerCase() || 'list'
+    const M = bot._schematic; if (!M) return fail('schematic module not loaded')
+    if (act === 'list') return { ok: true, note: clean(JSON.stringify(M.list().map(x => ({ id: x.id, kind: x.kind, size: x.size })))).slice(0, 500) }
+    const id = clean(a.id).slice(0, 64); if (!id) return fail('need an id')
+    if (act === 'diff') { const r = M.diff(id); if (!r.ok) return fail(clean(r.why)); return { ok: r.wrong.length === 0, note: clean(`${r.matched} of ${r.checked} required cells match, ${r.wrong.length} differ${r.unknown ? ', ' + r.unknown + ' not loaded' : ''}${r.wrong.length ? '; e.g. ' + r.wrong.slice(0, 4).map(w => `${w.x},${w.y},${w.z} should be ${w.want} but is ${w.got}`).join('; ') : ''}`) } }
+    if (act !== 'capture') return fail('action is capture, diff or list')
+    const o = { id }; if (a.room) o.room = clean(a.room); if (a.box && typeof a.box === 'object') o.box = { x0: Math.floor(num(a.box.x0)), y0: Math.floor(num(a.box.y0)), z0: Math.floor(num(a.box.z0)), x1: Math.floor(num(a.box.x1)), y1: Math.floor(num(a.box.y1)), z1: Math.floor(num(a.box.z1)) }
+    if (Array.isArray(a.seeds)) o.seeds = a.seeds.filter(c => Array.isArray(c) && c.length >= 3).slice(0, 8).map(c => c.slice(0, 3).map(num))
+    const r = M.capture(o); if (!r.ok) return fail(clean(r.why))
+    return { ok: true, note: clean(`saved ${r.schematic.id}: ${r.schematic.size.join('x')} cells, ${r.schematic.palette.length - 1} kinds of requirement (${r.file})`) }
+  })
   def('revise_strategy', '{text, why} replace your persistent STRATEGY (max ~2400 chars) with improved standing policies. Use when PATTERNS show a repeated failure: name the missing capability, design a durable process (infrastructure included), add a CHECK.', async (a) => { const ok = reflect.revise(a.text, a.why); return ok ? { ok: true, note: 'strategy updated' } : fail('text too short') })
   def('say', '{text} one short chat line to Walter (rare; no questions about the game).', async (a) => { const t = clean(a.text).slice(0, 160); if (!t || Date.now() - (T.lastSay || 0) < 90000) return { ok: true, note: 'skipped' }; T.lastSay = Date.now(); S.say(t); return { ok: true } })
   def('wait', '{ms} stand still (max 5000). Only to let something finish; never as a plan.', async (a) => { await S.wait(clamp(num(a.ms) || 1000, 100, 5000)); return { ok: true } })

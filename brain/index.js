@@ -22,7 +22,7 @@ const moduleMeta = require('./meta')
 const { createProfile } = require('./profile')
 const { createReflexes } = require('./reflexes')
 
-const MODULES = ['lag', 'safety', 'chat', 'pilot', 'router', 'excavation', 'nav', 'treefarm', 'husbandry', 'routines', 'crafting', 'build', 'lighting', 'mining', 'villagers', 'dashboard', 'autopilot', 'combat', 'survival', 'mode', 'clearbox', 'breath', 'senses', 'plugins', 'hurt', 'behavior', 'pilot-kit', 'telemetry', 'runlog', 'roadmap', 'acquired', 'inspect', 'outcome', 'journal', 'memory', 'bases']
+const MODULES = ['lag', 'safety', 'chat', 'pilot', 'router', 'excavation', 'nav', 'treefarm', 'husbandry', 'routines', 'crafting', 'build', 'lighting', 'mining', 'villagers', 'dashboard', 'autopilot', 'combat', 'survival', 'mode', 'clearbox', 'breath', 'senses', 'plugins', 'hurt', 'behavior', 'pilot-kit', 'telemetry', 'runlog', 'roadmap', 'acquired', 'inspect', 'outcome', 'schematic', 'journal', 'memory', 'bases']
 const NORMALIZE_FILLER = /\b(hey|yo|claude|bot|ozogo444|please|pls|plz|can you|could you|would you|will you|can u|go ahead and|just|now|for me)\b/g
 // same normalisation as handleCommand() in join.js
 const normalize = (text) => String(text).toLowerCase().replace(/[^\w\s',.-]/g, ' ').replace(NORMALIZE_FILLER, ' ').replace(/\s+/g, ' ').trim()

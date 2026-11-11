@@ -1,0 +1,9 @@
+{
+  "name": "schematic",
+  "version": 1,
+  "kind": "observer",
+  "summary": "Saves a schematic of a build the bot can see (generic block roles: 'solid, light-blocking, non-flammable' instead of cobblestone; exact blocks only where they matter: water levels, hoppers, slabs, trapdoors) and diffs a build against one, cell by cell. bot._schematic.capture / diff / list. brain/inspect uses the room's schematic for its exact check.",
+  "requires": [],
+  "provides": [],
+  "claims": []
+}

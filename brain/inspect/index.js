@@ -17,6 +17,9 @@ const grid = require('./grid')
 const light = require('./light')
 const mobfarm = require('./mobfarm')
 const render = require('./render')
+const exact = require('./exact')
+const designs = require('../schematic/designs')
+const SC = require('../schematic/store')
 
 const EVERY_MS = 4 * 60000
 const MARGIN = { x: 14, y: 6, z: 14 }          // light reaches 14 blocks; a torch farther away than that cannot matter, and rock stops it anyway
@@ -53,7 +56,16 @@ module.exports = function register(api) {
     if (!L) return { id: room.id, skipped: 'cannot rebuild the design from the registry record (shaft or platform level missing)' }
     const g = await grid.fromBot(bot, L.box, MARGIN, { yieldEvery: true, sleep })
     if (!g) return { id: room.id, skipped: 'the chunks around the room are not loaded' }
-    const res = mobfarm.check(L, g, { done: true })
+    let res = mobfarm.check(L, g, { done: true })
+    // the exact check: cell by cell against the room's own blueprint (a schematic saved for it), or against the design when it has none (then only a note: the
+    // specific checks above already say what is wrong, this says how much of the design is in place)
+    try {
+      const explicit = room.schematic ? SC.load(SC.dirsFor({ sharedDir: path.dirname(registryFile), stateDir: path.dirname(api.statePath('x')) }), room.schematic) : null
+      const schem = explicit || designs.mobfarmDesign(L, { id: 'design-' + room.id })
+      const ex = exact.check(schem, schem.origin, g, { fault: !!explicit })
+      res.findings.push(...ex.findings); res.stats = { ...res.stats, exact: ex.stats }
+      res = mobfarm.summarise(res.findings, res.stats, g)
+    } catch (e) { api.log('inspect', 'exact check failed: ' + e.message) }
     const lm = light.blockLight(g)
     const pics = render.renderMobFarm(L, g, lm, res)
     const sig = res.findings.filter(f => f.sev !== 'note').map(f => f.id + ':' + f.count).join('|')
