@@ -167,6 +167,15 @@ test('merge mode: a clean fix is merged; one that removes free-time lines or edi
   assert.equal(r.outcome, 'ready'); assert.match(r.summary, /GitHub CLI \(gh\) is not installed/); assert.equal(fixer.fixState(w.cfg).gh.ok, false)
 })
 
+test('a lock held by a live run skips this one; a lock left by a run that died does not', async () => {
+  const w = world(); w.order('step-iron'); fs.mkdirSync(w.cfg.loopDir, { recursive: true })
+  const lock = path.join(w.cfg.loopDir, 'fix.lock')
+  fs.writeFileSync(lock, JSON.stringify({ pid: process.pid }))
+  assert.equal((await fixer.runFix(w.cfg, { agent: goodAgent, now: NOW, words: [] })).skipped, 'another fixer run is going')
+  fs.writeFileSync(lock, JSON.stringify({ pid: 2 ** 22 + 12345 }))                // no such process
+  assert.equal((await fixer.runFix(w.cfg, { agent: goodAgent, now: NOW, words: [] })).outcome, 'ready'); assert.ok(!fs.existsSync(lock))
+})
+
 test('a dry run names the order and prints the prompt without touching anything', async () => {
   const w = world(); w.order('step-iron'); w.order('step-wood', { costMin: 90, title: 'wood' })
   const r = await fixer.runFix(w.cfg, { dryRun: true, now: NOW })

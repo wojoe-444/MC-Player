@@ -428,8 +428,13 @@ async function runFix(cfg, { agent = null, run = sh, now = Date.now(), log = () 
   const state = readJson(stateFile(cfg), {})
   const lock = path.join(cfg.loopDir, 'fix.lock')
   if (!dryRun) {
-    try { if (now - fs.statSync(lock).mtimeMs < LIMITS.lockMs) return { ok: true, skipped: 'another fixer run is going' } } catch { /* no lock */ }
-    fs.mkdirSync(cfg.loopDir, { recursive: true }); fs.writeFileSync(lock, new Date(now).toISOString())
+    // a lock younger than a run can be, held by a process that is still alive: a run cut off by a restart or a logoff must not block the next one for hours
+    try {
+      const held = readJson(lock, {})
+      let alive = true; try { process.kill(held.pid, 0) } catch (e) { alive = !!(e && e.code === 'EPERM') }
+      if (alive && Date.now() - fs.statSync(lock).mtimeMs < LIMITS.lockMs) return { ok: true, skipped: 'another fixer run is going' }
+    } catch { /* no lock */ }
+    fs.mkdirSync(cfg.loopDir, { recursive: true }); fs.writeFileSync(lock, JSON.stringify({ pid: process.pid, at: new Date(now).toISOString() }))
   }
   try {
     const all = orders.list(cfg.loopDir)
