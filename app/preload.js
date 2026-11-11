@@ -19,8 +19,6 @@ contextBridge.exposeInMainWorld('botApp', {
   updateCheck: () => ipcRenderer.invoke('update:check'),
   updateInstall: () => ipcRenderer.invoke('update:install'),
   onUpdate: (cb) => ipcRenderer.on('update', (_e, s) => cb(s)),
-  tabsState: () => ipcRenderer.invoke('tabs:state'),
-  selectTab: (id) => ipcRenderer.invoke('tabs:select', id),
-  onTabs: (cb) => ipcRenderer.on('tabs', (_e, s) => cb(s)),
   onState: (cb) => ipcRenderer.on('state', (_e, s) => cb(s)),
+  onNavigate: (cb) => ipcRenderer.on('navigate', (_e, page) => cb(page)),
 })

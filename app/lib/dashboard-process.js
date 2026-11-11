@@ -20,13 +20,30 @@ async function waitForPort(port, tries = 50, delay = 200) {
   return false
 }
 
+// The redesigned dashboard page carries <meta name="bot-dashboard-ui">. A dashboard that was started earlier from an older checkout
+// (dashboard/start.bat) serves the previous UI, which has no pages for Claude reviews, Memory loop or updates inside the app, so do not attach to it.
+const UI_MARKER = 'name="bot-dashboard-ui"'
+async function servesCurrentUi(url, fetchFn = globalThis.fetch) {
+  try {
+    const res = await fetchFn(url + '/', { signal: AbortSignal.timeout(3000) })
+    return (await res.text()).includes(UI_MARKER)
+  } catch { return false }
+}
+
 // Returns { url, attached, stop() }. Throws if the server never comes up.
-async function startDashboard(cfg, { repoRoot, log = console.log } = {}) {
-  const port = cfg.port
-  const url = `http://127.0.0.1:${port}`
+async function startDashboard(cfg, { repoRoot, log = console.log, fetchFn } = {}) {
+  let port = cfg.port
+  let url = `http://127.0.0.1:${port}`
   if (await portInUse(port)) {
-    log(`dashboard: attaching to the server already on port ${port}`)
-    return { url, attached: true, stop() {} }
+    if (await servesCurrentUi(url, fetchFn)) {
+      log(`dashboard: attaching to the server already on port ${port}`)
+      return { url, attached: true, stop() {} }
+    }
+    // an older dashboard holds the port: run our own copy on the next free port well away from the app's control port
+    for (let p = cfg.port + 100; p < cfg.port + 120; p++) if (!(await portInUse(p))) { port = p; break }
+    if (port === cfg.port) throw new Error(`port ${cfg.port} serves an older dashboard and no spare port was found`)
+    url = `http://127.0.0.1:${port}`
+    log(`dashboard: the server on port ${cfg.port} is an older version; starting this app's own on port ${port}`)
   }
   const script = path.join(repoRoot, 'dashboard', 'server.js')
   const child = spawn(process.execPath, [script], {
@@ -52,4 +69,4 @@ async function startDashboard(cfg, { repoRoot, log = console.log } = {}) {
   return { url, attached: false, stop() { try { child.kill() } catch {} } }
 }
 
-module.exports = { startDashboard, portInUse }
+module.exports = { startDashboard, portInUse, servesCurrentUi, UI_MARKER }
