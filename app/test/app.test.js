@@ -238,6 +238,9 @@ test('memory loop tab: jobs, ranked work orders, each bot\'s memory and last che
   const cand = (key, costMin) => ({ key, type: 'step', step: key, costMin, counts: {}, line: key, evidence: [] })
   lib.orders.sync(loopDir, { bot: 'ozo', cands: [cand('step-a', 3), cand('step-b', 9)], decided: { 'step-a': { isBug: true, title: 'A', problem: 'p' }, 'step-b': { isBug: true, title: 'B', problem: 'p' } }, now: Date.parse('2026-11-10T22:55:00Z') })
   lib.runs.append({ loopDir }, 'dream', { ok: true, summary: 'OzoGo444: 2 calls' }, Date.parse('2026-11-10T22:56:00Z'))
+  // what the flowchart reads: the newest run of each job (the slow jobs fall out of the shared list) and when each bot last wrote its journal
+  for (let i = 0; i < 45; i++) lib.runs.append({ loopDir }, 'deploy', { ok: true, summary: 'the bots are on main' }, Date.parse('2026-11-10T23:00:00Z') + i * 60000)
+  fs.mkdirSync(path.join(ozo, 'brain', 'state', 'journal')); for (const f of ['2026-11-09.jsonl', '2026-11-10.jsonl', '2026-11-10.day.json', 'state.json']) fs.writeFileSync(path.join(ozo, 'brain', 'state', 'journal', f), '{}\n')
   const asked = []
   const s = await loopState({ lib, loopDir, bots: [{ id: 'ozo', name: 'OzoGo444', dir: ozo }, { id: 'smeo', name: 'Smeo444', dir: path.join(root, 'none') }], status: async (j) => { asked.push(j.name); return { installed: j.id === 'review' } }, running: { dream: true } })
   assert.strictEqual(s.available, true); assert.deepStrictEqual(asked, ['MC-Player Bot Dream', 'MC-Player Bot Fixer', 'MC-Player Bot Deployer', 'MC-Player Bot Digest', 'MC-Player Bot Reviewer'])
@@ -256,7 +259,8 @@ test('memory loop tab: jobs, ranked work orders, each bot\'s memory and last che
   assert.deepStrictEqual([s2.code.isClone, s2.code.hasDeployer, s2.code.last[0].to], [true, true, 'abc']); assert.deepStrictEqual(s2.digest, { date: '2026-11-11', text: '# digest' })
   assert.strictEqual(s.reviewTask.task.installed, true)
   assert.deepStrictEqual(s.orders.map(o => [o.key, o.costMin, o.title]), [['step-b', 9, 'B'], ['step-a', 3, 'A']])
-  assert.strictEqual(s.runs[0].summary, 'OzoGo444: 2 calls')
+  assert.ok(s.runs.every(r => r.job === 'deploy'), 'the shared list is the newest 40 lines'); assert.strictEqual(s.lastRuns.dream.summary, 'OzoGo444: 2 calls'); assert.deepStrictEqual(Object.keys(s.lastRuns).sort(), ['deploy', 'dream'])
+  assert.strictEqual(s.bots[0].journal.day, '2026-11-10'); assert.ok(Date.now() - Date.parse(s.bots[0].journal.at) < 60000); assert.strictEqual(s.bots[1].journal, null)
   assert.strictEqual(s.bots[0].memory, '# Now\nSmelt iron.\n'); assert.strictEqual(s.bots[0].brief.ask, 'A chest of my own?'); assert.strictEqual(s.bots[0].lastCheck.changes.length, 1)
   assert.deepStrictEqual([s.bots[1].memory, s.bots[1].brief, s.bots[1].lastCheck], [null, null, null])
 })

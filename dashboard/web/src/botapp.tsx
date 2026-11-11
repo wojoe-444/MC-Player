@@ -21,6 +21,7 @@ export type LoopOrder = {
 }
 export type LoopBot = {
   id: string; name: string; memory: string | null
+  journal?: { day: string; at: string } | null
   brief: { at: string; day: number; intent?: string; focus?: string[]; holds?: { step: string; untilDay: number; why: string }[]; freeTime?: { choice: string; note?: string }; ask?: string } | null
   lastCheck: { at: string; changes: { step: string; op: string; from?: string; to?: string; why?: string; cites?: string[] }[]; calls?: { step: string; ok: boolean }[]; skippedSteps?: Record<string, unknown>; costUsd?: number; dropped?: string[] } | null
 }
@@ -38,6 +39,8 @@ export type LoopState = {
   digest?: { date: string; text: string } | null
   reviewTask?: { title: string; taskName: string; task: TaskState }
   orders?: LoopOrder[]; runs?: LoopRun[]; bots?: LoopBot[]
+  /** the newest run of each job (brief, review, dream, fix, deploy, digest) */
+  lastRuns?: Record<string, LoopRun>
   fix?: LoopFix | null
 }
 export type AppInfo = { version: string; packaged: boolean; dataDir: string; dashboardUrl: string }
