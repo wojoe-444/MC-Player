@@ -88,3 +88,11 @@ test('catalog: search words, mode and category filters, groups by category label
   assert.deepStrictEqual(g.map(x => x.label), ['Farms', 'Houses', 'Mob farms', 'Weird stuff'], 'groups sorted by label; an unnamed category is capitalised')
   assert.deepStrictEqual(g[2].items.map(e => e.id), ['a', 'b'], 'items by name'); assert.deepStrictEqual(C.categoryCounts(list).find(c => c.category === 'mobfarm').n, 2)
 })
+
+test('multi-word dye names (light_blue_carpet) get their colour and every block of the bundled library gets a tile', async () => {
+  const A = await import(lib('appearance.ts'))
+  assert.deepStrictEqual(A.styleOf('light_blue_carpet'), A.styleOf('light_blue_wool'))
+  assert.notDeepStrictEqual(A.styleOf('light_blue_carpet'), A.styleOf('light_gray_carpet'))
+  const S = require('../brain/schematic/store')
+  for (const { schematic } of S.list([S.LIBRARY])) for (const e of schematic.palette) if (e.block) { const st = A.styleOf(e.block); assert.ok(st && st.side, e.block); A.paintTile(st.side) }
+})

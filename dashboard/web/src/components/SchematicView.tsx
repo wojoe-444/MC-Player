@@ -60,8 +60,10 @@ export const SchematicView = forwardRef<SchematicViewHandle, Props>(function Sch
   const [W, H, D] = prep.model.size
   const dims = useRef([W, H, D]); dims.current = [W, H, D]
 
+  const lastView = useRef<"iso" | "front" | "top">("iso"), touched = useRef(false) // touched: the user has moved the camera, so a resize must not re-frame it
   const place = (view: "iso" | "front" | "top") => {
     const r = rig.current; if (!r) return
+    lastView.current = view; touched.current = false
     const [w, h, d] = dims.current
     const radius = Math.max(1, Math.hypot(w, h, d) / 2), fov = (r.camera.fov * Math.PI) / 180
     const aspect = r.camera.aspect || 1
@@ -88,6 +90,7 @@ export const SchematicView = forwardRef<SchematicViewHandle, Props>(function Sch
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 1000)
     const controls = new OrbitControls(camera, renderer.domElement)
+    controls.addEventListener("start", () => { touched.current = true })
     controls.enableDamping = true; controls.dampingFactor = 0.12; controls.screenSpacePanning = true; controls.maxPolarAngle = Math.PI * 0.98
     const opaqueMat = new THREE.MeshBasicMaterial({ vertexColors: true, alphaTest: 0.5 })
     const transMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 })
@@ -122,6 +125,7 @@ export const SchematicView = forwardRef<SchematicViewHandle, Props>(function Sch
       const w = Math.max(1, el.clientWidth), h = Math.max(1, el.clientHeight)
       renderer.setSize(w, h, false); renderer.domElement.style.width = w + "px"; renderer.domElement.style.height = h + "px"
       camera.aspect = w / h; camera.updateProjectionMatrix()
+      if (!touched.current) place(lastView.current) // the pane got its real size after the first framing: frame again
     }
     const ro = new ResizeObserver(resize); ro.observe(el); resize()
 

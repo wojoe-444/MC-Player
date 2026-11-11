@@ -26,10 +26,10 @@ const ORE: Record<string, RGB> = { coal: [30, 30, 30], iron: [216, 175, 147], co
 const METAL: Record<string, RGB> = { iron: [220, 220, 220], gold: [246, 208, 61], diamond: [98, 219, 213], emerald: [42, 203, 87], lapis: [31, 67, 140], redstone: [171, 27, 9], coal: [16, 16, 16], copper: [192, 107, 79], netherite: [66, 61, 63], amethyst: [133, 97, 191] }
 
 const SHAPE_SUFFIX = /_(slab|stairs|wall|fence_gate|fence|button|pressure_plate|wall_sign|hanging_sign|sign|pane)$/
-const ALIAS: Record<string, string> = { stone_brick: "stone_bricks", mossy_stone_brick: "mossy_stone_bricks", brick: "bricks", nether_brick: "nether_bricks", red_nether_brick: "red_nether_bricks", mud_brick: "mud_bricks", quartz: "quartz_block", smooth_quartz: "quartz_block", prismarine_brick: "prismarine_bricks", end_stone_brick: "end_stone_bricks", deepslate_brick: "deepslate_bricks", deepslate_tile: "deepslate_tiles", cracked_deepslate_bricks: "deepslate_bricks", cracked_deepslate_tiles: "deepslate_tiles", tuff_brick: "tuff_bricks", chiseled_tuff_bricks: "tuff_bricks", polished_blackstone_brick: "polished_blackstone_bricks", cut_sandstone: "sandstone", smooth_sandstone: "sandstone", cut_red_sandstone: "red_sandstone", smooth_red_sandstone: "red_sandstone", petrified_oak: "oak" }
+const ALIAS: Record<string, string> = { stone_brick: "stone_bricks", mossy_stone_brick: "mossy_stone_bricks", brick: "bricks", nether_brick: "nether_bricks", red_nether_brick: "red_nether_bricks", mud_brick: "mud_bricks", quartz: "quartz_block", smooth_quartz: "quartz_block", prismarine_brick: "prismarine_bricks", end_stone_brick: "end_stone_bricks", deepslate_brick: "deepslate_bricks", deepslate_tile: "deepslate_tiles", cracked_deepslate_bricks: "deepslate_bricks", cracked_deepslate_tiles: "deepslate_tiles", tuff_brick: "tuff_bricks", chiseled_tuff_bricks: "tuff_bricks", cracked_polished_blackstone_bricks: "polished_blackstone_bricks", chiseled_sandstone: "sandstone", waxed_copper_block: "copper_block", polished_blackstone_brick: "polished_blackstone_bricks", cut_sandstone: "sandstone", smooth_sandstone: "sandstone", cut_red_sandstone: "red_sandstone", smooth_red_sandstone: "red_sandstone", petrified_oak: "oak" }
 
 /** plants and other things drawn as crossed flat quads */
-export const isPlant = (name: string): boolean => /(grass|fern|bush|sapling|flower|tulip|dandelion|poppy|vine|lichen|cobweb|roots|sprouts|mushroom|azalea|berries|kelp|seagrass|allium|orchid|bluet|daisy|cornflower|lily|moss_carpet)/.test(name) && !/(block|leaves)$/.test(name)
+export const isPlant = (name: string): boolean => /(grass|fern|bush|sapling|flower|tulip|dandelion|poppy|vine|lichen|cobweb|roots|sprouts|mushroom|azalea|berries|kelp|seagrass|allium|orchid|bluet|daisy|cornflower|lily|moss_carpet|wheat|carrots|potatoes|beetroots|sugar_cane)/.test(name) && !/(block|leaves)$/.test(name)
 
 /** the style of a block (by its name; properties do not change how it is painted) */
 export function styleOf(name: string): Style {
@@ -57,7 +57,7 @@ export function styleOf(name: string): Style {
   if (new RegExp(`^(${dyes})_stained_glass(_pane)?$`).test(n)) return uniform(spec("glass", DYE[n.split("_stained")[0]]), true)
   if (n.endsWith("glass_pane")) return uniform(spec("glass", [200, 230, 240]), true)
   if (n === "ice" || n === "packed_ice" || n === "blue_ice") return uniform(spec("glass", n === "ice" ? [150, 190, 255] : [120, 170, 240]), n === "ice")
-  if (new RegExp(`^(${dyes})_wool$`).test(n) || new RegExp(`^(${dyes})_carpet$`).test(n)) return uniform(spec("noise", DYE[n.split("_")[0]]))
+  if ((m = n.match(new RegExp(`^(${dyes})_(wool|carpet)$`)))) return uniform(spec("noise", DYE[m[1]]))
   if ((m = n.match(new RegExp(`^(${dyes})_(concrete|concrete_powder|shulker_box|glazed_terracotta)$`)))) return uniform(spec(m[2] === "shulker_box" ? "metal" : "flat", DYE[m[1]]))
   if ((m = n.match(new RegExp(`^(${dyes})_(terracotta)$`)))) return uniform(spec("flat", mix(DYE[m[1]], [150, 92, 66], 0.55)))
   if ((m = n.match(new RegExp(`^(${dyes})_(bed|banner|wall_banner)$`)))) return uniform(spec("noise", DYE[m[1]]))
@@ -98,6 +98,42 @@ export function styleOf(name: string): Style {
     case "chiseled_tuff": return uniform(spec("bricks", [104, 106, 98], [76, 78, 70]))
     case "tuff_bricks": return uniform(spec("bricks", [101, 103, 95], [76, 78, 71]))
     case "campfire": case "soul_campfire": return uniform(spec("logside", [96, 66, 38], n === "campfire" ? [226, 130, 40] : [70, 190, 200]))
+    case "quartz_bricks": return uniform(spec("bricks", [235, 229, 222], [204, 198, 190]))
+    case "quartz_pillar": return uniform(spec("flat", [236, 231, 225]))
+    case "moss_block": return uniform(spec("noise", [89, 109, 45]))
+    case "dark_prismarine": return uniform(spec("noise", [52, 92, 76]))
+    case "packed_mud": return uniform(spec("noise", [142, 106, 79]))
+    case "farmland": return uniform(spec("noise", [110, 70, 40]))
+    case "oxidized_cut_copper": return uniform(spec("flat", [82, 162, 132]))
+    case "copper_block": return uniform(spec("flat", [192, 107, 79]))
+    case "pearlescent_froglight": return uniform(spec("noise", [240, 224, 236]))
+    case "ochre_froglight": return uniform(spec("noise", [243, 230, 170]))
+    case "verdant_froglight": return uniform(spec("noise", [229, 244, 228]))
+    case "shroomlight": return uniform(spec("noise", [240, 146, 70]))
+    case "chiseled_polished_blackstone": return uniform(spec("bricks", [48, 43, 50], [28, 24, 30]))
+    case "gilded_blackstone": return uniform(spec("ore", [42, 36, 41], [250, 210, 80]))
+    case "redstone_lamp": return uniform(spec("noise", [150, 90, 40]))
+    case "piston": case "sticky_piston": case "observer": case "dispenser": case "dropper": return uniform(spec("cobble", [117, 117, 117]))
+    case "note_block": case "jukebox": return uniform(spec("planks", [110, 70, 45]))
+    case "budding_amethyst": case "amethyst_block": return uniform(spec("noise", [130, 95, 190]))
+    case "smithing_table": case "anvil": case "chipped_anvil": case "damaged_anvil": return uniform(spec("flat", [60, 60, 66]))
+    case "stonecutter": return uniform(spec("cobble", [130, 128, 125]))
+    case "lectern": case "cartography_table": return uniform(spec("planks", [120, 85, 55]))
+    case "fletching_table": case "loom": return uniform(spec("planks", [180, 150, 100]))
+    case "cauldron": return uniform(spec("metal", [50, 50, 56]))
+    case "water_cauldron": return uniform(spec("water", [49, 99, 210]))
+    case "brewing_stand": return uniform(spec("metal", [150, 150, 150]))
+    case "enchanting_table": return uniform(spec("noise", [110, 30, 40]))
+    case "beacon": return uniform(spec("glass", [120, 220, 215]), true)
+    case "chain": return uniform(spec("metal", [40, 42, 46]))
+    case "lantern": return uniform(spec("noise", [214, 150, 70]))
+    case "soul_lantern": return uniform(spec("noise", [70, 200, 210]))
+    case "end_rod": return uniform(spec("flat", [240, 240, 240]))
+    case "iron_bars": return uniform(spec("glass", [130, 130, 135]), true)
+    case "nether_portal": return uniform(spec("glass", [110, 30, 190]), true)
+    case "rail": case "powered_rail": case "detector_rail": case "activator_rail": return uniform(spec("noise", [130, 110, 90]))
+    case "redstone_wire": return uniform(spec("flat", [180, 20, 20]))
+    case "repeater": case "comparator": return uniform(spec("flat", [160, 160, 160]))
     case "composter": return uniform(spec("planks", [122, 90, 48], [86, 62, 30]))
     case "grindstone": return uniform(spec("noise", [146, 146, 150]))
     case "diorite": return uniform(spec("noise", [188, 188, 188]))
