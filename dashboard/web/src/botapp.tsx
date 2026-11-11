@@ -24,6 +24,13 @@ export type LoopBot = {
   brief: { at: string; day: number; intent?: string; focus?: string[]; holds?: { step: string; untilDay: number; why: string }[]; freeTime?: { choice: string; note?: string }; ask?: string } | null
   lastCheck: { at: string; changes: { step: string; op: string; from?: string; to?: string; why?: string; cites?: string[] }[]; calls?: { step: string; ok: boolean }[]; skippedSteps?: Record<string, unknown>; costUsd?: number; dropped?: string[] } | null
 }
+export type FixMode = "merge" | "pr" | "local"
+export type LoopFix = {
+  mode: FixMode; repo: string; workDir: string; hasClone: boolean; at: string | null
+  gh: { ok: boolean; note: string } | null
+  last: { order: string; outcome: string; pr: number | null; note?: string } | null
+  orders: Record<string, { attempts: number; waiting: { on: "merge" | "deploy" | "verdict"; pr?: number } | null; ready: { branch: string; why?: string } | null }>
+}
 export type LoopRun = { at: string; job: string; ok?: boolean; summary?: string; durationMs?: number; costUsd?: number }
 export type LoopState = {
   available: boolean; loopDir?: string; jobs?: LoopJob[]
@@ -31,6 +38,7 @@ export type LoopState = {
   digest?: { date: string; text: string } | null
   reviewTask?: { title: string; taskName: string; task: TaskState }
   orders?: LoopOrder[]; runs?: LoopRun[]; bots?: LoopBot[]
+  fix?: LoopFix | null
 }
 export type AppInfo = { version: string; packaged: boolean; dataDir: string; dashboardUrl: string }
 type Result<S> = { ok?: boolean; error?: string; state?: S }
@@ -49,6 +57,7 @@ type BotApp = {
   loopInstall: (id: string, minutes: number) => Promise<Result<LoopState>>
   loopUninstall: (id: string) => Promise<Result<LoopState>>
   loopCodeDir: (dir: string) => Promise<Result<LoopState>>
+  loopFixMode?: (mode: FixMode) => Promise<Result<LoopState>>
   onLoop: (cb: (s: LoopState) => void) => void
   appInfo: () => Promise<AppInfo>
   updateState: () => Promise<UpdateState>
@@ -80,6 +89,7 @@ type Ctx = {
   installLoopJob: (id: string, minutes: number) => Promise<string | null>
   removeLoopJob: (id: string) => void
   saveCodeDir: (dir: string) => Promise<string | null>
+  saveFixMode: (mode: FixMode) => Promise<string | null>
   /** page ids the main process asked to show (menu shortcuts) */
   onNavigate: (cb: (page: string) => void) => void
 }
@@ -143,6 +153,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     removeLoopJob: (id) => { api?.loopUninstall(id).then((r) => { if (r.state) setLoop(r.state) }) },
     saveCodeDir: async (dir) => {
       const r = await api!.loopCodeDir(dir)
+      if (r.state) setLoop(r.state)
+      return r.ok ? null : r.error || "unknown error"
+    },
+    saveFixMode: async (mode) => {
+      if (!api?.loopFixMode) return "this version of the app cannot set it"
+      const r = await api.loopFixMode(mode)
       if (r.state) setLoop(r.state)
       return r.ok ? null : r.error || "unknown error"
     },

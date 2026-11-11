@@ -217,7 +217,7 @@ flowchart LR
 - **Narrow jobs.** The dream runs its five steps as five short calls, each with one question and only the files it needs, in place of one long session.
 - **Code checks what code can.** The caps, the rule text, whether a cited journal line exists, and whether a hold names a survival step are checked by code before anything is saved. A failed check discards that write and keeps the old file.
 - **Explicit prompts.** Each prompt says what the memory is for, and also says to read it first and to test a rule against the journal before keeping it. The article found models below Opus 5 needed that said.
-- **The fixer is the job to watch.** It writes code the bots run. Its guards stay as designed: one work order per run, the scenario must fail before the fix and pass after, a canary deploy, and a verdict from the journal a day later. "Work orders reopened after fixed" in the measures below is the number that says whether Haiku is enough for it.
+- **The fixer is the job to watch.** It writes code the bots run. Its guards: one work order per run, a test that must fail before the fix and pass after (checked by code, not by the session), limits on which files it may change, a canary deploy, and a verdict from the journal afterwards. "Work orders reopened after fixed" in the measures below is the number that says whether Haiku is enough for it.
 - **Cadence is cheap to raise.** The dream moves from every 6 hours to every 2. If a measure says a job is not keeping up, run it more often before anything else.
 
 **1. Journal.** An observer module like `brain/runlog`.
@@ -275,13 +275,31 @@ How it differs from the first design, and why:
 - An order nobody has seen for six dreams of a running bot closes with a reason that names the commit the bot moved to. If it comes back it is reopened and the reopen is counted.
 - An order lists the incident snapshots captured during that step or for that flag kind, with the bot whose folder holds them, so the fixer can rebuild the scene with `tools/snapshot-rebuild.js`.
 
-**5. Fixer.** A fresh session each time, on the laptop, in its own working copy of the code under AppData. It takes the top open work order and follows the debug loop Walter already approved:
-1. Rebuild the snapshot on the trial server and show the scenario failing.
-2. Fix it and show the pass rate over 30 runs.
-3. Open the PR and merge when the tests and the scenario are green.
-4. If it cannot reproduce the problem, ship telemetry that will catch it next time instead of a guess.
+**5. Fixer.** Built: `reviewer/lib/fixer.js` (`node run.js --fix`), its own Task Scheduler entry "MC-Player Bot Fixer" every 3 hours, installed from the Memory loop page. A fresh session each time, on the laptop, in its own copy of the code (`<loop folder>/fixer/MC-Player`, cloned from the public repo on the first run). One work order per run:
+1. It takes the most costly open order that is not waiting on a pull request, a deploy or a verdict, and puts its copy of the code on a new branch from `main`. It leaves outcome orders alone (a build that makes nothing, a setting a person has to change): those are not faults in the code.
+2. It writes the evidence beside the copy, on the laptop and never committed: the order, the journal lines about it, its snapshots.
+3. One session on Haiku 5.5 at xhigh, up to 40 minutes. It has file tools limited to its copy of the code and the evidence, and three tools of its own: run one file with node, run the test suite, read git history. No shell, no web, no push. Every tool call passes a gate in code first.
+4. It follows the debug loop Walter approved: find the cause, write a new test that fails because of it, fix it, run the suite. If it cannot make the fault happen it ships telemetry that will catch it next time instead of a guess. If it can do neither it gives up and says what it tried.
+5. Code then checks what the session left, and does not take its word:
+   - only bot code changed (`brain/`, `join.js`, `tools/scenarios/`, new files in `test/`), and never `brain/gate` (the rules), `brain/memory`, `brain/autopilot/whimsy.js` (free time), `CLAUDE.md`, `package.json`, the test runner or the loop's own jobs
+   - there is a new test, it fails on `main` and passes with the change (for a fix), and the whole suite passes. A test that fails on `main` too is not held against the change; the pull request names it and the digest says that `main` is red
+   - no path, name or address from the laptop is in the change
+   - a failed check gets one repair session, then the change is thrown away
+6. It commits, pushes the branch and opens the pull request with the GitHub CLI. In merge mode (the default, set on the tab) it merges when every check passed. It leaves the pull request open for a person, with one question in the digest, when the change edits an existing test, removes lines about free time, is over 400 lines, or its test fails on `main` only for a missing file. The other modes are "open the pull request, I merge it" and "keep the fix on this computer".
+7. The deployer ships the merge and judges it. Ok closes the order as fixed; a revert counts as a failed attempt.
 
-One work order per run. After two failed attempts the order is parked with what was tried, which is memory for the next attempt. It never changes the rules, `CLAUDE.md` or the free-time slot. A question of taste goes to the digest.
+After two failed attempts the order is parked with what was tried, which the next reader starts from. A question of taste goes to the digest. The session log of each run (every tool call, the answer, the checks) is kept in `<loop folder>/fixer/sessions`.
+
+Tried on a real order (2026-11-11, on a copy of Ozo's data, nothing pushed): "light-home step idles and goal-thrashes", 9.5 minutes lost a day. One session of 17 minutes, 61 tool calls, none refused, about 54 cents of usage. It found that the idle branch in `brain/autopilot/goals.js` ran the light-home routine with 8 torches, where the step itself wants 16 and places nothing below 14, and that the branch cleared the step's rest timer, so the empty pass repeated every idle minute. It wrote three tests, two of which fail on `main`, changed four lines, and the checks passed. That fix went in as its own pull request right after the fixer's. The earlier tries of the same trial found three faults in the fixer itself, all fixed: a 60 second limit on its own tools inherited from the environment, a session that ended in prose instead of the answer form, and a sound fix refused because another merge had left a test on `main` red.
+
+Cost: a fixer session is about 50 cents to a dollar of usage, against about 4 cents for a dream. It runs at most eight times a day, only when an order is open, and at most twice per order.
+
+What it cannot do yet: rebuild a snapshot on a trial server and measure a pass rate over 30 runs. It reproduces with an offline test on a made-up world, as the repo's own tests do. The snapshot files are in its evidence so it can read the scene.
+
+What to know before installing it:
+- It runs code a model wrote, on the laptop, under Walter's account, with nobody watching. Its commands run without credentials in their environment, and the gate keeps its file tools inside its copy of the code, but a test it writes is a program like any other. Windows has no sandbox to put around that. This is the same trust the deployer already extends to code on `main`.
+- It needs the GitHub CLI installed and logged in once (`gh auth login`, then `gh auth setup-git`). Without it the checked fix waits on its branch and the tab says so.
+- A fixer pull request carries the code change and a description of the fault (step names, counts). Journal, memory and snapshot files never leave the laptop.
 
 **6. Deployer.** Built: `reviewer/lib/deploy.js` (`node run.js --deploy`) calls `tools/deployer.js` of the clone the live bots run from (set on the Memory loop tab, by default `Downloads\MC-Player-live`).
 - Each run judges the last deploy first. While that deploy is inside its 40 minutes of waiting, nothing new is deployed, so a verdict is about one change.
@@ -339,7 +357,7 @@ Each phase is useful alone, is one or two PRs, and ships switched on.
 | 0 | Journal and rollup (built). The memory folder with caps and its git history (built). `global.md` seeded from `strategy.md` and corrected to today's rules (built). Rule text generated from `rules.json` (built). Deployer and digest put on a schedule. | A searchable record. Deploys without hands. |
 | 1 | Dawn brief for Ozo, with the picker hook and a real free-time step. Findings feed the brief. (Built.) | Memory has a reader. Review findings reach the bot within the hour. |
 | 2 | Dream job, work orders, the ledger, and findings that close with a reason. The Memory loop tab in the app: install, remove and run buttons, work orders, each bot's memory, runs. (Built.) | Memory is checked. Bugs are ranked by cost. |
-| 3 | The deployer and the digest on a schedule, each with its button on the Memory loop tab (built). The fixer. | Walter is out of the bug loop. |
+| 3 | The deployer and the digest on a schedule, each with its button on the Memory loop tab (built). The fixer (built; not yet on a trial server). | Walter is out of the bug loop. |
 | 4 | Tune the schedules from the measures above. Add Smeo. Use the same model call when the watchdog escalates past its first fix, instead of a blind kick. | |
 
 The build-inspection sense being added in the thread "Teach bots to see broken builds" plugs in as one more source of journal events and findings. It needs no special path.

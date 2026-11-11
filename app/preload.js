@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('botApp', {
   loopInstall: (id, minutes) => ipcRenderer.invoke('loop:install', id, minutes),
   loopUninstall: (id) => ipcRenderer.invoke('loop:uninstall', id),
   loopCodeDir: (dir) => ipcRenderer.invoke('loop:codeDir', dir),
+  loopFixMode: (mode) => ipcRenderer.invoke('loop:fixMode', mode),
   onLoop: (cb) => ipcRenderer.on('loop', (_e, s) => cb(s)),
   appInfo: () => ipcRenderer.invoke('app:info'),
   updateState: () => ipcRenderer.invoke('update:state'),

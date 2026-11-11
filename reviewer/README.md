@@ -107,6 +107,20 @@ Work orders live in the loop folder, beside the app's settings (`%APPDATA%/Bot D
 
 A finding now closes with a reason (`lib/findings.js`, `closeReason`): fixed by a named PR, went quiet after the bot moved to a named commit, closed by the reviewer, or went quiet with no code change in between.
 
+## 7. The fixer (`lib/fixer.js`, docs/MEMORY-LOOP.md job 5)
+
+`node run.js --fix` takes the most costly open work order to a pull request. Task Scheduler entry "MC-Player Bot Fixer", every 3 hours, installed from the app's Memory loop tab (`--install-task --fix`).
+
+- `--only KEY` takes that order (also a parked one). `--fix-mode merge|pr|local` (default: the app's setting, else merge). `--fix-dry-run` prints the order and the prompt.
+- Working copy: `<loop dir>/fixer/MC-Player`, cloned from the public repo, reset to `origin/main` on a new branch `fix/<key>-<MMDD-HHmm>` each run. It borrows `node_modules` from the code folder the live bots run from (a junction on Windows), else runs `npm ci`.
+- The session is `runAgent` in `lib/claude.js`: built-in Read, Glob, Grep, Edit, Write, plus `run_node`, `run_tests` and `git` (read only) served in process. No Bash. A `PreToolUse` hook asks `gateFor()` before every call: reads stay in the working copy and the evidence folder, writes stay in `ALLOWED` minus `PROTECTED`, existing tests are read only. The commands it runs get an environment without anything that looks like a credential.
+- `check()` decides, not the session: the diff is inside the remit, there is a new test, it fails on a worktree of `origin/main` and passes with the change, `node scripts/run-tests.js` passes (files that fail on `origin/main` too are listed as `redOnMain`, not counted), nothing from this computer (home path, address, key) is in the diff. One repair session on a failed check. A session that ends in prose gets one no-tool call (`FORM`) that reads the answer form off its report.
+- `runAgent` sets the time limit of its own tools itself (35 min, on the server and as `MCP_TOOL_TIMEOUT`): an inherited 60 s limit cut every suite run off in the first trial.
+- `publish()` uses `git push` and `gh pr create` / `gh pr merge --squash`. No `gh`, no login or a refused push leaves a `ready` event on the order; the next run publishes it without a new session.
+- The order's history carries it: `attempt` (with what was tried), `ready`, `pr`, then the deployer's `deploy` and `verdict`. Two failed attempts park the order. `progress()` reads that history; `pick()` skips orders that wait.
+- Files: `<loop dir>/fixer/state.json` (last run, whether GitHub was reachable), `fixer/evidence/<key>/`, `fixer/sessions/` (the last 30 session logs: every tool call, the answer, the checks), `fix.lock`.
+- Tests: `test/fixer.test.js` drives it with a real git repository standing in for GitHub and a function standing in for the session.
+
 ## Prompt tuning (2026-11-10)
 The first live run (OzoGo444 and Smeo444, 04:43Z) mostly restated detector flags under `<bot>-detector-<kind>` keys, rated six things high, read lifetime hurt totals as live evidence and an old window as the present, and said nothing about armor or progress. `lib/prompt.js` now orders attention (rules, loops and stalls, progress, mess, code faults in logs), lists the rules in force and the roadmap phases, asks for one finding per root cause with at most 2 high and 5 total, and says what not to trust. The model also gets `previousReview` (last summary and bag) and the bag and worn armor in `telemetrySummary.now`, so it can judge progress. `examples/replay-before.json` and `replay-after.json` are the old and new prompt run on the same reconstructed 04:48Z input.
 

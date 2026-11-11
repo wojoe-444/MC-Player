@@ -8,7 +8,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { NeedsApp, PageHeader } from "@/components/common"
-import { useApp, type LoopBot, type LoopJob, type LoopOrder, type LoopState, type TaskState } from "@/botapp"
+import { useApp, type FixMode, type LoopBot, type LoopFix, type LoopJob, type LoopOrder, type LoopState, type TaskState } from "@/botapp"
 
 const when = (iso?: string | null) => (iso ? new Date(iso).toLocaleString() : "never")
 const mins = (n: number) => `${Math.round((n || 0) * 10) / 10} min`
@@ -52,7 +52,28 @@ function CodeRow({ code }: { code: NonNullable<LoopState["code"]> }) {
   )
 }
 
-function JobCard({ j, code }: { j: LoopJob; code?: LoopState["code"] }) {
+// The fixer's own settings and state: what it does with a checked fix, whether it could reach GitHub on its last run, where its copy of the code is.
+const FIX_MODES: [FixMode, string][] = [["merge", "open the pull request and merge it"], ["pr", "open the pull request, I merge it"], ["local", "keep it on this computer"]]
+function FixRow({ fix }: { fix: LoopFix }) {
+  const { saveFixMode } = useApp()
+  const gh = fix.gh ? (fix.gh.ok ? "GitHub CLI was logged in on the last run." : `GitHub: ${fix.gh.note}`) : "It has not tried to reach GitHub yet. It needs the GitHub CLI logged in once (gh auth login, then gh auth setup-git)."
+  const last = fix.last ? `Last run ${when(fix.at)}: ${fix.last.note || fix.last.outcome}` : "No run yet."
+  return (
+    <div className="flex flex-col gap-2 rounded-lg bg-muted/50 p-4">
+      <label className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">With a checked fix
+        <select value={fix.mode} onChange={async (e) => { const err = await saveFixMode(e.target.value as FixMode); if (err) alert("Could not save: " + err) }} className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm text-foreground">
+          {FIX_MODES.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+        </select>
+      </label>
+      <span className="text-xs text-muted-foreground">{last} {gh}</span>
+      <span className="text-xs text-muted-foreground break-all">{`Its copy of the code: ${fix.workDir}${fix.hasClone ? "" : " (cloned from GitHub on the first run)"}. Session logs are beside it in fixer/sessions.`}</span>
+    </div>
+  )
+}
+const fixLine = (f?: LoopFix["orders"][string] | null) => !f ? "" : f.ready ? ` · fixer: checked fix waits on ${f.ready.branch}${f.ready.why ? ` (${f.ready.why})` : ""}`
+  : f.waiting ? ` · fixer: waits on ${f.waiting.on === "merge" ? "a merge" : f.waiting.on === "deploy" ? "the deployer" : "the deploy verdict"}` : f.attempts ? ` · fixer: ${f.attempts} failed attempt(s)` : ""
+
+function JobCard({ j, code, fix }: { j: LoopJob; code?: LoopState["code"]; fix?: LoopFix | null }) {
   const { installLoopJob, removeLoopJob, runLoopJob } = useApp()
   const [every, setEvery] = useState(j.minutes)
   const [busy, setBusy] = useState(false)
@@ -74,12 +95,13 @@ function JobCard({ j, code }: { j: LoopJob; code?: LoopState["code"] }) {
           <Button variant="outline" disabled={j.running} onClick={() => runLoopJob(j.id)}><PlayIcon />{j.running ? "Running…" : "Run now"}</Button>
         </div>
         {j.id === "deploy" && code && <CodeRow code={code} />}
+        {j.id === "fix" && fix && <FixRow fix={fix} />}
       </CardContent>
     </Card>
   )
 }
 
-function OrderCard({ o }: { o: LoopOrder }) {
+function OrderCard({ o, fix }: { o: LoopOrder; fix?: LoopFix["orders"][string] | null }) {
   const open = isOpen(o)
   const lines = Object.entries(o.bots || {}).map(([b, n]) => `${b}: ${n.line} (${mins(n.costMin)} lost)` + (n.evidence || []).map((e) => `\n    ${e}`).join(""))
   if (o.suggestion) lines.push(`Where to look: ${o.suggestion}`)
@@ -88,7 +110,7 @@ function OrderCard({ o }: { o: LoopOrder }) {
     <Card>
       <CardHeader>
         <CardTitle>{o.title}</CardTitle>
-        <CardDescription className="font-mono text-xs">{`${o.key} · ${o.kind} · ${o.status} · opened ${when(o.openedAt)} · seen in ${o.seenDreams} check(s)${o.reopens ? ` · reopened ${o.reopens}x` : ""}${o.pr ? ` · PR #${o.pr}` : ""}${o.closed ? ` · ${o.closed.reason}` : ""}`}</CardDescription>
+        <CardDescription className="font-mono text-xs">{`${o.key} · ${o.kind} · ${o.status} · opened ${when(o.openedAt)} · seen in ${o.seenDreams} check(s)${o.reopens ? ` · reopened ${o.reopens}x` : ""}${o.pr ? ` · PR #${o.pr}` : ""}${o.closed ? ` · ${o.closed.reason}` : ""}${fixLine(fix)}`}</CardDescription>
         <CardAction><Badge variant={open ? "warning" : "success"}>{open ? mins(o.costMin) : o.status}</Badge></CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -172,14 +194,14 @@ export function Loop() {
               </CardHeader>
             </Card>
           )}
-          {(s.jobs || []).map((j) => <JobCard key={j.id} j={j} code={s.code} />)}
+          {(s.jobs || []).map((j) => <JobCard key={j.id} j={j} code={s.code} fix={s.fix} />)}
         </div>
       </section>
 
       <section className="flex flex-col gap-4">
         <h2 className="text-lg font-semibold">Work orders</h2>
         {orders.length
-          ? <div className="grid items-start gap-6 xl:grid-cols-2 [&>*]:min-w-0">{orders.map((o) => <OrderCard key={o.key} o={o} />)}</div>
+          ? <div className="grid items-start gap-6 xl:grid-cols-2 [&>*]:min-w-0">{orders.map((o) => <OrderCard key={o.key} o={o} fix={s.fix?.orders?.[o.key]} />)}</div>
           : <p className="text-sm text-muted-foreground">No work orders yet. The dream job opens one when the journal shows the same fault again and again.</p>}
       </section>
 

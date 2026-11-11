@@ -10,14 +10,14 @@ const readText = (f, max = 20000) => { try { return fs.readFileSync(f, 'utf8').s
 function loadLib(reviewerDir) {
   try {
     const lib = (n) => require(path.join(reviewerDir, 'lib', n))
-    return { schedule: lib('schedule'), orders: lib('orders'), runs: lib('runs'), config: lib('config'), deploy: lib('deploy'), digest: lib('digest') }
+    return { schedule: lib('schedule'), orders: lib('orders'), runs: lib('runs'), config: lib('config'), deploy: lib('deploy'), digest: lib('digest'), fixer: lib('fixer') }
   } catch { return null }
 }
 
-const JOB_IDS = ['dream', 'deploy', 'digest']          // jobs this tab installs; the review job (which also answers the dawn briefs) keeps its buttons on the Claude reviews tab
+const JOB_IDS = ['dream', 'fix', 'deploy', 'digest']          // jobs this tab installs; the review job (which also answers the dawn briefs) keeps its buttons on the Claude reviews tab
 
 // bots: [{ id, name, dir }]. status(job) -> the Task Scheduler state of one job (injected: it shells out to schtasks)
-async function loopState({ lib, loopDir, bots, status, running = {}, codeDir = null }) {
+async function loopState({ lib, loopDir, bots, status, running = {}, codeDir = null, fixMode = null }) {
   if (!lib) return { available: false }
   const jobs = []
   for (const id of JOB_IDS) { const j = lib.schedule.JOBS[id]; jobs.push({ id, title: j.title, about: j.about, taskName: j.name, minutes: j.minutes, maxMinutes: j.maxMinutes, running: !!running[id], task: await status(j) }) }
@@ -25,6 +25,8 @@ async function loopState({ lib, loopDir, bots, status, running = {}, codeDir = n
   const mem = (b, ...p) => path.join(b.dir, 'brain', 'state', 'memory', ...p)
   return {
     available: true, loopDir, jobs,
+    // the fixer: its mode, its own working copy, whether the GitHub CLI was usable on its last run, and where each open order stands with it
+    fix: lib.fixer ? lib.fixer.fixState({ loopDir, fixMode: fixMode || undefined }) : null,
     code: { dir: codeDir, isClone: !!codeDir && fs.existsSync(path.join(codeDir, '.git')), hasDeployer: !!codeDir && fs.existsSync(path.join(codeDir, 'tools', 'deployer.js')), last: codeDir ? lib.deploy.deployLog(codeDir, 4) : [] },
     digest: lib.digest.latest(loopDir),
     reviewTask: { title: review.title, taskName: review.name, task: await status(review) },
