@@ -305,3 +305,15 @@ test('buildFacts: ids a model can cite, the newest facts kept, reviewer findings
   assert.strictEqual(dream.buildFacts(days, { max: 5 }).length, 5)
   assert.strictEqual(dream.noIds('held a stone pickaxe (E84, E90) and was flagged 15x (E73). See E12 too.'), 'held a stone pickaxe and was flagged 15x. See too.')
 })
+
+test('runDream: a build that produces nothing becomes a work order with no model call (brain/outcome writes the journal event, the dream opens the order)', async () => {
+  const root = tmp()
+  const evs = [{ at: iso(120), k: 'outcome', build: 'mobfarm-x', kindOf: 'mobfarm', state: 'blocked', who: 'human', liveH: 8, got: 0, unit: 'kills', why: 'the world is on Peaceful: no hostile mob can spawn anywhere', purpose: 'bones and arrows', sal: 1 }]
+  const smeo = mkBot(root, 'smeo', { memory: false, evs }), cfg = cfgFor(root, [smeo])
+  const d = await dream.runDream(cfg, { now: NOW, ask: async () => assert.fail('no model is asked about a measured outcome') })
+  assert.strictEqual(d.bots[0].ok, true)
+  const o = orders.load(cfg.loopDir, 'outcome-mobfarm-x')
+  assert.ok(o && o.status === 'open'); assert.strictEqual(o.kind, 'human'); assert.strictEqual(o.costMin, 40); assert.match(o.problem, /Peaceful/)
+  // the order is still there on the next dream while the event keeps being said (the module repeats it every 6 h)
+  assert.strictEqual(orders.list(cfg.loopDir, { status: 'open' }).length, 1)
+})
