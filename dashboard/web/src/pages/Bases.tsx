@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { CameraIcon, GemIcon, MountainSnowIcon, RotateCwIcon, ScanIcon } from "lucide-react"
+import { CameraIcon, GemIcon, Loader2Icon, MountainSnowIcon, RotateCwIcon, ScanIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Toggle } from "@/components/ui/toggle"
 import { PageHeader } from "@/components/common"
@@ -66,6 +65,18 @@ function PartRow({ p, active, onPick, tinted }: { p: CastPart; active: boolean; 
 // the same cast again (the page polls) must not rebuild the mesh
 const castSig = (d: CastData) => `${d.stats.cells}:${d.stats.recorded}:${d.stats.digsRecorded}:${d.markers.length}:${d.parts.map((p) => p.id + p.cells).join(",")}`
 
+function CastLoading() {
+  return (
+    <Card className="overflow-hidden py-0" role="status" aria-live="polite">
+      <div className="dark flex h-[34rem] flex-col items-center justify-center gap-3 bg-zinc-950 text-zinc-400 xl:h-[40rem]">
+        <Loader2Icon className="size-8 animate-spin" />
+        <div className="text-sm text-zinc-200">Reading the base from the world save…</div>
+        <div className="max-w-xs text-center text-xs">The first load takes a few seconds, then the metal is cast in your browser.</div>
+      </div>
+    </Card>
+  )
+}
+
 function CastBody({ base }: { base: BaseSummary }) {
   const { data, state } = useJson<CastData>(`/api/bases/${encodeURIComponent(base.id)}`, 60_000, castSig)
   const [color, setColor] = useState<CastColor>("metal")
@@ -89,7 +100,7 @@ function CastBody({ base }: { base: BaseSummary }) {
   }, [data, caves])
   if (state === "failed") return <Empty><EmptyHeader><EmptyTitle>Could not load the base</EmptyTitle><EmptyDescription>The dashboard server did not answer. It will keep trying.</EmptyDescription></EmptyHeader></Empty>
   if (state === "missing") return <Empty><EmptyHeader><EmptyTitle>No such base</EmptyTitle><EmptyDescription>The base list changed; pick another one.</EmptyDescription></EmptyHeader></Empty>
-  if (!data || !shown) return <Skeleton className="h-[34rem] w-full" />
+  if (!data || !shown) return <CastLoading />
   const s = data.stats
   const empty = s.cells === 0
   return (
@@ -171,7 +182,7 @@ export function Bases() {
           </Select>
         )}
       </PageHeader>
-      {state === "loading" && <Skeleton className="h-[34rem] w-full" />}
+      {state === "loading" && <CastLoading />}
       {state === "failed" && <Empty><EmptyHeader><EmptyTitle>Could not load the bases</EmptyTitle><EmptyDescription>The dashboard server did not answer. It will keep trying.</EmptyDescription></EmptyHeader></Empty>}
       {state === "ok" && !current && <Empty><EmptyHeader><EmptyTitle>No bases recorded yet</EmptyTitle><EmptyDescription>A base is a waypoint named in brain/bases/config.json. The bot records it, and what it digs there, once it runs with the bases module.</EmptyDescription></EmptyHeader></Empty>}
       {current && <CastBody key={current.id} base={current} />}
