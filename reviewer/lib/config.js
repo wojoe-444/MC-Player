@@ -29,7 +29,7 @@ function parseArgs(argv) {
     const t = argv[i]
     if (!t.startsWith('--')) continue
     const k = t.slice(2)
-    if (['ozo', 'smeo', 'out', 'loop', 'model', 'effort', 'minutes', 'claude-path'].includes(k)) a.opts[k] = argv[++i]
+    if (['ozo', 'smeo', 'out', 'loop', 'code', 'model', 'effort', 'minutes', 'claude-path'].includes(k)) a.opts[k] = argv[++i]
     else a.flags.add(k)
   }
   return a
@@ -55,6 +55,8 @@ function resolveConfig({ argv = [], env = process.env, home = os.homedir(), exis
     bots, args,
     outDir: args.opts.out || env.REVIEWER_DIR || path.join(home, '.mc-player', 'reviewer'),
     loopDir: args.opts.loop || loopDirOf(env, home, exists),
+    // the clone the live bots run from: the deployer keeps it on main (tools/deployer.js). Set on the app's Memory loop tab (loop.codeDir).
+    codeDir: args.opts.code || env.BOT_CODE_DIR || (app && app.loop && app.loop.codeDir) || path.join(home, 'Downloads', 'MC-Player-live'),
     model: args.opts.model || env.REVIEWER_MODEL || 'claude-haiku-5-5',
     effort: args.opts.effort || env.REVIEWER_EFFORT || 'xhigh',
     timeoutMs: Number(env.REVIEWER_TIMEOUT_MS) || 8 * 60000,

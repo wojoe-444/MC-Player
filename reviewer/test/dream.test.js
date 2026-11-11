@@ -67,6 +67,17 @@ test('candidates: keys come from what the journal measured, cost is stalled minu
   assert.strictEqual(by['flag-jumping'].costMin, 0)
   assert.strictEqual(c[0].key, 'death-tried-to-swim-in-lava')                       // most costly first
   assert.ok(!by['step-stash'], 'one alarm is not a candidate')
+  // snapshots: a step candidate takes those captured during the step, a flag candidate those of its kind; the order keeps them with the bot's name
+  const snapshots = [{ id: 's100-jumping', at: iso(100), kind: 'jumping', step: 'iron' }, { id: 's200-stuck', at: iso(50), kind: 'stuck', step: 'iron' }, { id: 's300-stuck', at: iso(40), kind: 'stuck', step: 'harvest' }]
+  const withSnaps = Object.fromEntries(orders.candidates({ rollup: rollup(ev), events: ev, snapshots }).map(x => [x.key, x.snapshots]))
+  assert.deepStrictEqual(withSnaps['step-iron'], ['s200-stuck', 's100-jumping']); assert.deepStrictEqual(withSnaps['flag-jumping'], ['s100-jumping'])
+  const loop = path.join(tmp(), 'loop')
+  orders.sync(loop, { bot: 'ozo', cands: orders.candidates({ rollup: rollup(ev), events: ev, snapshots }), decided: { 'step-iron': { isBug: true, title: 't', problem: 'p' } }, now: NOW })
+  assert.deepStrictEqual(orders.load(loop, 'step-iron').snapshots, ['ozo/s200-stuck', 'ozo/s100-jumping']); assert.match(fs.readFileSync(path.join(loop, 'WORK-ORDERS.md'), 'utf8'), /Snapshots to rebuild it from .*ozo\/s200-stuck/)
+  const sdir = path.join(tmp(), 'b'); fs.mkdirSync(path.join(sdir, 'brain', 'state', 'snapshots'), { recursive: true })
+  fs.writeFileSync(path.join(sdir, 'brain', 'state', 'snapshots', `s${Math.floor(NOW / 1000) - 60}-stuck.json`), JSON.stringify({ v: 1, id: 'x', flag: { kind: 'stuck' }, step: 'iron', task: null, world: { cells: [] } }))
+  fs.writeFileSync(path.join(sdir, 'brain', 'state', 'snapshots', 's100-old.json'), '{}')
+  assert.deepStrictEqual(dream.snapshotIndex({ dir: sdir }, NOW - 86400000).map(x => [x.kind, x.step]), [['stuck', 'iron']])
   // a step whose runs mostly fail loses that share of its minutes
   const r = { steps: { harvest: { runs: 10, minutes: 40, ok: 2, fail: 6, timeout: 2, other: 0, alarms: 0, stalledMin: 0 } }, deaths: [], flags: {} }
   assert.strictEqual(orders.candidates({ rollup: r })[0].costMin, 32)

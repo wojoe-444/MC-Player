@@ -26,8 +26,11 @@ const dirOf = (loopDir) => path.join(loopDir, 'work-orders')
 const fileOf = (loopDir, key) => path.join(dirOf(loopDir), `${slug(key)}.json`)
 
 // A day of journal numbers (brain/journal/rollup over the last 24 h) plus the raw events and the reviewer's open findings -> candidates. Pure.
-function candidates({ rollup, events = [], findings = [] }) {
+// snapshots: [{ id, at, kind, step }] (brain/state/snapshots: the scene around a high flag, which tools/snapshot-rebuild.js can rebuild on a trial server).
+// A step candidate takes the snapshots captured during that step, a flag candidate those of its kind, newest first.
+function candidates({ rollup, events = [], findings = [], snapshots = [] }) {
   const out = []
+  const snaps = (pick) => snapshots.filter(pick).sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 4).map(s => s.id)
   const causes = new Map()                 // step -> Map(alarm cause -> n)
   for (const e of events) {
     if (e.k !== 'alarm' || e.ev !== 'raised') continue
@@ -44,7 +47,7 @@ function candidates({ rollup, events = [], findings = [] }) {
       key: `step-${slug(id)}`, type: 'step', step: id, costMin: loss,
       counts: { runs: s.runs, minutes: s.minutes, ok: s.ok, fail: s.fail, timeout: s.timeout, alarms: s.alarms, stalledMin: s.stalledMin },
       line: `step ${id}: ${s.runs} runs, ${s.minutes} min, ${s.ok} ok, ${s.fail} fail, ${s.timeout} timeout, ${s.alarms} alarms, ${s.stalledMin} min stalled`,
-      evidence: why,
+      evidence: why, snapshots: snaps(s2 => s2.step === id),
     })
   }
   const deaths = new Map()
@@ -57,7 +60,7 @@ function candidates({ rollup, events = [], findings = [] }) {
   for (const [kind, n] of Object.entries((rollup && rollup.flags) || {})) {
     if (n < MIN_FLAGS) continue
     const last = events.filter(e => e.k === 'flag' && e.kind === kind).slice(-2).map(e => `${String(e.at).slice(11, 16)}Z ${cut(e.msg, 120)}`)
-    out.push({ key: `flag-${slug(kind)}`, type: 'flag', step: null, costMin: 0, counts: { flags: n }, line: `flag ${kind}: raised ${n} times`, evidence: last })
+    out.push({ key: `flag-${slug(kind)}`, type: 'flag', step: null, costMin: 0, counts: { flags: n }, line: `flag ${kind}: raised ${n} times`, evidence: last, snapshots: snaps(s2 => s2.kind === kind) })
   }
   for (const f of findings || []) {
     if (!f || f.severity !== 'high' || !((f.seenRuns || 0) >= MIN_FINDING_RUNS)) continue
@@ -121,6 +124,7 @@ function sync(loopDir, { bot, cands = [], decided = {}, commits = [], now = Date
     if (d && d.isBug) { if (d.title) o.title = cut(d.title, 120); if (d.problem) o.problem = cut(d.problem, 600); if (d.suggestion) o.suggestion = cut(d.suggestion, 400); if (d.kind) o.kind = d.kind }
     for (const k of [...((d && d.findings) || []), ...(c.finding ? [c.finding] : [])]) if (typeof k === 'string' && k && !o.findings.includes(k)) o.findings.push(k)
     o.findings = o.findings.slice(-12)
+    o.snapshots = [...new Set([...(c.snapshots || []).map(id => `${bot}/${id}`), ...(o.snapshots || [])])].slice(0, 8)       // newest first, with the bot whose folder holds the file
     o.bots[bot] = numbers; o.costMin = totalCost(o); o.updatedAt = at; o.seenDreams = (o.seenDreams || 0) + 1
     o.cost = [...(o.cost || []), { at, bot, min: c.costMin }].slice(-60)
     writeJson(fileOf(loopDir, o.key), o)
@@ -168,6 +172,7 @@ function toMarkdown(orders, at) {
     for (const [b, n] of Object.entries(o.bots || {})) L.push(`- ${b}: ${n.line} (${n.costMin} min lost)`, ...(n.evidence || []).map(e => `  - ${e}`))
     if (o.suggestion) L.push('', `Where to look: ${o.suggestion}`)
     if ((o.findings || []).length) L.push('', `Reviewer findings: ${o.findings.map(k => `\`${k}\``).join(', ')}`)
+    if ((o.snapshots || []).length) L.push('', `Snapshots to rebuild it from (brain/state/snapshots in that bot's folder): ${o.snapshots.join(', ')}`)
     L.push('')
   }
   const done = orders.filter(o => o.status === 'closed' || o.status === 'fixed').sort((a, b) => ((b.closed && b.closed.at) || '') > ((a.closed && a.closed.at) || '') ? 1 : -1).slice(0, 10)

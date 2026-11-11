@@ -10,8 +10,10 @@ const TASK_NAME = 'MC-Player Bot Reviewer'
 // Every scheduled job of the memory loop is one entry here: its Task Scheduler name, its launcher file, what it passes to run.js and how often it runs.
 // The Bot Dashboard app installs and removes them by id; nothing else on the computer is touched.
 const JOBS = {
-  review: { id: 'review', name: TASK_NAME, vbs: 'launch-reviewer.vbs', args: ['--once'], minutes: 10, maxMinutes: 120, title: 'Review and dawn briefs' },
-  dream: { id: 'dream', name: 'MC-Player Bot Dream', vbs: 'launch-dream.vbs', args: ['--dream'], minutes: 120, maxMinutes: 720, title: 'Dream: check memory against the journal, open work orders' },
+  review: { id: 'review', name: TASK_NAME, vbs: 'launch-reviewer.vbs', args: ['--once'], minutes: 10, maxMinutes: 120, title: 'Review and dawn briefs', about: 'Watches both bots and answers their dawn briefs.' },
+  dream: { id: 'dream', name: 'MC-Player Bot Dream', vbs: 'launch-dream.vbs', args: ['--dream'], minutes: 120, maxMinutes: 720, title: 'Dream: check memory against the journal, open work orders', about: 'Haiku 5.5 at xhigh on your Claude login, a few short calls per bot. It skips a bot whose journal has nothing new. "Run now" takes about five minutes per bot.' },
+  deploy: { id: 'deploy', name: 'MC-Player Bot Deployer', vbs: 'launch-deployer.vbs', args: ['--deploy'], minutes: 30, maxMinutes: 720, title: 'Deployer: put main on the live bots, take a deploy back if they get worse', about: 'No model. It runs the tests on new code from main, fast-forwards the code folder below, and hot-reloads or restarts the bots. Forty minutes later it compares each bot with its own hours before, and puts the old code back if the bot got clearly worse. It refuses to touch a code folder that has local changes.' },
+  digest: { id: 'digest', name: 'MC-Player Bot Digest', vbs: 'launch-digest.vbs', args: ['--digest'], minutes: 60, maxMinutes: 720, title: 'Digest: one page a day', about: 'No model. Checked every hour, written once a day after 07:00: what the bots asked for, deaths and stalls, work orders, deploys, and which jobs failed.' },
 }
 const jobOf = (job) => (typeof job === 'string' ? JOBS[job] : job) || JOBS.review
 

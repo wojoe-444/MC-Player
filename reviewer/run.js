@@ -12,6 +12,9 @@
 //                                   Its own Task Scheduler entry, every 2 h: --install-task --dream (--minutes N), --uninstall-task --dream, --task-status --dream
 //   node run.js --dream --force     dream even when the journal has nothing new      --dream-dry-run   print the prompts and the candidates; no model call
 //   node run.js --orders            print the work orders, most costly first
+//   node run.js --deploy            the deployer on a schedule (lib/deploy.js): judge the last deploy, then put main on the live bots. Its own entry, every 30 min.
+//   node run.js --digest            the daily digest (lib/digest.js): at most one a day, after 07:00; --force writes one now. Its own entry, checked hourly.
+//   --code DIR                      the clone the live bots run from (default: the app's setting, else ~/Downloads/MC-Player-live)
 //   --loop DIR                      where work orders and run logs live (default: beside the Bot Dashboard app's settings)
 const path = require('path')
 const { resolveConfig } = require('./lib/config')
@@ -24,7 +27,7 @@ const runs = require('./lib/runs')
 async function main() {
   const cfg = resolveConfig({ argv: process.argv.slice(2) })
   const f = cfg.args.flags
-  const job = schedule.JOBS[f.has('dream') ? 'dream' : 'review']
+  const job = schedule.JOBS[['dream', 'deploy', 'digest'].find(j => f.has(j)) || 'review']
   if (f.has('install-task')) {
     const r = await schedule.install({ scriptPath: path.resolve(__filename), outDir: cfg.outDir, minutes: cfg.args.opts.minutes ? cfg.minutes : job.minutes, job })
     console.log(r.ok ? `Installed Task Scheduler job "${job.name}": every ${r.minutes} min while you are logged in, hidden window, runs ${r.nodeExe} ${__filename} ${job.args.join(' ')}` : `Could not install: ${r.error}`)
@@ -33,6 +36,14 @@ async function main() {
   if (f.has('uninstall-task')) { const r = await schedule.uninstall(undefined, job); console.log(r.ok ? `Removed the Task Scheduler job "${job.name}".` : `Could not remove: ${r.error}`); return r.ok ? 0 : 1 }
   if (f.has('task-status')) { console.log(JSON.stringify(await schedule.status(undefined, job), null, 1)); return 0 }
   if (f.has('orders')) { const { list, toMarkdown } = require('./lib/orders'); console.log(toMarkdown(list(cfg.loopDir), new Date().toISOString())); return 0 }
+  if (f.has('deploy')) {
+    const r = await require('./lib/deploy').runDeploy(cfg, { log: (m) => logLine(cfg, m, Date.now()), tests: !f.has('no-tests') })
+    console.log(JSON.stringify(r)); return r.ok ? 0 : 1
+  }
+  if (f.has('digest')) {
+    const r = require('./lib/digest').runDigest(cfg, { force: f.has('force'), log: (m) => logLine(cfg, m, Date.now()) })
+    console.log(r.text || JSON.stringify(r)); return r.ok ? 0 : 1
+  }
   if (f.has('dream') || f.has('dream-dry-run')) {
     const { runDream } = require('./lib/dream')
     const d = await runDream(cfg, { ask: askClaude, force: f.has('force'), dryRun: f.has('dream-dry-run'), log: (m) => logLine(cfg, m, Date.now()) })

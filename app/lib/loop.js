@@ -10,21 +10,23 @@ const readText = (f, max = 20000) => { try { return fs.readFileSync(f, 'utf8').s
 function loadLib(reviewerDir) {
   try {
     const lib = (n) => require(path.join(reviewerDir, 'lib', n))
-    return { schedule: lib('schedule'), orders: lib('orders'), runs: lib('runs'), config: lib('config') }
+    return { schedule: lib('schedule'), orders: lib('orders'), runs: lib('runs'), config: lib('config'), deploy: lib('deploy'), digest: lib('digest') }
   } catch { return null }
 }
 
-const JOB_IDS = ['dream']          // jobs this tab installs; the review job (which also answers the dawn briefs) keeps its buttons on the Claude reviews tab
+const JOB_IDS = ['dream', 'deploy', 'digest']          // jobs this tab installs; the review job (which also answers the dawn briefs) keeps its buttons on the Claude reviews tab
 
 // bots: [{ id, name, dir }]. status(job) -> the Task Scheduler state of one job (injected: it shells out to schtasks)
-async function loopState({ lib, loopDir, bots, status, running = {} }) {
+async function loopState({ lib, loopDir, bots, status, running = {}, codeDir = null }) {
   if (!lib) return { available: false }
   const jobs = []
-  for (const id of JOB_IDS) { const j = lib.schedule.JOBS[id]; jobs.push({ id, title: j.title, taskName: j.name, minutes: j.minutes, maxMinutes: j.maxMinutes, running: !!running[id], task: await status(j) }) }
+  for (const id of JOB_IDS) { const j = lib.schedule.JOBS[id]; jobs.push({ id, title: j.title, about: j.about, taskName: j.name, minutes: j.minutes, maxMinutes: j.maxMinutes, running: !!running[id], task: await status(j) }) }
   const review = lib.schedule.JOBS.review
   const mem = (b, ...p) => path.join(b.dir, 'brain', 'state', 'memory', ...p)
   return {
     available: true, loopDir, jobs,
+    code: { dir: codeDir, isClone: !!codeDir && fs.existsSync(path.join(codeDir, '.git')), hasDeployer: !!codeDir && fs.existsSync(path.join(codeDir, 'tools', 'deployer.js')), last: codeDir ? lib.deploy.deployLog(codeDir, 4) : [] },
+    digest: lib.digest.latest(loopDir),
     reviewTask: { title: review.title, taskName: review.name, task: await status(review) },
     orders: lib.orders.list(loopDir).slice(0, 40).map(o => ({ key: o.key, title: o.title, status: o.status, kind: o.kind, costMin: o.costMin, problem: o.problem, suggestion: o.suggestion, openedAt: o.openedAt, updatedAt: o.updatedAt, seenDreams: o.seenDreams, reopens: o.reopens, pr: o.pr, closed: o.closed, findings: o.findings, bots: Object.fromEntries(Object.entries(o.bots || {}).map(([k, v]) => [k, { costMin: v.costMin, line: v.line, evidence: v.evidence }])) })),
     runs: lib.runs.read({ loopDir }, { limit: 40 }),
