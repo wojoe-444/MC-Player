@@ -20,6 +20,8 @@ const MIN_TRAMPLES = 2
 const LEFT_BLOCK_MIN = 1.5                 // lost minutes per scaffold block still standing: the eyesore Walter would have to point out, and the trip to take it down
 const LEFT_TREE_MIN = 10                   // per half-felled tree: the logs and the canopy they keep alive, and the walk back to finish it
 const MIN_STRAY_BLOCKS = 4                 // loose single blocks only count from this many; one pillar or tower is already an order
+const ASK_MIN = 15                         // lost minutes per question the bot put to Walter in a day: its plan waits on an answer nobody is there to give
+const MIN_ASKS = 3                         // a bot that asked this many times in a day is blocked, not curious
 const MIN_LOSS = 10, MIN_FAILS = 5, MIN_ALARMS = 5, MIN_DEATHS = 2, MIN_FLAGS = 10, MIN_FINDING_RUNS = 6
 const QUIET_DREAMS = 6                     // an order nobody has seen for this many dreams of a running bot closes as "went quiet" (12 h at one dream per 2 h)
 const REASK_MS = 24 * 3600000
@@ -147,6 +149,20 @@ function candidates({ rollup, events = [], findings = [], snapshots = [] }) {
         suggestion: 'Look at why brain/autopilot/schematicbuild.js cannot do those cells: the placement recipe for that block (brain/schematic/follow.js recipe), a spot with a line of sight, a supply it lacks, or a cell that is not ours to dig (the ledger). The diff is the test: reproduce the cells from the journal event and make a test for the recipe.' },
     })
   }
+  // Questions the dawn brief put to Walter (journal `brief` events with an `ask`). A bot that keeps asking is blocked on something its code does not do (it holds the
+  // ingots and asks why no step makes the pickaxe; it has no chest and asks for one). Nobody answers at 3 a.m., so the question becomes a work order, opened by code
+  // without a model: the fixer reads what is asked, finds the step it names and makes that step do it, or answers with the one question that needs a person.
+  const asks = events.filter(e => e && e.k === 'brief' && typeof e.ask === 'string' && e.ask.trim().length > 8)
+  if (asks.length >= MIN_ASKS) {
+    const last = asks.slice(-3).map(e => `${String(e.at).slice(11, 16)}Z ${cut(e.ask, 230)}`)
+    out.push({
+      key: 'bot-asks', type: 'asks', step: null, costMin: Math.min(asks.length, 12) * ASK_MIN, counts: { asks: asks.length },
+      line: `the bot put ${asks.length} question(s) to Walter in a day; latest: ${cut(asks[asks.length - 1].ask, 160)}`, evidence: last,
+      auto: { isBug: true, kind: 'bug', title: 'The bot keeps asking for help with something its code does not do',
+        problem: cut(`The bot asked ${asks.length} question(s) in its dawn briefs in the last day and none was answered, so each one stayed a block on its plan. Latest: ${last.join(' | ')}. A bot that is an independent player does the thing itself: it crafts the tool, places the chest, takes the other way round. Each question names a step that does not do what the bot needs, or an item it cannot make.`, 600),
+        suggestion: 'Find the step each question names in brain/autopilot/plan.js (its need() and run), and the recipe or placement it never attempts. Make the step do it with what the bag holds (for a pickaxe or ladders: the iron and sticks are already there). If the question is about a preference, not about code, answer "question" with that one question.' },
+    })
+  }
   for (const f of findings || []) {
     if (!f || f.severity !== 'high' || !((f.seenRuns || 0) >= MIN_FINDING_RUNS)) continue
     out.push({ key: `finding-${slug(f.key)}`, type: 'finding', step: null, costMin: 0, counts: { seenRuns: f.seenRuns }, finding: f.key,
@@ -154,7 +170,7 @@ function candidates({ rollup, events = [], findings = [], snapshots = [] }) {
   }
   return out.sort((a, b) => (b.costMin - a.costMin) || (weight(b) - weight(a)))
 }
-const weight = (c) => (c.counts.deaths || 0) * 100 + (c.counts.alarms || 0) + (c.counts.fail || 0) + (c.counts.timeout || 0) + (c.counts.trampled || 0) + (c.counts.leftovers || 0) + (c.counts.flags || 0) / 10 + (c.counts.seenRuns || 0) / 10
+const weight = (c) => (c.counts.deaths || 0) * 100 + (c.counts.alarms || 0) + (c.counts.fail || 0) + (c.counts.timeout || 0) + (c.counts.trampled || 0) + (c.counts.leftovers || 0) + (c.counts.asks || 0) + (c.counts.flags || 0) / 10 + (c.counts.seenRuns || 0) / 10
 
 function load(loopDir, key) { return readJson(fileOf(loopDir, key)) }
 function list(loopDir, { status = null } = {}) {
