@@ -14,6 +14,15 @@ function loadLib(reviewerDir) {
   } catch { return null }
 }
 
+// when the bot last wrote to its journal (brain/journal): the newest day file and its modified time. Only the time is read, never the events.
+function journalOf(b) {
+  try {
+    const dir = path.join(b.dir, 'brain', 'state', 'journal')
+    const day = fs.readdirSync(dir).filter(f => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(f)).sort().pop()
+    return day ? { day: day.slice(0, 10), at: new Date(fs.statSync(path.join(dir, day)).mtimeMs).toISOString() } : null
+  } catch { return null }
+}
+
 const JOB_IDS = ['dream', 'fix', 'deploy', 'digest']          // jobs this tab installs; the review job (which also answers the dawn briefs) keeps its buttons on the Claude reviews tab
 
 // bots: [{ id, name, dir }]. status(job) -> the Task Scheduler state of one job (injected: it shells out to schtasks)
@@ -23,6 +32,9 @@ async function loopState({ lib, loopDir, bots, status, running = {}, codeDir = n
   for (const id of JOB_IDS) { const j = lib.schedule.JOBS[id]; jobs.push({ id, title: j.title, about: j.about, taskName: j.name, minutes: j.minutes, maxMinutes: j.maxMinutes, running: !!running[id], task: await status(j) }) }
   const review = lib.schedule.JOBS.review
   const mem = (b, ...p) => path.join(b.dir, 'brain', 'state', 'memory', ...p)
+  // the newest run of each job, read per job: the shared list below is the newest 40 lines overall, and the jobs that run often crowd the slow ones out of it
+  const lastRuns = {}
+  for (const id of ['brief', 'review', ...JOB_IDS]) { const r = lib.runs.read({ loopDir }, { jobs: [id], limit: 1 })[0]; if (r) lastRuns[id] = { at: r.at, job: r.job, ok: r.ok, summary: r.summary } }
   return {
     available: true, loopDir, jobs,
     // the fixer: its mode, its own working copy, whether the GitHub CLI was usable on its last run, and where each open order stands with it
@@ -31,11 +43,11 @@ async function loopState({ lib, loopDir, bots, status, running = {}, codeDir = n
     digest: lib.digest.latest(loopDir),
     reviewTask: { title: review.title, taskName: review.name, task: await status(review) },
     orders: lib.orders.list(loopDir).slice(0, 40).map(o => ({ key: o.key, title: o.title, status: o.status, kind: o.kind, costMin: o.costMin, problem: o.problem, suggestion: o.suggestion, openedAt: o.openedAt, updatedAt: o.updatedAt, seenDreams: o.seenDreams, reopens: o.reopens, pr: o.pr, closed: o.closed, findings: o.findings, bots: Object.fromEntries(Object.entries(o.bots || {}).map(([k, v]) => [k, { costMin: v.costMin, line: v.line, evidence: v.evidence }])) })),
-    runs: lib.runs.read({ loopDir }, { limit: 40 }),
+    runs: lib.runs.read({ loopDir }, { limit: 40 }), lastRuns,
     bots: bots.map(b => {
       const brief = readJson(mem(b, 'brief.json')), last = readJson(mem(b, 'dream', 'last.json'))
       return {
-        id: b.id, name: b.name, memory: readText(mem(b, 'global.md')),
+        id: b.id, name: b.name, memory: readText(mem(b, 'global.md')), journal: journalOf(b),
         brief: brief ? { at: brief.at, day: brief.day, intent: brief.intent, focus: brief.focus, holds: brief.holds, freeTime: brief.freeTime, ask: brief.ask } : null,
         lastCheck: last ? { at: last.at, changes: (last.memory && last.memory.changes) || [], calls: last.calls, skippedSteps: last.skippedSteps, costUsd: last.costUsd, dropped: last.dropped } : null,
       }

@@ -1,5 +1,5 @@
 // The Memory loop page (docs/MEMORY-LOOP.md): the loop's scheduled jobs (install, remove, run now), the digest, the ranked work orders,
-// each bot's memory file with what the last check changed, and one line per run. Everything shown is read from this computer by the app's main process.
+// each bot's memory file with what the last check changed, and one line per run. It opens with the loop drawn as a flowchart (components/LoopFlow). Everything shown is read from this computer by the app's main process.
 import { useEffect, useState } from "react"
 import { PlayIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -8,6 +8,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { NeedsApp, PageHeader } from "@/components/common"
+import { LoopFlow } from "@/components/LoopFlow"
 import { useApp, type FixMode, type LoopBot, type LoopFix, type LoopJob, type LoopOrder, type LoopState, type TaskState } from "@/botapp"
 
 const when = (iso?: string | null) => (iso ? new Date(iso).toLocaleString() : "never")
@@ -79,7 +80,7 @@ function JobCard({ j, code, fix }: { j: LoopJob; code?: LoopState["code"]; fix?:
   const [busy, setBusy] = useState(false)
   const t = j.task
   return (
-    <Card>
+    <Card id={`loop-job-${j.id}`} className="scroll-mt-4">
       <CardHeader>
         <CardTitle>{j.title}</CardTitle>
         <CardDescription>{taskLine(t, j.taskName, "Run now")}</CardDescription>
@@ -176,6 +177,11 @@ export function Loop() {
       <PageHeader title="Memory loop" description={`The bots keep a journal, plan each dawn from a small memory file, and a check compares that memory with the journal every two hours. What memory cannot fix becomes a work order, ranked by lost minutes. Everything on this page stays on this computer (${s.loopDir}).`} />
 
       <section className="flex flex-col gap-4">
+        <h2 className="text-lg font-semibold">How the loop feeds itself</h2>
+        <LoopFlow s={s} />
+      </section>
+
+      <section id="loop-digest" className="flex scroll-mt-4 flex-col gap-4">
         <h2 className="text-lg font-semibold">Digest</h2>
         {s.digest
           ? <Card><CardContent><Details summary={`Digest of ${s.digest.date}`} open><File>{s.digest.text}</File></Details></CardContent></Card>
@@ -198,14 +204,14 @@ export function Loop() {
         </div>
       </section>
 
-      <section className="flex flex-col gap-4">
+      <section id="loop-orders" className="flex scroll-mt-4 flex-col gap-4">
         <h2 className="text-lg font-semibold">Work orders</h2>
         {orders.length
           ? <div className="grid items-start gap-6 xl:grid-cols-2 [&>*]:min-w-0">{orders.map((o) => <OrderCard key={o.key} o={o} fix={s.fix?.orders?.[o.key]} />)}</div>
           : <p className="text-sm text-muted-foreground">No work orders yet. The dream job opens one when the journal shows the same fault again and again.</p>}
       </section>
 
-      <section className="flex flex-col gap-4">
+      <section id="loop-memory" className="flex scroll-mt-4 flex-col gap-4">
         <h2 className="text-lg font-semibold">Each bot's memory</h2>
         <div className="grid items-start gap-6 xl:grid-cols-2 [&>*]:min-w-0">{(s.bots || []).map((b) => <BotCard key={b.id} b={b} />)}</div>
       </section>
