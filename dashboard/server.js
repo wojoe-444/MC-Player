@@ -464,7 +464,7 @@ http.createServer((req, res) => {
   }
   if (p === '/api/schematics') return send(res, 200, JSON.stringify(castCached('schematics', () => schematiccast.index(castOpts()))), 'application/json');
   if ((sm = p.match(/^\/api\/schematics\/([\w.-]+)$/))) {
-    const sc = castCached('schematic:' + sm[1], () => schematiccast.cast(castOpts(), sm[1]));
+    const sc = castCached('schematic:' + sm[1], () => schematiccast.detail(castOpts(), sm[1]));
     return sc ? send(res, 200, JSON.stringify(sc), 'application/json') : send(res, 404, 'no such schematic');
   }
   if (p === '/api/progress') return send(res, 200, JSON.stringify(progress()), 'application/json');

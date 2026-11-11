@@ -7,9 +7,12 @@
 //   any      anything at all (natural rock that touches nothing the build uses, or a cell nobody could read)
 //   air      open: a mob or the player can stand or walk through (air, cave air)
 //   solid    a full, opaque (light-blocking), non-flammable, non-falling cube that emits no light: cobblestone, stone, deepslate, bricks, concrete, ores, dirt ...
+//            `block` is the one drawn (cobblestone); any other solid block passes the check
 //   water    a water cell, with its level when the level matters (a source is 0, flowing 1..7)
 //   lava     a lava cell
-//   block    this exact block, with the listed properties (everything else)
+//   block    this exact block, with the listed properties (everything else); `alt: [names]` lists other blocks that are accepted in its place (an aesthetic build
+//            that allows spruce planks where it drew oak)
+// Any entry may carry `scenery: true`: part of the surroundings (terrain, trees next to the build). Drawn when the viewer shows the surroundings, never checked.
 'use strict'
 
 const strip = (n) => String(n || '').replace(/^minecraft:/, '')
@@ -35,9 +38,17 @@ const keepProps = (props) => { const o = {}; for (const k of KEEP) if (props && 
 function describe(name, props) {
   const n = strip(name)
   if (isAir(n)) return { role: 'air' }
-  if (isSolid(n)) return { role: 'solid' }
-  if (isWater(n)) return { role: 'water', level: String((props && props.level) != null ? props.level : 0) }
-  if (isLava(n)) return { role: 'lava', level: String((props && props.level) != null ? props.level : 0) }
+  if (isSolid(n)) return { role: 'solid', block: n }
+  if (isWater(n)) return { role: 'water', block: 'water', level: String((props && props.level) != null ? props.level : 0) }
+  if (isLava(n)) return { role: 'lava', block: 'lava', level: String((props && props.level) != null ? props.level : 0) }
+  const p = keepProps(props)
+  return { role: 'block', block: n, ...(Object.keys(p).length ? { props: p } : {}) }
+}
+// the same cell for an aesthetic build: every block is wanted as itself (no "any solid block"), air stays air
+function describeExact(name, props) {
+  const n = strip(name)
+  if (isAir(n)) return { role: 'air' }
+  if (isWater(n) || isLava(n)) return describe(name, props)
   const p = keepProps(props)
   return { role: 'block', block: n, ...(Object.keys(p).length ? { props: p } : {}) }
 }
@@ -51,11 +62,13 @@ function matches(entry, name, props) {
     case 'solid': return isSolid(n)
     case 'water': return isWater(n) && (entry.level == null || String((props && props.level) != null ? props.level : 0) === String(entry.level))
     case 'lava': return isLava(n)
-    case 'block': return n === entry.block && Object.entries(entry.props || {}).every(([k, v]) => props && String(props[k]) === String(v))
+    case 'block': if (entry.alt && entry.alt.map(strip).includes(n)) return true; return n === entry.block && Object.entries(entry.props || {}).every(([k, v]) => props && String(props[k]) === String(v))
     default: return false
   }
 }
 const label = (e) => !e ? '?' : e.role === 'block' ? e.block + (e.props ? ' ' + Object.entries(e.props).map(([k, v]) => `${k}=${v}`).join(' ') : '') : e.role === 'water' || e.role === 'lava' ? `${e.role}${e.level != null ? ' level ' + e.level : ''}` : e.role
+// 'oak_stairs' -> 'Oak Stairs'
+const displayName = (n) => strip(n).split('_').map(w => w ? w[0].toUpperCase() + w.slice(1) : w).join(' ')
 const requirementText = (e) => ({ any: 'anything', air: 'open air', solid: 'a solid, light-blocking, non-flammable block (cobblestone, stone, deepslate ...)', water: 'water' + (e.level != null ? (String(e.level) === '0' ? ' (a source)' : ` (flowing, level ${e.level})`) : ''), lava: 'lava' }[e && e.role] || `exactly ${label(e)}`)
 
-module.exports = { strip, isAir, isSolid, isWater, isLava, isOpenish, describe, matches, label, requirementText, keepProps, SOLID }
+module.exports = { strip, isAir, isSolid, isWater, isLava, isOpenish, describe, describeExact, displayName, matches, label, requirementText, keepProps, SOLID }

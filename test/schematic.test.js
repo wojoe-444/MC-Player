@@ -15,7 +15,9 @@ test('roles: any solid, light-blocking, non-flammable cube is "solid"; wood, gla
   for (const n of ['cobblestone', 'minecraft:stone', 'deepslate', 'cobbled_deepslate', 'stone_bricks', 'white_concrete', 'iron_ore', 'tuff', 'polished_andesite', 'dirt']) assert.strictEqual(B.describe(n).role, 'solid', n)
   for (const n of ['oak_planks', 'birch_log', 'glass', 'glowstone', 'cobblestone_slab', 'cobblestone_stairs', 'sand', 'gravel', 'white_wool', 'ice', 'spawner', 'hay_block', 'slime_block', 'cobblestone_wall']) assert.notStrictEqual(B.describe(n).role, 'solid', n)
   assert.deepStrictEqual(B.describe('hopper', { facing: 'down', enabled: 'true' }), { role: 'block', block: 'hopper', props: { facing: 'down' } }, 'noise properties are dropped')
-  assert.deepStrictEqual(B.describe('water', { level: '3' }), { role: 'water', level: '3' })
+  assert.deepStrictEqual(B.describe('water', { level: '3' }), { role: 'water', block: 'water', level: '3' })
+  assert.deepStrictEqual(B.describe('minecraft:cobblestone'), { role: 'solid', block: 'cobblestone' }, 'a wall cell keeps the specific block it shows')
+  assert.deepStrictEqual(B.describeExact('cobblestone'), { role: 'block', block: 'cobblestone' }, 'an aesthetic build wants the block itself')
   assert.ok(B.matches({ role: 'solid' }, 'minecraft:deepslate') && !B.matches({ role: 'solid' }, 'oak_planks') && B.matches({ role: 'air' }, 'cave_air'))
   assert.ok(B.matches({ role: 'water', level: '0' }, 'water', { level: '0' }) && !B.matches({ role: 'water', level: '0' }, 'water', { level: '2' }))
 })
@@ -33,19 +35,19 @@ const box = { x0: 0, y0: 0, z0: 0, x1: 8, y1: 4, z1: 6 }
 const get = (m) => (x, y, z) => m.get(x + ',' + y + ',' + z) || null
 
 test('capture keeps open space, the shell and the exact pieces; deep rock is "any"; a tree outside the seeds is not the build; runs add up', () => {
-  const m = world(), s = F.capture(get(m), box, { id: 't', seeds: [[3, 2, 3]] })
+  const m = world(), s = F.capture(get(m), box, { id: 't', seeds: [[3, 2, 3]], surround: 0 })
   const roles = s.palette.map(p => p.role + (p.block ? ':' + p.block : ''))
-  assert.deepStrictEqual(roles.slice().sort(), ['any', 'air', 'block:hopper', 'block:torch', 'solid', 'water', 'water'].sort())
+  assert.deepStrictEqual(roles.slice().sort(), ['any', 'air', 'block:hopper', 'block:torch', 'solid:cobblestone', 'water:water', 'water:water'].sort())
   assert.ok(!roles.includes('block:oak_log'), 'the tree is not connected to the cavity')
   const cells = F.cellsOf(s); assert.strictEqual(cells.length, 9 * 5 * 7)
-  const legend = F.legend(s); assert.ok(legend.find(l => l.role === 'solid' && l.sources[0].block === 'cobblestone'))
+  const legend = F.legend(s); assert.ok(legend.find(l => l.role === 'solid' && l.block === 'cobblestone'), 'the wall is solid and shows cobblestone')
   assert.strictEqual(legend.find(l => l.role === 'any').cells, 9 * 5 * 7 - legend.filter(l => l.role !== 'any').reduce((n, l) => n + l.cells, 0))
   // hopper at (3,0,3): kept as exact; rock in the corner (0,0,0) touches nothing open: any
   assert.strictEqual(s.palette[cells[F.idx(s.size, 0, 0, 0)]].role, 'any')
   assert.deepStrictEqual(s.palette[cells[F.idx(s.size, 3, 0, 3)]], { role: 'block', block: 'hopper', props: { facing: 'down' } })
 })
 test('diff: any other solid block still matches; wood in a wall, a hole, a wrong water level and a hopper facing sideways do not', () => {
-  const m = world(), s = F.capture(get(m), box, { id: 't', seeds: [[3, 2, 3]] })
+  const m = world(), s = F.capture(get(m), box, { id: 't', seeds: [[3, 2, 3]], surround: 0 })
   assert.ok(F.diff(s, get(m)).ok)
   m.set('0,2,3', { name: 'stone', props: {} }); m.set('1,2,0', { name: 'deepslate', props: {} })         // wall cells swapped for other rock
   assert.ok(F.diff(s, get(m)).ok, 'cobble, stone and deepslate are the same to the build')
@@ -57,7 +59,7 @@ test('diff: any other solid block still matches; wood in a wall, a hole, a wrong
   assert.strictEqual(F.diff(s, get(m), [20, 0, 0]).unknown, F.diff(s, get(m)).checked + F.diff(s, get(m)).unknown, 'a schematic moved to where nothing is loaded compares nothing')
 })
 test('masks: only the boxes named are the build', () => {
-  const m = world(), s = F.capture(get(m), box, { id: 't', masks: [{ x0: 0, y0: 0, z0: 0, x1: 4, y1: 4, z1: 6 }] })
+  const m = world(), s = F.capture(get(m), box, { id: 't', surround: 0, masks: [{ x0: 0, y0: 0, z0: 0, x1: 4, y1: 4, z1: 6 }] })
   const cells = F.cellsOf(s); assert.strictEqual(s.palette[cells[F.idx(s.size, 6, 2, 3)]].role, 'any'); assert.strictEqual(s.palette[cells[F.idx(s.size, 2, 2, 3)]].role, 'air')
 })
 
@@ -75,9 +77,12 @@ test('exact check on the REAL farm of 2026-11-10 against the bots\' design: it f
 test('the library: the captured working farm loads, its runs add up, and what it needs is generic', () => {
   const lib = S.list([S.LIBRARY]); const f = lib.find(e => e.schematic.id === 'mobfarm-forever2k27'); assert.ok(f, 'mobfarm-forever2k27 is in the library')
   const s = f.schematic; assert.strictEqual(F.cellsOf(s).length, s.size[0] * s.size[1] * s.size[2])
-  const leg = F.legend(s); assert.ok(leg.some(l => l.role === 'solid' && l.sources.some(x => x.block === 'cobblestone')), 'cobblestone walls are stored as "solid"')
+  assert.strictEqual(s.v, 2); assert.ok(!s.sources, 'format 2 has no per-entry source counts')
+  const leg = F.legend(s).filter(l => !l.scenery); assert.ok(leg.some(l => l.role === 'solid' && l.block === 'cobblestone') && leg.some(l => l.role === 'solid' && l.block === 'stone'), 'walls are role solid, each cell names its block')
+  assert.ok(s.palette.every(e => e.role === 'any' || e.role === 'air' || e.block), 'every cell that is not air or any names a specific block')
   assert.ok(leg.some(l => l.label.startsWith('hopper')) && leg.some(l => l.label.startsWith('water level 0')) && leg.some(l => /trapdoor/.test(l.label)) && leg.some(l => /cobblestone_slab/.test(l.label)))
   assert.ok(!leg.some(l => /leaves|cave_vines|spruce_log/.test(l.label)), 'the trees and vines around it are not part of it')
+  assert.ok(F.legend(s).some(l => l.scenery), 'the rock and the torches around it are kept as scenery')
 })
 
 test('store: later directories win; ids are safe file names', () => {
@@ -107,16 +112,65 @@ test('bot module: capture from the loaded world, save it for both bots, tag the 
   delete process.env.BOT_SHARED
 })
 
-// ---- dashboard: a schematic as a CastData payload
-test('dashboard schematiccast: index and cast of the library schematic', () => {
+// ---- format 2: a specific block in every cell, roles as the allowed substitutes
+test('surroundings are kept as scenery: drawn, never checked', () => {
+  const m = world(), s = F.capture(get(m), box, { id: 't', seeds: [[3, 2, 3]], surround: 1 })
+  const sc = s.palette.map((e, i) => ({ e, i })).filter(x => x.e.scenery)
+  assert.ok(sc.length && sc.some(x => x.e.block === 'oak_log' || x.e.block === 'cobblestone'), JSON.stringify(sc))
+  const mm = world(); mm.set('8,2,3', { name: 'air', props: {} })   // the tree trunk is scenery: changing it is no mismatch
+  assert.ok(F.diff(s, get(mm)).ok)
+})
+test('aesthetic mode: every block is wanted as itself; air is not kept', () => {
+  const m = new Map(), set = (x, y, z, n, props = {}) => m.set(x + ',' + y + ',' + z, { name: n, props })
+  for (let x = 0; x < 3; x++) for (let z = 0; z < 3; z++) { set(x, 0, z, 'oak_planks'); set(x, 1, z, x === 1 && z === 1 ? 'air' : 'cobblestone') }
+  set(1, 2, 1, 'oak_stairs', { facing: 'east', half: 'bottom', waterlogged: 'false' })
+  const s = F.capture(get(m), { x0: 0, y0: 0, z0: 0, x1: 2, y1: 2, z1: 2 }, { id: 'a', mode: 'aesthetic', surround: 0 })
+  assert.strictEqual(s.mode, 'aesthetic'); assert.ok(s.palette.every(e => e.role === 'any' || e.role === 'block'), 'no generic solid role: ' + JSON.stringify(s.palette))
+  assert.ok(F.diff(s, get(m)).ok); m.set('0,1,0', { name: 'stone', props: {} }); assert.strictEqual(F.diff(s, get(m)).wrong.length, 1, 'stone is not cobblestone in an aesthetic build')
+})
+test('alt: an exact entry can name the blocks accepted in its place', () => {
+  const e = { role: 'block', block: 'oak_planks', alt: ['spruce_planks'] }
+  assert.ok(B.matches(e, 'oak_planks') && B.matches(e, 'minecraft:spruce_planks') && !B.matches(e, 'birch_planks'))
+})
+test('upgrade: a format 1 file becomes format 2 with a block for every wall cell', () => {
+  const v1 = { v: 1, id: 'old', size: [1, 1, 1], origin: [0, 0, 0], palette: [{ role: 'any' }, { role: 'solid' }, { role: 'water', level: '0' }], rle: [1, 1], counts: { 1: 1 }, sources: { 1: { stone: 3, cobblestone: 9 } } }
+  const u = F.upgrade(v1); assert.strictEqual(u.v, 2); assert.strictEqual(u.palette[1].block, 'cobblestone'); assert.strictEqual(u.palette[2].block, 'water'); assert.ok(!u.sources)
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sch-v1-')); fs.writeFileSync(path.join(dir, 'old.json'), JSON.stringify(v1))
+  assert.strictEqual(S.load([dir], 'old').palette[1].block, 'cobblestone', 'the store upgrades what it reads')
+})
+test('bill of materials: one row per block, isolatable; raw materials in cobblestone, logs and smelting', () => {
+  const BOM = require('../brain/schematic/bom')
+  const pal = [{ role: 'any' }, { role: 'solid', block: 'cobblestone' }, { role: 'solid', block: 'stone' }, { role: 'block', block: 'oak_stairs', props: { facing: 'east' } }, { role: 'block', block: 'oak_stairs', props: { facing: 'west' } },
+    { role: 'block', block: 'oak_planks' }, { role: 'block', block: 'torch' }, { role: 'block', block: 'wall_torch', props: { facing: 'east' } }, { role: 'water', block: 'water', level: '0' }, { role: 'block', block: 'oak_log', scenery: true }, { role: 'block', block: 'cobblestone_slab', props: { type: 'bottom' } }]
+  const s = { palette: pal, counts: { 1: 100, 2: 10, 3: 6, 4: 6, 5: 8, 6: 3, 7: 1, 8: 5, 9: 50, 10: 4 } }
+  const rows = BOM.bom(s), by = Object.fromEntries(rows.map(r => [r.key, r]))
+  assert.strictEqual(by.oak_stairs.cells, 12); assert.deepStrictEqual(by.oak_stairs.indices, [3, 4]); assert.strictEqual(by.torch.cells, 4, 'wall torches count as torches'); assert.ok(!by.oak_log, 'scenery is not in the bill')
+  assert.ok(by.cobblestone.subs && /solid/.test(by.cobblestone.subs) && by.water.fluid)
+  const raw = BOM.rawMaterials(rows), l = Object.fromEntries(raw.lines.map(x => [x.id, x.amount]))
+  assert.strictEqual(l.cobblestone, 100 + 10 + 2, '100 cobblestone, 10 stone, 4 slabs = 2'); assert.strictEqual(l.smelting, 10 + 1, '10 stone + a quarter log of charcoal for 4 torches')
+  assert.strictEqual(l.oak_log, Math.ceil((12 * 1.5 + 8) / 4 + 1 + 4 / 32))
+  assert.ok(!raw.lines.some(x => /water/i.test(x.label)))
+})
+
+// ---- dashboard: a schematic for the viewer
+test('dashboard schematiccast: index and detail of the library schematic', () => {
   const sc = require('../dashboard/schematiccast')
   const o = { sharedDir: path.join(os.tmpdir(), 'nonexistent-shared'), botDirs: [] }
   const idx = sc.index(o)
-  assert.ok(idx.schematics.some(s => s.id === 'mobfarm-forever2k27'))
-  const c = sc.cast(o, 'mobfarm-forever2k27')
-  assert.equal(c.cellStride, 5)
-  assert.equal(c.cells.length, c.stats.cells * 5)
-  assert.ok(c.parts.every(p => p.cells > 0))
-  assert.ok(c.schematic.legend.some(l => l.role === 'solid' && /light-blocking/.test(l.needs)))
-  assert.equal(sc.cast(o, 'nope'), null)
+  assert.ok(idx.schematics.some(s => s.id === 'mobfarm-forever2k27' && s.mode === 'functional'))
+  const d = sc.detail(o, 'mobfarm-forever2k27')
+  assert.strictEqual(d.v, 2); assert.strictEqual(F.cellsOf(d).length, d.size[0] * d.size[1] * d.size[2])
+  const cobble = d.bom.find(r => r.key === 'cobblestone'); assert.ok(cobble && cobble.cells === 926 && /solid/.test(cobble.subs))
+  assert.ok(d.bom.every(r => r.indices.every(i => d.palette[i] && !d.palette[i].scenery)))
+  assert.ok(d.raw.lines.find(l => l.id === 'cobblestone').amount > 900 && d.raw.lines.some(l => l.id === 'smelting'))
+  assert.strictEqual(sc.detail(o, 'nope'), null)
+})
+
+test('the built-for-looks example: every block exact, stairs and fences and a door in the bill, the yard around it is scenery', () => {
+  const s = D.starterHut(); assert.strictEqual(s.mode, 'aesthetic'); assert.ok(s.palette.every(e => e.role === 'any' || e.role === 'block' || e.role === 'air'), 'no generic roles in an aesthetic build')
+  assert.ok(F.diff(s, (x, y, z) => ({ name: 'minecraft:stone', props: {} })).wrong.length === F.diff(s, (x, y, z) => ({ name: 'minecraft:stone', props: {} })).checked, 'stone is not the hut')
+  const BOM = require('../brain/schematic/bom'), rows = BOM.bom(s), by = Object.fromEntries(rows.map(r => [r.key, r.cells]))
+  assert.ok(by.oak_stairs > 20 && by.oak_fence > 30 && by.oak_planks > 100 && by.torch === 6 && by.oak_door === 2, JSON.stringify(by))
+  assert.ok(s.palette.some(e => e.scenery && e.block === 'grass_block'), 'the lawn is scenery'); assert.ok(!rows.some(r => r.key === 'grass_block'))
+  const lib = S.load([S.LIBRARY], 'starter-hut'); assert.ok(lib && lib.mode === 'aesthetic', 'it ships in the library')
 })

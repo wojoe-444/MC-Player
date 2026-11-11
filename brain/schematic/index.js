@@ -3,10 +3,12 @@
 //   bot._schematic.capture({ id, name?, kind?, purpose?, box | room, seeds?, masks? })  -> { ok, file, schematic } | { ok:false, why }
 //        box   { x0,y0,z0,x1,y1,z1 } world cells; every chunk column of it must be loaded
 //        room  a registry room id: its box (plus a margin) is captured and the room record gets `schematic: id`, so brain/inspect diffs it cell by cell from then on
+//        mode  'functional' (default: walls stored as role `solid` with the block that was there) or 'aesthetic' (every block exact: a house, a statue)
+//        surround  cells of natural world kept around it as scenery for the picture (default 2)
 //        seeds cells inside the build: only open space connected to them is the build (a farm in the open is not the forest around it)
 //   bot._schematic.diff(id, at?)  -> brain/schematic/format.js diff against the loaded world
 //   bot._schematic.list()
-// What is stored is roles, not block names, wherever the name does not matter (see blocks.js): "a solid, light-blocking, non-flammable block" instead of cobblestone.
+// Every cell stores the specific block it shows AND a role (see blocks.js): a wall is `solid` (any solid, light-blocking, non-flammable block passes the check) shown as the block it was.
 // Walter 2026-11-11: the improvement loop needs to be able to save a schematic of a working build, and to check the next one against it.
 'use strict'
 const fs = require('fs')
@@ -36,7 +38,7 @@ module.exports = function register(api) {
     const cells = (box.x1 - box.x0 + 1) * (box.y1 - box.y0 + 1) * (box.z1 - box.z0 + 1)
     if (!(cells > 0) || cells > MAX_CELLS) return { ok: false, why: `the box has ${cells} cells (the limit is ${MAX_CELLS})` }
     if (!grid.columnsLoaded(bot, box, 0)) return { ok: false, why: 'the chunks around the box are not loaded: go there first' }
-    const s = F.capture(liveGet(), box, { id: o.id, name: o.name, kind: o.kind || (room && room.room.type) || 'build', purpose: o.purpose, seeds: o.seeds, masks: o.masks,
+    const s = F.capture(liveGet(), box, { id: o.id, name: o.name, kind: o.kind || (room && room.room.type) || 'build', purpose: o.purpose, seeds: o.seeds, masks: o.masks, mode: o.mode === 'aesthetic' ? 'aesthetic' : 'functional', surround: o.surround,
       source: { world: o.world || 'live world', save: null, capturedAt: new Date(now()).toISOString(), by: (bot.username || 'bot') + ' (in game)' } })
     if (s.unknownCells > s.size[0] * s.size[1] * s.size[2] * 0.02) return { ok: false, why: `${s.unknownCells} cells could not be read (chunks missing)` }
     const dir = path.join(sharedDir, 'schematics')
@@ -59,7 +61,7 @@ module.exports = function register(api) {
     if (!grid.columnsLoaded(bot, box, 0)) return { ok: false, why: 'the chunks are not loaded' }
     return { ok: true, ...F.diff(s, liveGet(), at || s.origin) }
   }
-  const list = () => S.list(dirs()).map(e => ({ id: e.schematic.id, name: e.schematic.name, kind: e.schematic.kind, size: e.schematic.size, origin: e.schematic.origin, file: e.file }))
+  const list = () => S.list(dirs()).map(e => ({ id: e.schematic.id, name: e.schematic.name, kind: e.schematic.kind, mode: e.schematic.mode, size: e.schematic.size, origin: e.schematic.origin, file: e.file }))
 
   bot._schematic = { v: 1, capture, diff, list, dirs }
   return {
