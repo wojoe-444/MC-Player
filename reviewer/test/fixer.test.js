@@ -167,6 +167,22 @@ test('merge mode: a clean fix is merged; one that removes free-time lines or edi
   assert.equal(r.outcome, 'ready'); assert.match(r.summary, /GitHub CLI \(gh\) is not installed/); assert.equal(fixer.fixState(w.cfg).gh.ok, false)
 })
 
+test('a session that ends in prose instead of the answer form: one short call reads the form off its report, and the checks still decide', async () => {
+  const w = world(); w.order('step-iron'); const asked = []
+  const prose = async (o) => { await goodAgent(o); return { ok: false, error: 'the answer was not structured JSON', text: 'I fixed half() and all tests pass.', costUsd: 0.4, calls: [] } }
+  const ask = async (o) => { asked.push(o); return { ok: true, costUsd: 0.01, data: answer().data } }
+  const r = await fixer.runFix(w.cfg, { agent: prose, ask, now: NOW, words: [] })
+  assert.equal(r.outcome, 'ready', r.summary); assert.equal(asked.length, 1); assert.equal(asked[0].prompt, 'I fixed half() and all tests pass.'); assert.match(asked[0].systemPrompt, /closing report/)
+  const log = JSON.parse(fs.readFileSync(path.join(w.cfg.loopDir, 'fixer', 'sessions', fs.readdirSync(path.join(w.cfg.loopDir, 'fixer', 'sessions'))[0]), 'utf8'))
+  assert.equal(log.rounds[0].formFromText, true); assert.match(log.diff, /Math\.floor/)
+  // without that call (or when it fails) the run is an error, not an attempt, and the session log keeps the prose and the diff
+  const w2 = world(); w2.order('step-iron')
+  const r2 = await fixer.runFix(w2.cfg, { agent: prose, ask: async () => ({ ok: false, error: 'x' }), now: NOW, words: [] })
+  assert.equal(r2.ok, false); assert.match(r2.summary, /not structured JSON/)
+  const log2 = JSON.parse(fs.readFileSync(path.join(w2.cfg.loopDir, 'fixer', 'sessions', fs.readdirSync(path.join(w2.cfg.loopDir, 'fixer', 'sessions'))[0]), 'utf8'))
+  assert.equal(log2.rounds[0].text, 'I fixed half() and all tests pass.'); assert.match(log2.diff, /Math\.floor/)
+})
+
 test('a lock held by a live run skips this one; a lock left by a run that died does not', async () => {
   const w = world(); w.order('step-iron'); fs.mkdirSync(w.cfg.loopDir, { recursive: true })
   const lock = path.join(w.cfg.loopDir, 'fix.lock')

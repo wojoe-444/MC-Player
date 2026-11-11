@@ -48,7 +48,7 @@ async function main() {
     console.log(r.text || JSON.stringify(r)); return r.ok ? 0 : 1
   }
   if (f.has('fix') || f.has('fix-dry-run')) {
-    const r = await require('./lib/fixer').runFix(cfg, { agent: runAgent, only: cfg.args.opts.only || null, dryRun: f.has('fix-dry-run'), log: (m) => logLine(cfg, m, Date.now()) })
+    const r = await require('./lib/fixer').runFix(cfg, { agent: runAgent, ask: askClaude, only: cfg.args.opts.only || null, dryRun: f.has('fix-dry-run'), log: (m) => logLine(cfg, m, Date.now()) })
     if (r.dryRun) { console.log(r.order ? `order ${r.order} on ${r.branch} (${r.mode} mode)\n\n--- system ---\n${r.system}\n\n--- prompt ---\n${r.prompt}` : 'no open work order to take'); return 0 }
     console.log(JSON.stringify(r)); return r.ok ? 0 : 1
   }

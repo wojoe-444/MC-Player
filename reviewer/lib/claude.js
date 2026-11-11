@@ -99,7 +99,9 @@ async function runAgent(opts) {
     if (result.subtype !== 'success' || result.is_error) return { ok: false, error: hint(`${result.subtype}: ${(result.errors || []).join('; ') || result.result || 'failed'}`.slice(0, 500)), ...base }
     let data = result.structured_output
     if (!data && typeof result.result === 'string') { try { data = JSON.parse(result.result.replace(/^```(?:json)?\s*|\s*```$/g, '')) } catch {} }
-    if (!data) return { ok: false, error: 'the answer was not structured JSON', text: String(result.result || '').slice(0, 2000), ...base }
+    // a long session sometimes ends in prose with the JSON inside it, or in prose alone: look for the object, else hand the text back for the caller to deal with
+    if (!data && typeof result.result === 'string') { const m = /\{[\s\S]*\}/.exec(result.result); if (m) { try { data = JSON.parse(m[0]) } catch {} } }
+    if (!data) return { ok: false, error: 'the answer was not structured JSON', text: String(result.result || '').slice(0, 8000), ...base }
     return { ok: true, data, ...base }
   } catch (e) {
     const msg = ac.signal.aborted ? `timed out after ${Math.round((opts.timeoutMs || 30 * 60000) / 60000)} min` : String(e && e.message || e)

@@ -264,6 +264,8 @@ The bot is an independent player with its own goals, its own memory and free tim
 ## The answer
 Plain sentences a maintainer can check. The title says what the change does. If the right fix depends on a preference of the person who runs the bots (how the bot should behave, not how the code works), do not decide it: put the one question in "question" and take the outcome that fits what you could do without the answer.`
 
+const FORM = `Below is the closing report of a repair session on a Minecraft bot's code. Fill in the answer form from it. Use only what the report says: do not add causes, changes or tests it does not mention. outcome is "fixed" when it says it fixed the fault and its new test and the test suite pass, "telemetry" when it says it could not reproduce the fault and added recording instead, and "gave-up" in every other case, including a report that is unclear or cut off. Fields the report says nothing about are empty.`
+
 function taskPrompt({ o, evidence, attempts, repair }) {
   const L = [`# Work order ${o.key}`, '', `**${o.title}**`, '', o.problem || '', '']
   for (const [b, n] of Object.entries(o.bots || {})) { L.push(`- ${b}: ${n.line} (${n.costMin} min lost in a day)`); for (const e of n.evidence || []) L.push(`  - ${e}`) }
@@ -436,7 +438,7 @@ function finishReady(cfg, o, p, { run, now, log }) {
 }
 
 // deps: { agent: async (opts) -> runAgent's result, run: sh, now, log, force, only, dryRun }
-async function runFix(cfg, { agent = null, run = sh, now = Date.now(), log = () => {}, only = null, dryRun = false, words } = {}) {
+async function runFix(cfg, { agent = null, ask = null, run = sh, now = Date.now(), log = () => {}, only = null, dryRun = false, words } = {}) {
   const row = (r) => { runs.append(cfg, 'fix', r, now); return r }
   const state = readJson(stateFile(cfg), {})
   const lock = path.join(cfg.loopDir, 'fix.lock')
@@ -481,7 +483,14 @@ async function runFix(cfg, { agent = null, run = sh, now = Date.now(), log = () 
       const a = await agent({ systemPrompt: SYSTEM, prompt: taskPrompt({ o, evidence, attempts: p.attempts, repair }), schema: SCHEMA, model: cfg.model, effort: cfg.effort, cwd: wc.dir, claudePath: cfg.claudePath,
         builtins: ['Read', 'Glob', 'Grep', 'Edit', 'Write'], tools: toolsFor({ dir: wc.dir }), gate: gateFor({ dir: wc.dir, evidence: evidence.dir, run }), maxTurns: LIMITS.turns, timeoutMs: LIMITS.sessionMs })
       cost += a.costUsd || 0
-      session.rounds.push({ ok: a.ok, error: a.error, answer: a.data, turns: a.turns, costUsd: a.costUsd, durationMs: a.durationMs, calls: (a.calls || []).slice(-400) })
+      session.rounds.push({ ok: a.ok, error: a.error, answer: a.data, text: a.text, turns: a.turns, costUsd: a.costUsd, durationMs: a.durationMs, calls: (a.calls || []).slice(-400) })
+      // the session ended in prose instead of the answer form (seen in a real trial after 55 tool calls): one short call with no tools reads the form off
+      // its report. Nothing is taken on trust by this: the checks below still decide.
+      if (!a.ok && a.text && ask) {
+        const f = await ask({ systemPrompt: FORM, prompt: a.text, schema: SCHEMA, model: cfg.model, effort: cfg.effort, cwd: wc.dir, claudePath: cfg.claudePath, timeoutMs: 5 * 60000 })
+        cost += f.costUsd || 0
+        if (f.ok && f.data && SCHEMA.properties.outcome.enum.includes(f.data.outcome)) { a.ok = true; a.data = f.data; session.rounds[round].answer = f.data; session.rounds[round].formFromText = true }
+      }
       if (!a.ok) { error = a.error; break }
       answer = a.data
       if (answer.outcome === 'gave-up') break
@@ -491,6 +500,7 @@ async function runFix(cfg, { agent = null, run = sh, now = Date.now(), log = () 
       if (checked.ok) break
       repair = `${checked.fail}.${checked.detail ? `\n\n${checked.detail}` : ''}`
     }
+    session.diff = tail(run('git', ['diff', 'origin/main'], { cwd: wc.dir }).out, 20000) || undefined           // what the session left, kept for whoever reads a failed attempt
     saveSession(cfg, o.key, now, session)
     const asked = answer && answer.question ? askOnce(cfg, answer.question, o.key) : false
     const done = (r) => { writeJson(stateFile(cfg), { ...state, at: new Date(now).toISOString(), gh: r.gh || state.gh, last: { order: o.key, outcome: r.outcome, pr: r.pr || null, note: r.summary } }); return row({ costUsd: cost || undefined, asked: asked || undefined, ...r, gh: undefined }) }
