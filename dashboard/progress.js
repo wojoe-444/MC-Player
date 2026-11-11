@@ -147,6 +147,35 @@ function acquiredByDate(stateDir) {
   return out
 }
 
+// Online time of one UTC day, from the journal's event file: the sum of the gaps between consecutive events, each gap capped at
+// ONLINE_GAP_CAP_MS (the rollup's own cap for a step: longer is a hole in the record, not play), and a gap that ends in a `start`
+// event counted as nothing (the process was down). It is the denominator of every per-player-hour figure on the dashboard.
+const ONLINE_GAP_CAP_MS = 30 * 60000
+function onlineMinutes(events) {
+  const ts = []
+  for (const e of arr(events)) { const t = e && Date.parse(e.at); if (Number.isFinite(t)) ts.push([t, e.k]) }
+  ts.sort((a, b) => a[0] - b[0])
+  let ms = 0
+  for (let i = 1; i < ts.length; i++) if (ts[i][1] !== 'start') ms += Math.min(ONLINE_GAP_CAP_MS, ts[i][0] - ts[i - 1][0])
+  return ms / 60000
+}
+const onlineCache = new Map()                                  // file -> { sig, min }: the page polls every 20 s and a day file can be large
+function onlineMinFor(file) {
+  let st; try { st = fs.statSync(file) } catch { return null }
+  const sig = st.size + ':' + st.mtimeMs, c = onlineCache.get(file)
+  if (c && c.sig === sig) return c.min
+  let text; try { text = fs.readFileSync(file, 'utf8') } catch { return null }
+  const evs = []
+  for (const line of text.split('\n')) {
+    if (!line) continue
+    const m = /"at":"([^"]+)"/.exec(line), k = /"k":"([^"]+)"/.exec(line)       // two fields only: no need to parse every event
+    if (m) evs.push({ at: m[1], k: k ? k[1] : '' })
+  }
+  const min = round1(onlineMinutes(evs))
+  onlineCache.set(file, { sig, min })
+  return min
+}
+
 // One row per UTC date, newest last: the journal's rollup where there is one, the acquired log for the rest.
 function realDaysFrom(stateDir) {
   const jdir = path.join(stateDir, 'journal')
@@ -158,7 +187,7 @@ function realDaysFrom(stateDir) {
   const rows = all.map(date => {
     const j = dates.includes(date) ? readJson(path.join(jdir, date + '.day.json')) : null
     const a = acq[date] || null
-    const row = { date, journal: !!j, deaths: null, stalledMin: null, alarms: null, flagsHigh: null, commits: null, activeMin: null, topSteps: [], iron: null, ingots: null, diamonds: null, items: null }
+    const row = { date, journal: !!j, deaths: null, stalledMin: null, alarms: null, flagsHigh: null, commits: null, activeMin: null, onlineMin: null, topSteps: [], iron: null, ingots: null, diamonds: null, items: null }
     if (j) {
       row.deaths = arr(j.deaths).length
       row.stalledMin = round1((j.alarms && j.alarms.stalledMin) || 0)
@@ -167,6 +196,7 @@ function realDaysFrom(stateDir) {
       row.commits = arr(j.commits).length
       const steps = Object.entries(j.steps || {}).map(([id, s]) => ({ id, minutes: round1(s.minutes || 0), runs: s.runs || 0, fail: (s.fail || 0) + (s.timeout || 0) }))
       row.activeMin = round1(steps.reduce((n, s) => n + s.minutes, 0))
+      row.onlineMin = onlineMinFor(path.join(jdir, date + '.jsonl'))     // null when the event file is gone (rates then show a dash, never a made-up hour)
       row.topSteps = steps.sort((x, y) => y.minutes - x.minutes).slice(0, 4)
       const its = j.items || {}
       row.iron = Object.entries(its).filter(([k]) => IRON.test(k)).reduce((n, [, v]) => n + v, 0)
@@ -210,4 +240,4 @@ function buildProgress({ bots, codeDir, registryFile, now = Date.now() }) {
   }
 }
 
-module.exports = { buildProgress, PHASES, buildsFrom, gameDaysFrom, realDaysFrom, roadmapFor, acquiredByDate }
+module.exports = { onlineMinutes, buildProgress, PHASES, buildsFrom, gameDaysFrom, realDaysFrom, roadmapFor, acquiredByDate }

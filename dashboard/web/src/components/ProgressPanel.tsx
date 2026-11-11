@@ -6,6 +6,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { fmtOnline, fmtRate, MIN_ONLINE_MIN, perHour } from "@/lib/rates"
 import { ago } from "@/useDashboard"
 import type { BotProgress, BuildRow, GameDay, Progress, RealDay, RoadmapPhase } from "@/types"
 
@@ -24,6 +25,18 @@ export function useProgress() {
 
 const dash = <span className="text-muted-foreground">–</span>
 const num = (n: number | null | undefined, digits = 0) => (n == null ? dash : n === 0 ? <span className="text-muted-foreground">0</span> : n.toFixed(digits))
+
+/** A count as "per player-hour" with the raw total as small second line. No rate when the day has too little online time; the raw total is still shown. */
+function Rate({ value, onlineMin, digits = 0, alert = false }: { value: number | null; onlineMin: number | null; digits?: number; alert?: boolean }) {
+  if (value == null) return dash
+  const r = perHour(value, onlineMin)
+  return (
+    <span className="flex flex-col items-end leading-tight">
+      <span className={alert && value > 0 ? "font-medium text-destructive" : value === 0 ? "text-muted-foreground" : ""}>{r == null ? "–" : value === 0 ? "0" : fmtRate(r)}</span>
+      <span className="text-[0.7rem] font-normal text-muted-foreground">{value.toFixed(digits)} total</span>
+    </span>
+  )
+}
 const since = (iso: string | null | undefined) => (iso ? ago(Date.now() - Date.parse(iso)) : "never")
 
 // ---------------------------------------------------------------- roadmap
@@ -222,7 +235,7 @@ export function RealDaysCard({ days, hasJournal }: { days: RealDay[]; hasJournal
       <CardHeader>
         <CardTitle>Per real day</CardTitle>
         <CardDescription>
-          Deaths, stalled minutes and the items picked up, per calendar day (UTC), from the bot's journal. Days before the journal started show only what the pickup log proves, and a dash where nothing was recorded.
+          Per calendar day (UTC), from the bot's journal. Every count is a rate per player-hour (one bot online for one hour), because a day with 2 hours online and one with 10 can't be compared by raw totals; the raw total for the day sits under each rate. Online time is read from the journal's event times, and a day with under {MIN_ONLINE_MIN} minutes of it shows no rate. Days before the journal started show only what the pickup log proves, and a dash where nothing was recorded.
           {!hasJournal && " The journal starts once the bot restarts on the code that writes it."}
         </CardDescription>
       </CardHeader>
@@ -234,9 +247,10 @@ export function RealDaysCard({ days, hasJournal }: { days: RealDay[]; hasJournal
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead><TableHead className="text-right">Deaths</TableHead><TableHead className="text-right" title="Minutes the watchdog counted as stalled">Stalled min</TableHead>
-                  <TableHead className="text-right">Alarms</TableHead><TableHead className="text-right" title="High-severity detector flags">High flags</TableHead>
-                  <TableHead className="text-right">Iron</TableHead><TableHead className="text-right">Ingots</TableHead><TableHead className="text-right">Diamonds</TableHead>
+                  <TableHead>Date</TableHead><TableHead className="text-right" title="Time the bot was online that day, from the journal's event times">Online</TableHead>
+                  <TableHead className="text-right" title="Deaths per player-hour">Deaths /h</TableHead><TableHead className="text-right" title="Minutes the watchdog counted as stalled, per player-hour">Stalled min /h</TableHead>
+                  <TableHead className="text-right" title="Alarms per player-hour">Alarms /h</TableHead><TableHead className="text-right" title="High-severity detector flags per player-hour">High flags /h</TableHead>
+                  <TableHead className="text-right" title="Iron picked up per player-hour">Iron /h</TableHead><TableHead className="text-right">Ingots /h</TableHead><TableHead className="text-right">Diamonds /h</TableHead>
                   <TableHead className="hidden lg:table-cell">Most time on</TableHead>
                 </TableRow>
               </TableHeader>
@@ -244,13 +258,14 @@ export function RealDaysCard({ days, hasJournal }: { days: RealDay[]; hasJournal
                 {rows.map((d) => (
                   <TableRow key={d.date}>
                     <TableCell className="font-medium">{d.date}{!d.journal && <span className="ml-2 text-xs font-normal text-muted-foreground">pickups only</span>}</TableCell>
-                    <TableCell className={`text-right tabular-nums ${d.deaths ? "font-medium text-destructive" : ""}`}>{num(d.deaths)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{num(d.stalledMin, 1)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{num(d.alarms)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{num(d.flagsHigh)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{num(d.iron)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{num(d.ingots)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{num(d.diamonds)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{d.onlineMin == null ? dash : fmtOnline(d.onlineMin)}</TableCell>
+                    <TableCell className="text-right tabular-nums"><Rate value={d.deaths} onlineMin={d.onlineMin} alert /></TableCell>
+                    <TableCell className="text-right tabular-nums"><Rate value={d.stalledMin} onlineMin={d.onlineMin} digits={1} /></TableCell>
+                    <TableCell className="text-right tabular-nums"><Rate value={d.alarms} onlineMin={d.onlineMin} /></TableCell>
+                    <TableCell className="text-right tabular-nums"><Rate value={d.flagsHigh} onlineMin={d.onlineMin} /></TableCell>
+                    <TableCell className="text-right tabular-nums"><Rate value={d.iron} onlineMin={d.onlineMin} /></TableCell>
+                    <TableCell className="text-right tabular-nums"><Rate value={d.ingots} onlineMin={d.onlineMin} /></TableCell>
+                    <TableCell className="text-right tabular-nums"><Rate value={d.diamonds} onlineMin={d.onlineMin} /></TableCell>
                     <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">{d.topSteps.length ? d.topSteps.slice(0, 3).map((s) => `${s.id} ${Math.round(s.minutes)}m`).join(", ") : "–"}</TableCell>
                   </TableRow>
                 ))}

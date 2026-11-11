@@ -19,6 +19,7 @@ import { ProgressBody, useProgress } from "@/components/ProgressPanel"
 import { ReplayPanel } from "@/components/ReplayPanel"
 import { MemoryView, StructureView } from "@/components/StructurePanel"
 import { Frame, ViewPanel } from "@/components/ViewPanel"
+import { fmtOnline, fmtRate, perHour, pooledPerHour, round1 } from "@/lib/rates"
 import { useBotSelection } from "@/bot"
 import { useData } from "@/DashboardContext"
 import { BOT_IDS, type BotId, type BotSnap } from "@/types"
@@ -28,25 +29,45 @@ function Loading() {
 }
 
 // ---------------------------------------------------------------- Dashboard
+// The four KPI cards are rates: per player-hour (one bot online for one hour), over the bots' online time that was recorded
+// (lib/rates.ts). The raw 7-day total and the online time behind it sit on the card's second line.
+type KpiKey = "items" | "active" | "deaths" | "stalled"
+const KPIS: { key: KpiKey; label: string; higherIsBetter: boolean; unit: string; total: string }[] = [
+  { key: "items", label: "Items picked up per player-hour", higherIsBetter: true, unit: "/h", total: "items" },
+  { key: "active", label: "Active min per player-hour", higherIsBetter: true, unit: " min/h", total: "active min" },
+  { key: "deaths", label: "Deaths per player-hour", higherIsBetter: false, unit: "/h", total: "deaths" },
+  { key: "stalled", label: "Stalled min per player-hour", higherIsBetter: false, unit: " min/h", total: "stalled min" },
+]
+
 function useKpis() {
   const { data } = useProgress()
   return useMemo(() => {
     if (!data) return null
-    const byDate = new Map<string, { items: number; active: number; deaths: number; stalled: number }>()
+    type Day = { online: number } & Record<KpiKey, number>
+    const byDate = new Map<string, Day>()
     for (const id of BOT_IDS) for (const d of data.bots[id].days) {
-      const e = byDate.get(d.date) ?? { items: 0, active: 0, deaths: 0, stalled: 0 }
-      e.items += d.items ?? 0; e.active += d.activeMin ?? 0; e.deaths += d.deaths ?? 0; e.stalled += d.stalledMin ?? 0
+      if (!d.onlineMin) continue                       // no online time recorded: this bot-day is left out of the numerator as well as the denominator
+      const e = byDate.get(d.date) ?? { online: 0, items: 0, active: 0, deaths: 0, stalled: 0 }
+      e.online += d.onlineMin; e.items += d.items ?? 0; e.active += d.activeMin ?? 0; e.deaths += d.deaths ?? 0; e.stalled += d.stalledMin ?? 0
       byDate.set(d.date, e)
     }
     const days = [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-8).map(([, v]) => v)
-    if (days.length < 2) return null
-    const mk = (label: string, key: keyof (typeof days)[number], higherIsBetter: boolean, unit = "") => {
-      const series = days.map((d) => d[key])
-      const total = series.slice(-7).reduce((a, b) => a + b, 0)
-      const today = series[series.length - 1]
-      return { label, value: String(Math.round(total * 10) / 10) + unit, delta: `${today >= 0 ? "+" : ""}${Math.round(today * 10) / 10}${unit} today`, good: higherIsBetter ? true : today === 0, spark: series }
-    }
-    return [mk("Items picked up (7d)", "items", true), mk("Active minutes (7d)", "active", true), mk("Deaths (7d)", "deaths", false), mk("Stalled minutes (7d)", "stalled", false)]
+    if (days.length < 1) return null
+    const week = days.slice(-7), today = days[days.length - 1]
+    return KPIS.map(({ key, label, higherIsBetter, unit, total }) => {
+      const pooled = pooledPerHour(week.map((d) => ({ value: d[key], onlineMin: d.online })))
+      const todayRate = perHour(today[key], today.online)
+      const series = days.map((d) => perHour(d[key], d.online)).filter((r): r is number => r != null)
+      const diff = todayRate != null && pooled.rate != null ? todayRate - pooled.rate : null
+      return {
+        label: `${label} (7d)`,
+        value: pooled.rate == null ? "–" : fmtRate(pooled.rate) + unit,
+        delta: diff == null ? "too little online time today" : `${diff >= 0 ? "+" : "-"}${fmtRate(Math.abs(diff))}${unit} today vs 7d`,
+        good: diff == null ? true : higherIsBetter ? diff >= 0 : diff <= 0,
+        spark: series.length >= 2 ? series : [0, 0],
+        note: `${round1(pooled.total)} ${total} in ${fmtOnline(pooled.onlineMin)} online`,
+      }
+    })
   }, [data])
 }
 
