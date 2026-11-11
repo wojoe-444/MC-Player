@@ -186,5 +186,5 @@ test('sponge import: varint cells, block states, air dropped, scenery marked; th
   const by = s.palette.map(e => e.block || e.role); assert.deepStrictEqual(by, ['any', 'stone_bricks', 'oak_fence', 'stone'])
   assert.deepStrictEqual(s.palette[2].props, undefined, 'fence connections are noise'); assert.ok(s.palette[3].scenery && !s.palette[1].scenery)
   assert.strictEqual(s.counts[0], 1, 'air is not kept')
-  for (const id of ['lithic-spire', 'lithic-spire-earthfill', 'walled-palace', 'starter-base', 'starter-tower', 'walled-market-town']) { const l = S.load([S.LIBRARY], id); assert.ok(l && l.v === 2 && l.mode === 'aesthetic' && F.cellsOf(l).length === l.size[0] * l.size[1] * l.size[2], id) }
+  for (const id of ['lithic-spire', 'lithic-spire-earthfill', 'walled-palace', 'starter-base', 'starter-tower', 'walled-market-town', 'deep-node', 'deep-node-2', 'snow-glass-villa']) { const l = S.load([S.LIBRARY], id); assert.ok(l && l.v === 2 && l.mode === 'aesthetic' && F.cellsOf(l).length === l.size[0] * l.size[1] * l.size[2], id) }
 })
