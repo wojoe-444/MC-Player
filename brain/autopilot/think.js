@@ -173,6 +173,11 @@ module.exports = function think(G, S, M, api, log) {
       if (rows.length) v.build_problems = rows.map(([id, r]) => ({ build: id, faults: r.faults, what: (r.headline || []).slice(0, 3), details: 'brain/state/inspect/' + r.file, fixes: (r.fixes || []).length ? 'mob_farm action=repair can take out ' + r.fixes.map(f => f.id).join(', ') : undefined, rule: 'a build that fails its own inspection is not done: fix it before building more on top of it' }))
     } catch { /* no inspection yet */ }
     try {
+      const o = JSON.parse(fs.readFileSync(path.join(stateDir, 'outcome.json'), 'utf8'))
+      const bad = Object.values(o.builds || {}).filter(b => b && (b.state === 'blocked' || b.state === 'overdue'))
+      if (bad.length && Date.now() - Date.parse(o.updatedAt || 0) < 3 * 3600000) v.outcome_problems = bad.map(b => ({ build: b.id, state: b.state, why: (b.why || []).join(' ').slice(0, 220), rule: b.who === 'human' ? 'only a person can change this: do not work around it, and do not spend more bot time on this build until it is changed' : 'a build whose blocks are right but that produces nothing is not done: find what it needs from the world' }))
+    } catch { /* no outcome check yet */ }
+    try {
       const f = JSON.parse(fs.readFileSync(path.join(stateDir, 'review', 'findings.json'), 'utf8'))
       if (Date.now() - Date.parse(f.updatedAt || 0) < 45 * 60000) {
         const open = (f.open || []).filter(x => x.severity === 'high' || x.severity === 'med').slice(0, 3)

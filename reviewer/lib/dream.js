@@ -444,8 +444,11 @@ async function dreamBot(cfg, bot, { ask, now, log, force = false, dryRun = false
 
   // --- hand off: every bot with a journal ---
   let sync = { opened: [], reopened: [], updated: [], closed: [] }
-  const ask5 = dryRun ? cands.filter(c => { const o = orders.load(cfg.loopDir, c.key); return !(o && o.status === 'open') }) : orders.undecided(cfg.loopDir, cands, now)
+  // outcome candidates (a build that produces nothing, a blocked precondition) arrive with their own problem statement: no model is asked, the order is opened in code
+  const autos = cands.filter(c => c.auto)
+  const ask5 = (dryRun ? cands.filter(c => { const o = orders.load(cfg.loopDir, c.key); return !(o && o.status === 'open') }) : orders.undecided(cfg.loopDir, cands, now)).filter(c => !c.auto)
   let decided = {}
+  for (const c of autos) decided[c.key] = { ...c.auto, why: 'measured by brain/outcome, not judged' }
   if (!cands.length) skippedSteps.handoff = 'the journal shows no candidate'
   else if (!ask5.length) skippedSteps.handoff = 'every candidate already has an order or a recent decision'
   else {
@@ -455,7 +458,7 @@ async function dreamBot(cfg, bot, { ask, now, log, force = false, dryRun = false
       '', '## work orders already open', ...(orders.list(cfg.loopDir, { status: 'open' }).slice(0, 15).map(o => `${o.key}: ${o.title}`).concat(['(end)'])),
     ].join('\n')
     const a = await call('handoff', HANDOFF, fill(HANDOFF.system, bot), prompt)
-    if (a) { const r = handoffDecisions(a, ask5); decided = r.decided; dropped.push(...r.dropped) }
+    if (a) { const r = handoffDecisions(a, ask5); decided = { ...decided, ...r.decided }; dropped.push(...r.dropped) }
   }
   if (dryRun) return { bot: bot.id, dryRun: true, prompts, candidates: cands, skippedSteps }
   sync = orders.sync(cfg.loopDir, { bot: bot.id, cands, decided, commits, now })

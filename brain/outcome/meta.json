@@ -1,0 +1,9 @@
+{
+  "name": "outcome",
+  "version": 1,
+  "kind": "observer",
+  "summary": "Checks that each registered build does what it is for: a mob farm that could have worked for hours and killed nothing, a tree farm with no logs, pens with no animals. Reads preconditions the bot can see (difficulty), counts output, and writes brain/state/outcome.json, a lesson line and a journal event so the work-order loop picks up a build that produces nothing.",
+  "requires": [],
+  "provides": [],
+  "claims": []
+}
