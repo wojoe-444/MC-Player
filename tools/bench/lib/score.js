@@ -69,16 +69,17 @@ function analyze({ samples, seconds, stats, placedDelta, deathLog, reconnects = 
   for (const mark of [10, 20, 30, 45, 60]) if (seconds >= mark * 60 - 30) ptsAt[mark] = MILESTONES.reduce((a, m) => a + (got[m.k].t != null && got[m.k].t <= mark * 60 ? m.pts : 0), 0)
 
   // stall: a 30 s stretch with the bot within 1.5 blocks of where it was and nothing in the bag changing. Night stretches (13000..23000) reported apart: sheltering is not a stall.
-  let stall = 0, stallDay = 0, win = [], dist = 0, bagChanges = 0
+  let stall = 0, stallDay = 0, win = [], dist = 0, bagChanges = 0, wasStill = false
   const bagKey = (inv) => Object.entries(inv || {}).sort().join(',')
   let prev = null
   for (const s of samples) {
     if (prev) { if (s.pos && prev.pos) dist += Math.hypot(s.pos[0] - prev.pos[0], s.pos[2] - prev.pos[2]); if (bagKey(s.inv) !== bagKey(prev.inv)) bagChanges++ }
     win.push(s)
-    while (win.length > 1 && s.t - win[0].t > 30) win.shift()
-    if (prev && win.length > 1 && s.t - win[0].t >= 29) {
+    while (win.length > 2 && s.t - win[1].t >= 30) win.shift()      // keep one sample at least 30 s old as the anchor
+    if (prev && win.length > 1 && s.t - win[0].t >= 30) {
       const still = win.every(w => w.pos && s.pos && Math.hypot(w.pos[0] - s.pos[0], w.pos[1] - s.pos[1], w.pos[2] - s.pos[2]) < 1.5) && win.every(w => bagKey(w.inv) === bagKey(s.inv))
-      if (still) { const dt = s.t - prev.t; stall += dt; const tod = s.day != null ? s.day % 24000 : 0; if (tod < 13000 || tod > 23000) stallDay += dt }
+      if (!still) wasStill = false
+      if (still) { const dt = wasStill ? s.t - prev.t : s.t - win[0].t; wasStill = true; stall += dt; const tod = s.day != null ? s.day % 24000 : 0; if (tod < 13000 || tod > 23000) stallDay += dt }
     }
     prev = s
   }

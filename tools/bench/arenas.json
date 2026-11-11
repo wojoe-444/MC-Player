@@ -35,14 +35,29 @@
     "forest-1": {
       "name": "Forest",
       "biome": "minecraft:forest",
-      "seed": 4102,
+      "seed": 4106,
       "want": {
         "minLand": 0.92,
         "minTrees": 0.12,
         "maxTrees": 0.6,
         "maxRelief": 30
       },
-      "note": "dense oak and birch: wood is easy, sight lines are short"
+      "note": "dense oak and birch: wood is easy, sight lines are short",
+      "center": [
+        -32,
+        32
+      ],
+      "spawn": [
+        -32,
+        70,
+        35
+      ],
+      "window": {
+        "land": 0.95,
+        "trees": 0.495,
+        "relief": 16,
+        "medianY": 70
+      }
     },
     "taiga-1": {
       "name": "Taiga",
