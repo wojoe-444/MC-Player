@@ -16,6 +16,7 @@ function salientLine(e) {
   else if (e.k === 'alarm') o.what = `${e.type} cleared after ${e.secs}s at fix level ${e.level}`
   else if (e.k === 'gate') o.what = `${e.rule} blocked ${e.packet || 'a packet'} x${e.n}: ${e.why || ''}`.trim()
   else if (e.k === 'trample') o.what = `farmland at ${(e.pos || []).join(',')} turned to dirt${e.by === 'bot' ? ` after the bot's ${e.how || 'landing'}` : ' (not clearly the bot)'}${e.space ? ` in ${e.space}` : ''}${e.step ? ` during ${e.step}` : ''}`
+  else if (e.k === 'leftover') o.what = e.what === 'tree' ? `half-felled ${e.species || ''} tree at ${(e.pos || []).join(',')}: ${e.n} log(s) stand on nothing, ${e.leaves || 0} leaves held up` : `${e.kind} of ${e.block || 'filler'} at ${(e.pos || []).join(',')}: ${e.n} block(s), ${e.h} high, placed by ${e.by || 'a bot'}${e.via ? ` during ${e.via}` : ''}, standing ${e.standingMin} min`
   else if (e.k === 'flag') o.what = `${e.kind}: ${e.msg || ''}`.trim()
   else if (e.k === 'chat') o.what = `${e.from}: ${e.text}`
   else if (e.k === 'first') o.what = `first ${e.what}: ${e.id}`
@@ -32,7 +33,7 @@ function rollup(events, { date = null } = {}) {
   const out = {
     v: 1, date, from: evs.length ? evs[0].at : null, to: evs.length ? evs[evs.length - 1].at : null, events: evs.length,
     steps: {}, alarms: { raised: 0, cleared: 0, stalledMin: 0, maxLevel: 0, byType: {} }, flags: {}, flagsHigh: 0,
-    deaths: [], trampled: { n: 0, byHow: {}, bySpace: {}, byStep: {}, last: null }, items: {}, firsts: [], gate: {}, commits: [], starts: 0, chat: 0, reflexes: 0, notes: 0, salient: [], salientDropped: 0, gameDays: {}
+    deaths: [], trampled: { n: 0, byHow: {}, bySpace: {}, byStep: {}, last: null }, leftovers: { scaffold: { ids: {}, last: null }, trees: { ids: {}, last: null } }, items: {}, firsts: [], gate: {}, commits: [], starts: 0, chat: 0, reflexes: 0, notes: 0, salient: [], salientDropped: 0, gameDays: {}
   }
   const step = (id) => (out.steps[id] = out.steps[id] || newStep())
   const days = out.gameDays
@@ -89,6 +90,12 @@ function rollup(events, { date = null } = {}) {
         const bump = (m, k) => { m[k] = (m[k] || 0) + 1 }
         bump(tr.byHow, e.how || 'unknown'); bump(tr.bySpace, e.space || 'unassigned'); bump(tr.byStep, e.step || e.task || 'unknown')
         tr.last = { at: e.at, pos: e.pos || null, how: e.how || null }
+        break
+      }
+      case 'leftover': {                                                              // one entry per cluster id: the latest report of it wins (it grows or shrinks while it stands)
+        const bucket = out.leftovers[e.what === 'tree' ? 'trees' : 'scaffold']
+        bucket.ids[e.id] = { at: e.at, kind: e.kind || null, pos: e.pos || null, n: e.n || 0, h: e.h || 0, leaves: e.leaves || 0, species: e.species || null, block: e.block || null, by: e.by || null, via: e.via || null, standingMin: e.standingMin || 0 }
+        bucket.last = { at: e.at, id: e.id, pos: e.pos || null }
         break
       }
       case 'chat': out.chat++; break

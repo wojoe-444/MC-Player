@@ -32,6 +32,7 @@ module.exports = function register(api) {
   const winDir = path.join(dir, 'windows'), detDir = path.dirname(api.statePath('detectors/x'))
   try { fs.mkdirSync(winDir, { recursive: true }) } catch {}
   const addEvent = (e) => { events.push(e) }
+  bot._telemetryEvent = (e) => { if (e && e.k && Number.isFinite(e.t)) addEvent(e) }          // for observers that find things on their own schedule (brain/leftovers)
   const pos = () => bot.entity && bot.entity.position
   const invNames = () => { try { return bot.inventory.items().map(i => i.name) } catch { return [] } }
 
@@ -327,6 +328,7 @@ module.exports = function register(api) {
     stop() {
       clearInterval(timer); clearInterval(analyzeTimer)
       bot.removeListener('physicsTick', onPhysics); bot.removeListener('blockUpdate', onFarmUpdate); clearTimeout(trampleSoon); bot.removeListener('entitySwingArm', onSwing); bot.removeListener('blockPlaced', onPlaced)
+      delete bot._telemetryEvent
       bot.removeListener('diggingCompleted', onDug); bot.removeListener('diggingAborted', onDigAbort); bot.removeListener('path_update', onPathUpdate); bot.removeListener('playerCollect', onCollect); bot.removeListener('windowOpen', onWindow); bot.removeListener('chat', onOwnChat)
       try { bot.inventory.removeListener('updateSlot', onSlot) } catch {}; clearTimeout(armorSoon)
       if (api.events) api.events.removeListener('task', onTask)

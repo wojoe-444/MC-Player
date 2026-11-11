@@ -1276,11 +1276,22 @@ module.exports = function plan(G, S, M, api, log) {
   const SCAFFOLD = /^(cobblestone|cobbled_deepslate|dirt|andesite|diorite|granite|tuff|netherrack|stone)$/
   let _tidy = { at: 0, list: [] }
   const tidyList = () => { if (Date.now() - _tidy.at < 10000) return _tidy.list; _tidy = { at: Date.now(), list: tidyList0() }; return _tidy.list }
+  // What brain/leftovers found standing (the provenance ledger says a bot of ours placed it as scaffolding): cells of clusters, whether the cluster is a pillar or tower
+  const leftScaffold = () => { try { return (bot._leftovers && bot._leftovers.scaffold()) || [] } catch { return [] } }
+  const leftTrees = () => { try { return (bot._leftovers && bot._leftovers.trees()) || [] } catch { return [] } }
   const tidyList0 = () => {
     const hb = homeBox(), now = Date.now(), placedKeys = new Set((st.placed || []).map(q => q[0] + ',' + q[1] + ',' + q[2]))
-    return (st.placed || []).filter(q => now - q[4] > 10 * 60000 && SCAFFOLD.test(q[3])).map(q => v(q[0], q[1], q[2])).filter(p => {
+    const kk = (p) => p.x + ',' + p.y + ',' + p.z
+    // pillars and towers the detector found: proven ours by the ledger, so the home-box rule (which protects the house shell) does not apply to them
+    const ledgerKeys = new Set(), pillarKeys = new Set()
+    for (const c of leftScaffold()) for (const q of c.cells || []) { const k = q.join(','); ledgerKeys.add(k); if (c.kind !== 'stray') pillarKeys.add(k) }
+    const pool = new Map()
+    for (const q of st.placed || []) if (now - q[4] > 10 * 60000 && SCAFFOLD.test(q[3])) pool.set(q[0] + ',' + q[1] + ',' + q[2], v(q[0], q[1], q[2]))
+    for (const k of ledgerKeys) if (!pool.has(k)) { const [x, y, z] = k.split(',').map(Number); pool.set(k, v(x, y, z)) }
+    const eligible = [...pool.values()].filter(p => {
       const b = S.block(p); if (!b || !SCAFFOLD.test(b.name)) return false
-      if (inBox(p, hb) || nearList(p, st.farm, 1) || nearList(p, st.grove, 1)) return false
+      const pillar = pillarKeys.has(kk(p))
+      if ((inBox(p, hb) && !pillar) || nearList(p, st.farm, 1) || nearList(p, st.grove, 1)) return false
       // near home only: scaffold left out on the routes to the far mine sent it 90 blocks out among the skeletons, and it died there
       // (186-204,66-69,-379..-390, 15:59 and 16:05)
       { const h1 = home(); if (h1 && Math.hypot(p.x - h1.x, p.z - h1.z) > 40) return false }
@@ -1294,14 +1305,17 @@ module.exports = function plan(G, S, M, api, log) {
       // (exposure, not height: valleys and the island shore sit below the bed and their pillars must still go; a block with solid
       // rock within 8 above it is under ground; its own placed blocks stacked above do not count as cover, natural stone does)
       { const h0 = home(); if (h0 && p.y < h0.y - 12) return false }       // deep backstop: a tall cavern's floor can have open air 8 up
-      for (let dy = 1; dy <= 8; dy++) { const q = p.offset(0, dy, 0), a = S.block(q); if (!a) break; if (a.boundingBox === 'block' && !placedKeys.has(q.x + ',' + q.y + ',' + q.z) && !/_leaves$|_log$/.test(a.name)) return false }
+      for (let dy = 1; dy <= 8; dy++) { const q = p.offset(0, dy, 0), a = S.block(q); if (!a) break; if (a.boundingBox === 'block' && !placedKeys.has(kk(q)) && !ledgerKeys.has(kk(q)) && !/_leaves$|_log$/.test(a.name)) return false }
       if (st.mine && st.mine.entry && Math.abs(p.x - st.mine.entry[0]) <= 3 && Math.abs(p.z - st.mine.entry[2]) <= 3) return false
-      const below = S.block(p.offset(0, -1, 0)), above = S.block(p.offset(0, 1, 0))
+      const below = S.block(p.offset(0, -1, 0))
       if (below && below.name === 'water') return false                         // sea paths: taking them apart from on top of them means swimming
-      if (above && !S.isAir(above)) return false                                // something stands on it (a torch, a block, a plant)
-      return S.skyVisible ? true : true
-    }).sort((p, q) => q.y - p.y)
+      return true
+    })
+    // A column comes down top first, so a block qualifies when what sits on it is passable (air, a torch, a plant) or is itself on the list. The old rule (nothing at all on
+    // top) took one block off each pillar per pass and the rest stayed for good (Walter's screenshot, 2026-11-11).
+    return require('../leftovers/lib').topFirst(eligible, (x, y, z) => { const a = S.block(v(x, y, z)); return !a || a.boundingBox !== 'block' })
   }
+  tidyList.force = (p) => { for (const c of leftScaffold()) if (c.kind !== 'stray' && (c.cells || []).some(q => q[0] === p.x && q[1] === p.y && q[2] === p.z)) return true; return false }
   // over-lighting: the top-down map showed 240 torches in a tight grid around home. A torch the bot placed with another one within 3 blocks goes.
   // replaced by the light-home grid pruning (it keeps grid torches and checks the light before taking one down)
   const extraTorches = () => []
@@ -1403,18 +1417,42 @@ module.exports = function plan(G, S, M, api, log) {
     st.torchSpaceAt = Date.now() + (removed ? 20 : 60) * 60000; G.save()
     note(`torch-spacing: took out ${removed} too-close torches (kept ${kept} that the light needs)`)
     return removed > 0 } })
-  steps.push({ id: 'tidy', budget: 150000, cool: 300000, need: () => !S.isNight() && ((bot.time && bot.time.timeOfDay) || 0) >= 2000 && !!home() && (tidyList().length > 0 || extraTorches().length > 0), run: async () => {
+  const treeJobs = () => { const h = home(); return leftTrees().filter(t => !h || Math.hypot(t.pos[0] - h.x, t.pos[2] - h.z) <= 70).filter(t => !(st.remnantFail || {})[t.id] || Date.now() > st.remnantFail[t.id]) }
+  steps.push({ id: 'tidy', budget: 240000, cool: 300000, need: () => !S.isNight() && ((bot.time && bot.time.timeOfDay) || 0) >= 2000 && !!home() && (tidyList().length > 0 || extraTorches().length > 0 || (!!(api.treefarm && api.treefarm.engine) && treeJobs().length > 0)), run: async () => {
     let n = 0
     let tn = 0
     for (const p of extraTorches().slice(0, 30)) { if (bot.findBlocks({ matching: ids(/^(torch|wall_torch)$/), maxDistance: 3, count: 4, point: p }).filter(o => !o.equals(p)).length === 0) continue; const tb = S.block(p); if (tb && await S.mine(tb, { dig: false })) tn++ }
     if (tn) note('tidy: removed ' + tn + ' crowded torches')
-    for (const p of tidyList().slice(0, 24)) {
-      const b = S.block(p); if (!b) continue
-      if (S.flo(bot.entity.position).offset(0, -1, 0).equals(p)) continue       // never the block it stands on
-      if (await S.mine(b, { dig: false })) n++
+    // scaffold: the list is recomputed between rounds, because taking the top block off a column makes the next one down eligible
+    const tried = new Set(), stuck = [], stuckSet = new Set()
+    for (let round = 0; round < 4; round++) {
+      _tidy.at = 0
+      const list = tidyList().filter(p => !tried.has(p.x + ',' + p.y + ',' + p.z))
+      if (!list.length) break
+      let did = 0
+      for (const p of list.slice(0, 24)) {
+        tried.add(p.x + ',' + p.y + ',' + p.z)
+        const b = S.block(p); if (!b) continue
+        if (S.flo(bot.entity.position).offset(0, -1, 0).equals(p)) continue       // never the block it stands on
+        const k = p.x + ',' + p.y + ',' + p.z
+        // a column whose top could not be reached stays whole: taking the lower blocks out from under it would only leave the top floating
+        if (stuckSet.has(p.x + ',' + (p.y + 1) + ',' + p.z)) { stuckSet.add(k); continue }
+        if (await S.mine(b, { dig: false, force: tidyList.force(p) })) { n++; did++ } else { stuck.push(k); stuckSet.add(k) }
+      }
+      if (!did) break
     }
     st.placed = (st.placed || []).filter(q => { const b = S.block(v(q[0], q[1], q[2])); return !b || !S.isAir(b) })
-    G.save(); note('tidy: took down ' + n + ' scaffold blocks'); return n > 0 } })
+    // trees cut part of the way up: finish them (the engine climbs, cuts the limbs, clears the canopy and comes down again)
+    let finished = 0
+    const tf = api.treefarm && api.treefarm.engine
+    if (tf && typeof tf.finishRemnant === 'function') for (const t of treeJobs().slice(0, 2)) {
+      if (S.isNight()) break
+      const r = await tf.finishRemnant(S.ctx, v(t.pos[0], t.pos[1], t.pos[2])).catch(e => { if (S.isAbort(e)) throw e; return { status: 'error', why: e.message } })
+      note(`tidy: half-felled ${t.species || ''} tree at ${t.pos.join(',')}: ${r.status}, cut ${r.logs || 0}, left ${r.left || 0}${r.noScaffold ? ', no dirt to climb with' : ''}`)
+      if (r.status === 'done' && !r.left) finished++
+      else { st.remnantFail = st.remnantFail || {}; st.remnantFail[t.id] = Date.now() + (r.status === 'danger' || r.status === 'busy' ? 10 : 90) * 60000 }       // not finished: leave it a while, the detector keeps it on the record
+    }
+    G.save(); note('tidy: took down ' + n + ' scaffold blocks' + (stuck.length ? ` (${stuck.length} out of reach: ${stuck.slice(0, 3).join(' ')})` : '') + (finished ? `, finished ${finished} tree(s)` : '')); return n > 0 || finished > 0 } })
 
   // ---- supply trips (Walter: going 200-300 blocks by day for resources is normal): when nothing usable is remembered, walk out on land in a new
   // direction each time; trees and animals seen on the way are remembered by the sighting timers and the normal steps go and use them ----

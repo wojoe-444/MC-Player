@@ -424,13 +424,26 @@ module.exports = function makeSkills({ bot, api, log }) {
       tree.sort((a, b) => a.position.y - b.position.y)
       let cut = 0
       for (const lg of tree) {
-        if (got >= want + 2) break
+        if (S.freeSlots() <= 1) break                                       // a tree is felled whole (a count of `want` used to stop it mid-trunk); only a full bag stops it
         const cur = S.block(lg.position); if (!cur || !LOG_RE.test(cur.name)) continue
         if (lg.position.y - Math.floor(bot.entity.position.y) > 6) continue   // too high without a tower
         // walk to it, do not dig through the hillside to reach a trunk (Walter: the bot tears up terrain)
         if (await S.mine(cur, { dig: false })) { got++; cut++ }
       }
       if (!cut) S.ban('b' + key(start.position), 5 * 60000)
+      // Finish what was started (Walter 2026-11-11: half-cut trees, their remaining logs keeping whole canopies alive). Logs more than 6 above the bot, or hidden, are
+      // skipped above; once the trunk is cut they stand on nothing, and the treefarm engine takes them the rest of the way down (pillar, leaves, canopy, descent) before
+      // anything is replanted in the trunk column.
+      if (cut) {
+        const left = tree.filter(lg => { const c = S.block(lg.position); return c && LOG_RE.test(c.name) })
+        const tf = api.treefarm && api.treefarm.engine
+        if (left.length && tf && typeof tf.finishRemnant === 'function' && S.ctx) {
+          const low = left.slice().sort((a, b) => a.position.y - b.position.y)[0]
+          let r = null
+          try { r = await tf.finishRemnant(S.ctx, low.position) } catch (e) { if (S.isAbort && S.isAbort(e)) throw e; log('CHOP', 'finishing the tree failed: ' + e.message) }
+          if (r) { got += r.logs || 0; log('CHOP', `tree at ${key(low.position)}: ${left.length} log(s) stood after the ground pass, finishing: ${r.status}, cut ${r.logs || 0}, left ${r.left || 0}`) }
+        }
+      }
       // a felled tree is replanted where it stood (with a sapling of the same wood if we carry one)
       if (cut && tree.length) {
         const base = tree[0].position, g = S.block(base.offset(0, -1, 0)), c = S.block(base)

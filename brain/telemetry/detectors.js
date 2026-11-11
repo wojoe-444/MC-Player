@@ -5,6 +5,7 @@
 //   { k:'place', t, block, x,y,z, sky, tk }
 //   { k:'fail', t, what, note }                                          (what: noPath | timeout | digAbort | taskFailed)
 //   { k:'trample', t, x,y,z, by, how, dist, fall, space, step, tk }       (farmland turned to dirt near the bot; by: 'bot' | 'unknown', how: jump | drop | hop | none)
+//   { k:'leftover', t, what, id, kind, n, h, leaves, x,y,z, standingMin } (brain/leftovers, each scan, per cluster that has stood 5+ min: what 'scaffold' | 'tree'; kind pillar | tower | stray | ungrounded)
 // The reviewer (reviewer/) reads the flags and counters; Haiku reasons over those plus a few raw excerpts, not over raw logs.
 
 const DEFAULTS = {
@@ -23,6 +24,7 @@ const DEFAULTS = {
   tier: { minOver: 3 },
   pillar: { windowS: 20, minJumps: 4, maxExtent: 1.5, minGain: 1.0, lookDown: 0.9 },
   farmland: { windowS: 600, highCount: 3 },
+  leftover: { windowS: 360, highPillarH: 4, highScaffold: 3, highTrees: 2, highLeaves: 40, highStandingMin: 45 },
 }
 const FILLER = new Set(['cobblestone', 'dirt', 'stone', 'netherrack', 'cobbled_deepslate', 'gravel', 'andesite', 'diorite', 'granite', 'tuff', 'sand', 'deepslate'])
 
@@ -160,6 +162,32 @@ function farmlandFlag(events, now, cfg) {
   return { kind: 'farmland_trampled', sev: ev.length >= c.highCount ? 'high' : 'med', t0, t1: now,
     msg: `${ev.length} farmland block(s) turned back to dirt under the bot in ${Math.round(c.windowS / 60)} min (${hows})${where}${doing}; last at ${last.x},${last.y},${last.z}`,
     data: { n: ev.length, how, space: last.space || null, step: last.step || last.tk || null, blocks: ev.slice(-5).map(e => [e.x, e.y, e.z]) } }
+}
+
+// Mess the bot left behind and nobody asked it to keep (Walter 2026-11-11: scaffolding pillars never taken down, trees cut halfway with the top logs and a whole canopy
+// still standing). brain/leftovers re-reports every cluster each scan while it stands, so the newest report per cluster id inside the window is the current state.
+// Flag only: the sources are the tidy step (autopilot/plan.js) and the tree choppers (autopilot/skills.js chopTree, treefarm/engine.js finishRemnant).
+function leftoverFlags(events, now, cfg) {
+  const c = cfg.leftover, t0 = now - c.windowS * 1000, byId = new Map()
+  for (const e of evSince(events, t0, 'leftover')) byId.set(e.id, e)
+  const all = [...byId.values()], out = []
+  const sc = all.filter(e => e.what === 'scaffold'), tr = all.filter(e => e.what === 'tree')
+  const at = (e) => `${e.x},${e.y},${e.z}`
+  if (sc.length) {
+    const blocks = sc.reduce((s, e) => s + (e.n || 0), 0), tall = sc.filter(e => (e.h || 0) >= c.highPillarH), old = sc.filter(e => (e.standingMin || 0) >= c.highStandingMin)
+    const worst = sc.slice().sort((a, b) => (b.h - a.h) || (b.n - a.n))[0]
+    out.push({ kind: 'leftover_scaffold', sev: tall.length || sc.length >= c.highScaffold || old.length ? 'high' : 'med', t0, t1: now,
+      msg: `${sc.length} scaffolding leftover(s) (${blocks} blocks) the bot placed and never took down: ${sc.filter(e => e.kind !== 'stray').length} pillar/tower, tallest ${worst.h} high at ${at(worst)}; oldest standing ${Math.max(...sc.map(e => e.standingMin || 0))} min`,
+      data: { clusters: sc.length, blocks, tall: tall.length, items: sc.slice(0, 5).map(e => [e.kind, e.h, e.n, e.x, e.y, e.z]) } })
+  }
+  if (tr.length) {
+    const leaves = tr.reduce((s, e) => s + (e.leaves || 0), 0), logs = tr.reduce((s, e) => s + (e.n || 0), 0)
+    const worst = tr.slice().sort((a, b) => (b.leaves - a.leaves) || (b.n - a.n))[0]
+    out.push({ kind: 'leftover_trees', sev: tr.length >= c.highTrees || leaves >= c.highLeaves ? 'high' : 'med', t0, t1: now,
+      msg: `${tr.length} half-felled tree(s): ${logs} log(s) still stand on nothing and hold up about ${leaves} leaves (worst at ${at(worst)}, ${worst.n} logs, ${worst.leaves} leaves)`,
+      data: { trees: tr.length, logs, leaves, items: tr.slice(0, 5).map(e => [e.n, e.leaves, e.x, e.y, e.z]) } })
+  }
+  return out
 }
 
 function oscillationFlag(samples, now, cfg) {
@@ -395,7 +423,7 @@ function analyze(samples, events, now, over, state) {
   const flags = [
     ...jumpFlags(samples, events, now, cfg), pillarFlag(samples, events, now, cfg), ladderBobFlag(samples, events, now, cfg), oscillationFlag(samples, now, cfg), stuckFlag(samples, now, cfg), idleFlag(samples, events, now, cfg),
     wrongToolFlag(events, now, cfg), stairsFlag(events, now, cfg), placementFlag(events, now, cfg), torchFlag(events, now, cfg), lavaFlag(samples, now, cfg), armorFlag(state, now), armorCarriedFlag(state, now), tierFlag(events, now, cfg), chatFlag(events, now, cfg), farmlandFlag(events, now, cfg),
-    ...toolFlags(events, now), ...failFlags(events, now, cfg),
+    ...leftoverFlags(events, now, cfg), ...toolFlags(events, now), ...failFlags(events, now, cfg),
   ].filter(Boolean)
   return flags
 }
