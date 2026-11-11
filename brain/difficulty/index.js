@@ -21,7 +21,16 @@ module.exports = function register(api) {
   let last = null, since = Date.now(), lastRemind = 0, timers = [], hist = []
   try { const j = JSON.parse(fs.readFileSync(file, 'utf8')); hist = Array.isArray(j.history) ? j.history.slice(-10) : [] } catch { /* first run */ }
 
-  const read = () => { const d = bot.game && bot.game.difficulty; return typeof d === 'string' && KNOWN.includes(d) ? d : (typeof d === 'number' && KNOWN[d]) || null }
+  // mineflayer's bot.game.difficulty (set on the 'difficulty' packet) was undefined on the live 1.21.6 bots, so join.js also keeps the raw packet in bot._rawDifficulty
+  const read = () => {
+    const d = bot.game && bot.game.difficulty
+    if (typeof d === 'string' && KNOWN.includes(d)) return d
+    if (typeof d === 'number' && KNOWN[d]) return KNOWN[d]
+    const raw = bot._rawDifficulty && bot._rawDifficulty.value
+    if (typeof raw === 'number' && KNOWN[raw]) return KNOWN[raw]
+    if (typeof raw === 'string' && KNOWN.includes(raw)) return raw
+    return null
+  }
   const save = (d) => {
     try { fs.writeFileSync(file, JSON.stringify({ difficulty: d, peaceful: d === 'peaceful', at: new Date().toISOString(), since: new Date(since).toISOString(), history: hist.slice(-10) }, null, 1)) } catch (e) { log('could not write difficulty.json: ' + e.message) }
   }
