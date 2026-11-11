@@ -50,7 +50,10 @@ type Rig = {
 export const SchematicView = forwardRef<SchematicViewHandle, Props>(function SchematicView({ prep, built, spin, ground, onHover, onUnavailable, className }, ref) {
   const host = useRef<HTMLDivElement>(null)
   const rig = useRef<Rig | null>(null)
-  const hover = useRef(onHover); hover.current = onHover
+  const over = useRef(false)   // the pointer is on a block: hold the spin so the tooltip and the block stay put
+  const spinRef = useRef(spin); spinRef.current = spin
+  const hover = useRef((h: Hover | null) => { over.current = h != null; const r = rig.current; if (r) r.controls.autoRotate = spinRef.current && !over.current; onHoverRef.current(h) })
+  const onHoverRef = useRef(onHover); onHoverRef.current = onHover
   const prepRef = useRef(prep); prepRef.current = prep
   const builtRef = useRef(built); builtRef.current = built
 
@@ -183,7 +186,7 @@ export const SchematicView = forwardRef<SchematicViewHandle, Props>(function Sch
     r.box.visible = false
   }, [built, prep])
 
-  useEffect(() => { const r = rig.current; if (r) { r.controls.autoRotate = spin; r.controls.autoRotateSpeed = 1.6 } }, [spin])
+  useEffect(() => { const r = rig.current; if (r) { r.controls.autoRotate = spin && !over.current; r.controls.autoRotateSpeed = 1.6 } }, [spin])
   useEffect(() => { const r = rig.current; if (r && r.ground.children[0]) r.ground.children[0].visible = ground }, [ground, prep])   // the lawn; the grid stays
 
   return <div ref={host} className={className} />

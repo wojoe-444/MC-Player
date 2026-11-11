@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { CameraIcon, Loader2Icon } from "lucide-react"
+import { CameraIcon, Loader2Icon, RotateCwIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { Slider } from "@/components/ui/slider"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { Toggle } from "@/components/ui/toggle"
 import { PageHeader } from "@/components/common"
 import { SchematicPicker, useCatalogState } from "@/components/SchematicPicker"
 import { SchematicView, type Hover, type SchematicViewHandle } from "@/components/SchematicView"
@@ -36,15 +37,23 @@ function Check({ checked, onChange, children }: { checked: boolean; onChange: (v
   )
 }
 
-function Viewer({ item, picker }: { item: SchematicSummary; picker: React.ReactNode }) {
+// The page is a grid of three panels: the list, the viewer, the details. Each child below places itself (the areas only exist from @3xl up; narrower, they stack in this order).
+const AREA = { list: "@3xl:[grid-area:list]", view: "@3xl:[grid-area:view]", details: "@3xl:[grid-area:details]" }
+// long bills (a tower is 60 kinds of block) show their biggest rows first
+const OTHER_SHOWN = 6
+const BOM_SHOWN = 14
+const VIEW_H = "h-[28rem] @3xl:h-[min(68vh,44rem)] @6xl:h-[calc(100vh-15rem)]"
+
+function Viewer({ item }: { item: SchematicSummary }) {
   const { data, state } = useJson<SchematicDetail>(`/api/schematics/${encodeURIComponent(item.id)}`, 120_000, sig)
-  if (state === "failed") return <Empty><EmptyHeader><EmptyTitle>Could not load the schematic</EmptyTitle><EmptyDescription>The dashboard server did not answer. It will keep trying.</EmptyDescription></EmptyHeader></Empty>
-  if (state === "missing") return <Empty><EmptyHeader><EmptyTitle>No such schematic</EmptyTitle><EmptyDescription>The list changed; pick another one.</EmptyDescription></EmptyHeader></Empty>
-  if (!data) return <Card className="flex h-[34rem] items-center justify-center gap-3 text-sm text-muted-foreground" role="status"><Loader2Icon className="size-6 animate-spin" />Loading the schematic…</Card>
-  return <Body key={data.id} data={data} picker={picker} />
+  if (state === "failed") return <div className={AREA.view}><Empty><EmptyHeader><EmptyTitle>Could not load the schematic</EmptyTitle><EmptyDescription>The dashboard server did not answer. It will keep trying.</EmptyDescription></EmptyHeader></Empty></div>
+  if (state === "missing") return <div className={AREA.view}><Empty><EmptyHeader><EmptyTitle>No such schematic</EmptyTitle><EmptyDescription>The list changed; pick another one.</EmptyDescription></EmptyHeader></Empty></div>
+  if (!data) return <Card className={cn("flex items-center justify-center gap-3 text-sm text-muted-foreground", AREA.view, VIEW_H)} role="status"><Loader2Icon className="size-6 animate-spin" />Loading the schematic…</Card>
+  return <Body key={data.id} data={data} />
 }
 
-function Body({ data, picker }: { data: SchematicDetail; picker: React.ReactNode }) {
+/** Returns two grid children (the viewer, the details) so the page can lay them out beside the list. */
+function Body({ data }: { data: SchematicDetail }) {
   const [W, H, D] = data.size
   const prep = useMemo(() => prepare({ size: data.size, cells: decodeCells(data.rle, data.size), palette: data.palette }), [data])
   const [mode, setMode] = useState<"up" | "single">("up")
@@ -52,8 +61,10 @@ function Body({ data, picker }: { data: SchematicDetail; picker: React.ReactNode
   const [ghost, setGhost] = useState(true)
   // a yard around a house is part of the picture; the rock around a captured farm hides it, so that starts off
   const [surroundings, setSurroundings] = useState(data.mode === "aesthetic")
-  const [spin, setSpin] = useState(false)
+  const [spin, setSpin] = useState(true)
   const [isolate, setIsolate] = useState<string | null>(null)
+  const [allOther, setAllOther] = useState(false)
+  const [allBom, setAllBom] = useState(false)
   const [hover, setHover] = useState<Hover | null>(null)
   const [broken, setBroken] = useState(false)
   const view = useRef<SchematicViewHandle>(null)
@@ -85,81 +96,15 @@ function Body({ data, picker }: { data: SchematicDetail; picker: React.ReactNode
   const rowOf = (e: SchematicDetail["palette"][number] | undefined): BomRow | undefined => (e && !e.scenery ? data.bom.find((b) => b.block === (e.role === "water" || e.role === "lava" ? e.role : e.block?.replace(/^(soul_)?wall_torch$/, "$1torch"))) : undefined)
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[21rem_minmax(0,1fr)]">
-      <Card className="gap-5 self-start overflow-y-auto p-4 lg:max-h-[calc(100vh-15rem)]">
-        {picker}
-        <div className="flex flex-col gap-1">
-          <h2 className="text-xl font-semibold tracking-tight">{data.name}</h2>
-          <p className="text-sm text-muted-foreground">{W} × {D} footprint · {H} layers tall</p>
-          {data.purpose && <p className="text-xs text-muted-foreground">{data.purpose}</p>}
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            <Badge variant="secondary" className="capitalize">{data.kind}</Badge>
-            <Badge variant="outline" title={data.mode === "aesthetic" ? "Every block is exactly the one drawn" : "Walls accept any solid, light-blocking, non-flammable block"}>{data.mode === "aesthetic" ? "Exact blocks" : "Functional"}</Badge>
-          </div>
-        </div>
-
-        <Section title="View">
-          <div className="grid grid-cols-3 gap-2">
-            {([["iso", "Isometric"], ["front", "Front"], ["top", "Top"]] as const).map(([v, label]) => <Button key={v} variant="outline" size="sm" onClick={() => view.current?.setView(v)}>{label}</Button>)}
-          </div>
-        </Section>
-
-        <Section title="Layer slicer">
-          <ToggleGroup type="single" value={mode} onValueChange={(v) => v && setMode(v as "up" | "single")} variant="outline" className="grid w-full grid-cols-2" spacing={0}>
-            <ToggleGroupItem value="up">Up to layer</ToggleGroupItem>
-            <ToggleGroupItem value="single">Single layer</ToggleGroupItem>
-          </ToggleGroup>
-          <Slider min={0} max={Math.max(0, H - 1)} step={1} value={[layer]} onValueChange={(v) => setLayer(v[0])} aria-label="Layer" disabled={H < 2} />
-          <div className="flex items-baseline justify-between text-sm"><span className="text-muted-foreground">Layers shown</span><span className="font-semibold tabular-nums">{mode === "single" ? layer : `0 – ${layer}`}</span></div>
-          <Check checked={ghost} onChange={setGhost}>Ghost hidden blocks</Check>
-          <Check checked={surroundings} onChange={setSurroundings}>Show surroundings</Check>
-          <Check checked={spin} onChange={setSpin}>Auto-rotate</Check>
-        </Section>
-
-        <Section title="Raw materials">
-          {data.raw.lines.length === 0 && data.raw.other.length === 0 && <p className="text-sm text-muted-foreground">Nothing to gather.</p>}
-          <dl className="flex flex-col gap-1 text-sm">
-            {data.raw.lines.map((l) => (
-              <div key={l.id} className="flex items-baseline justify-between gap-3">
-                <dt>{l.label}{l.verb ? ` ${l.verb}` : ""}</dt>
-                <dd className="tabular-nums"><span className="font-semibold">{n0(l.amount)}</span>{l.verb && l.amount >= 64 ? <span className="ml-1 text-xs text-muted-foreground">({l.stacks} stacks)</span> : null}</dd>
-              </div>
-            ))}
-            {data.raw.other.length > 0 && <div className="pt-1 text-xs font-medium text-muted-foreground">Other</div>}
-            {data.raw.other.map((o) => <div key={o.name} className="flex items-baseline justify-between gap-3"><dt>{o.name}</dt><dd className="font-semibold tabular-nums">{n0(o.amount)}</dd></div>)}
-          </dl>
-          {data.raw.note && <p className="text-xs text-muted-foreground">{data.raw.note}</p>}
-        </Section>
-
-        <Section title="Bill of materials">
-          <div className="flex items-baseline justify-between text-sm"><span className="text-muted-foreground">Blocks visible / total</span><span className="font-semibold tabular-nums">{n0(built.visible)} / {n0(built.total)}</span></div>
-          <p className="text-xs text-muted-foreground">Click a row to isolate that block type. {isolate && <button className="underline underline-offset-2 hover:text-foreground" onClick={() => setIsolate(null)}>Clear</button>}</p>
-          <ul className="-mx-1 flex flex-col">
-            {data.bom.map((r) => (
-              <li key={r.key}>
-                <button onClick={() => setIsolate(isolate === r.key ? null : r.key)} aria-pressed={isolate === r.key} title={r.subs ?? undefined}
-                  className={cn("flex w-full items-center gap-2.5 rounded-md px-1 py-1 text-left text-sm hover:bg-accent", isolate === r.key && "bg-accent ring-1 ring-ring")}>
-                  <BlockIcon block={r.block} />
-                  <span className="flex min-w-0 flex-1 flex-col leading-tight"><span className="truncate">{r.name}</span>{r.role === "solid" && <span className="truncate text-[11px] text-muted-foreground">or any solid block</span>}</span>
-                  <span className="font-semibold tabular-nums">{n0(r.cells)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Section>
-
-        {(data.notes.length > 0 || data.source.world) && (
-          <div className="flex flex-col gap-1.5 border-t pt-3 text-xs text-muted-foreground">
-            {data.notes.map((n) => <p key={n}>{n}</p>)}
-            {data.source.world && <p>Captured from {data.source.world}{data.source.by ? ` by ${data.source.by}` : ""}{data.source.capturedAt ? `, ${data.source.capturedAt.slice(0, 10)}` : ""}.</p>}
-          </div>
-        )}
-      </Card>
-
-      <Card className="relative h-[34rem] overflow-hidden py-0 lg:h-[calc(100vh-15rem)] lg:min-h-[34rem]">
+    <>
+      <Card className={cn("relative overflow-hidden py-0", AREA.view, VIEW_H)}>
         {broken
           ? <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">This window cannot draw 3D (WebGL is off). The bill of materials still works.</div>
           : <SchematicView ref={view} prep={prep} built={built} spin={spin} ground={surroundings} onHover={setHover} onUnavailable={() => setBroken(true)} className="absolute inset-0" />}
+        <div className="absolute top-3 left-3 flex items-center gap-1.5">
+          {([["iso", "Isometric"], ["front", "Front"], ["top", "Top"]] as const).map(([v, label]) => <Button key={v} variant="outline" size="sm" onClick={() => view.current?.setView(v)} className="bg-background/80 backdrop-blur">{label}</Button>)}
+          <Toggle variant="outline" size="sm" pressed={spin} onPressedChange={setSpin} aria-label="Auto-rotate" title="Auto-rotate (it holds still while you point at a block)" className="bg-background/80 backdrop-blur data-[state=on]:bg-accent"><RotateCwIcon />Rotate</Toggle>
+        </div>
         <div className="absolute top-3 right-3"><Button variant="outline" size="icon-sm" onClick={shot} aria-label="Save a picture" className="bg-background/80 backdrop-blur"><CameraIcon /></Button></div>
         {hovered && (
           <div className="pointer-events-none absolute z-10 max-w-64 rounded-lg border bg-popover/95 p-2.5 text-xs text-popover-foreground shadow-md backdrop-blur"
@@ -182,7 +127,71 @@ function Body({ data, picker }: { data: SchematicDetail; picker: React.ReactNode
         )}
         <div className="pointer-events-none absolute right-3 bottom-3 rounded-md bg-background/80 px-2 py-1 text-[11px] text-muted-foreground backdrop-blur">Drag to orbit · right-drag to pan · scroll to zoom · ↑/↓ step layers · hover a block to inspect</div>
       </Card>
-    </div>
+
+      <Card className={cn("gap-5 p-4 @6xl:h-[calc(100vh-15rem)] @6xl:overflow-y-auto", AREA.details)}>
+        <div className="flex flex-col gap-1">
+          <h2 className="text-xl font-semibold tracking-tight">{data.name}</h2>
+          <p className="text-sm text-muted-foreground">{W} × {D} footprint · {H} layers tall</p>
+          {data.purpose && <p className="text-xs text-muted-foreground">{data.purpose}</p>}
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            <Badge variant="secondary" className="capitalize">{data.kind}</Badge>
+            <Badge variant="outline" title={data.mode === "aesthetic" ? "Every block is exactly the one drawn" : "Walls accept any solid, light-blocking, non-flammable block"}>{data.mode === "aesthetic" ? "Exact blocks" : "Functional"}</Badge>
+          </div>
+        </div>
+
+        <Section title="Layer slicer">
+          <ToggleGroup type="single" value={mode} onValueChange={(v) => v && setMode(v as "up" | "single")} variant="outline" className="grid w-full grid-cols-2" spacing={0}>
+            <ToggleGroupItem value="up">Up to layer</ToggleGroupItem>
+            <ToggleGroupItem value="single">Single layer</ToggleGroupItem>
+          </ToggleGroup>
+          <Slider min={0} max={Math.max(0, H - 1)} step={1} value={[layer]} onValueChange={(v) => setLayer(v[0])} aria-label="Layer" disabled={H < 2} />
+          <div className="flex items-baseline justify-between text-sm"><span className="text-muted-foreground">Layers shown</span><span className="font-semibold tabular-nums">{mode === "single" ? layer : `0 – ${layer}`}</span></div>
+          <Check checked={ghost} onChange={setGhost}>Ghost hidden blocks</Check>
+          <Check checked={surroundings} onChange={setSurroundings}>Show surroundings</Check>
+        </Section>
+
+        <Section title="Raw materials">
+          {data.raw.lines.length === 0 && data.raw.other.length === 0 && <p className="text-sm text-muted-foreground">Nothing to gather.</p>}
+          <dl className="flex flex-col gap-1 text-sm">
+            {data.raw.lines.map((l) => (
+              <div key={l.id} className="flex items-baseline justify-between gap-3">
+                <dt>{l.label}{l.verb ? ` ${l.verb}` : ""}</dt>
+                <dd className="tabular-nums"><span className="font-semibold">{n0(l.amount)}</span>{l.verb && l.amount >= 64 ? <span className="ml-1 text-xs text-muted-foreground">({l.stacks} stacks)</span> : null}</dd>
+              </div>
+            ))}
+            {data.raw.other.length > 0 && <div className="pt-1 text-xs font-medium text-muted-foreground">Other</div>}
+            {(allOther ? data.raw.other : data.raw.other.slice(0, OTHER_SHOWN)).map((o) => <div key={o.name} className="flex items-baseline justify-between gap-3"><dt>{o.name}</dt><dd className="font-semibold tabular-nums">{n0(o.amount)}</dd></div>)}
+          </dl>
+          {data.raw.other.length > OTHER_SHOWN && <button onClick={() => setAllOther(!allOther)} className="self-start text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground">{allOther ? "Show fewer" : `Show all ${data.raw.other.length}`}</button>}
+          {data.raw.note && <p className="text-xs text-muted-foreground">{data.raw.note}</p>}
+        </Section>
+
+        <Section title="Bill of materials">
+          <div className="flex items-baseline justify-between text-sm"><span className="text-muted-foreground">Blocks visible / total</span><span className="font-semibold tabular-nums">{n0(built.visible)} / {n0(built.total)}</span></div>
+          <p className="text-xs text-muted-foreground">Click a row to isolate that block type. {isolate && <button className="underline underline-offset-2 hover:text-foreground" onClick={() => setIsolate(null)}>Clear</button>}</p>
+          <ul className="-mx-1 flex flex-col">
+            {(allBom ? data.bom : data.bom.slice(0, BOM_SHOWN)).map((r) => (
+              <li key={r.key}>
+                <button onClick={() => setIsolate(isolate === r.key ? null : r.key)} aria-pressed={isolate === r.key} title={r.subs ?? undefined}
+                  className={cn("flex w-full items-center gap-2.5 rounded-md px-1 py-1 text-left text-sm hover:bg-accent", isolate === r.key && "bg-accent ring-1 ring-ring")}>
+                  <BlockIcon block={r.block} />
+                  <span className="flex min-w-0 flex-1 flex-col leading-tight"><span className="truncate">{r.name}</span>{r.role === "solid" && <span className="truncate text-[11px] text-muted-foreground">or any solid block</span>}</span>
+                  <span className="font-semibold tabular-nums">{n0(r.cells)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {data.bom.length > BOM_SHOWN && <button onClick={() => setAllBom(!allBom)} className="self-start text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground">{allBom ? "Show fewer" : `Show all ${data.bom.length} blocks`}</button>}
+        </Section>
+
+        {(data.notes.length > 0 || data.source.world) && (
+          <div className="flex flex-col gap-1.5 border-t pt-3 text-xs text-muted-foreground">
+            {data.notes.map((n) => <p key={n}>{n}</p>)}
+            {data.source.world && <p>Captured from {data.source.world}{data.source.by ? ` by ${data.source.by}` : ""}{data.source.capturedAt ? `, ${data.source.capturedAt.slice(0, 10)}` : ""}.</p>}
+          </div>
+        )}
+      </Card>
+    </>
   )
 }
 
@@ -191,16 +200,25 @@ export function Schematics() {
   const [pick, setPick] = useState<string | null>(null)
   const list = data?.schematics ?? []
   const current = list.find((s) => s.id === pick) ?? list[0] ?? null
-  // one build needs no catalog; with more, a searchable list grouped by category
   const catalog = useCatalogState()
-  const picker = list.length > 1 ? <SchematicPicker list={list} currentId={current?.id ?? null} onPick={setPick} state={catalog} /> : null
   return (
     <>
       <PageHeader title="Schematics" description="What the bots consider a build to be, block by block. Every cell shows a specific block; its role says what else may stand there (a wall accepts any solid, light-blocking, non-flammable block)." />
       {state === "loading" && <Card className="flex h-40 items-center justify-center gap-3 text-sm text-muted-foreground" role="status"><Loader2Icon className="size-6 animate-spin" />Loading the schematics…</Card>}
       {state === "failed" && <Empty><EmptyHeader><EmptyTitle>Could not load the schematics</EmptyTitle><EmptyDescription>The dashboard server did not answer. It will keep trying.</EmptyDescription></EmptyHeader></Empty>}
       {state === "ok" && !current && <Empty><EmptyHeader><EmptyTitle>No schematics saved yet</EmptyTitle><EmptyDescription>A bot saves one with the save_schematic skill, or run tools/schematic.js on a world save.</EmptyDescription></EmptyHeader></Empty>}
-      {current && <Viewer key={current.id} item={current} picker={picker} />}
+      {current && (
+        // three panels (list, viewer, details) when the page is wide, the list beside the viewer with the details under it when it is medium, stacked when narrow: by the page's own width, not the window's
+        <div className="@container">
+          <div className="grid gap-4 @3xl:grid-cols-[16rem_minmax(0,1fr)] @3xl:[grid-template-areas:'list_view'_'list_details'] @6xl:grid-cols-[16rem_minmax(0,1fr)_21rem] @6xl:[grid-template-areas:'list_view_details']">
+            <Card className={cn("gap-3 p-3 max-h-80 @3xl:self-start @3xl:sticky @3xl:top-4 @3xl:max-h-[calc(100vh-8rem)] @6xl:h-[calc(100vh-15rem)] @6xl:max-h-none", AREA.list)}>
+              <div className="flex items-baseline justify-between px-1"><h2 className="text-sm font-semibold">Schematics</h2><span className="text-xs text-muted-foreground tabular-nums">{list.length}</span></div>
+              <SchematicPicker list={list} currentId={current.id} onPick={setPick} state={catalog} />
+            </Card>
+            <Viewer key={current.id} item={current} />
+          </div>
+        </div>
+      )}
     </>
   )
 }
