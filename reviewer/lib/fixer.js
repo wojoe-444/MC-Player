@@ -177,7 +177,8 @@ function reallyInside(root, p) {
 const mayChange = (rel) => rel.startsWith(SCRATCH + '/') || (ALLOWED.some(r => r.test(rel)) && !PROTECTED.some(r => r.test(rel)))
 // every tool call of the session passes here first -> { allow, why }
 function gateFor({ dir, evidence, run = sh }) {
-  const existing = new Set(run('git', ['ls-files', 'test'], { cwd: dir }).out.split('\n').filter(Boolean))        // tests that are on main: read only
+  // tests that are on main: read only. (Read from main itself, not the index: the checks stage the session's new test, and a repair session must be able to edit it.)
+  const existing = new Set(run('git', ['ls-tree', '-r', '--name-only', 'origin/main', 'test'], { cwd: dir }).out.split('\n').filter(Boolean))
   return (name, input) => {
     if (/^mcp__fixer__(run_node|run_tests|git)$/.test(name)) return { allow: true }                 // our own tools check their own arguments
     if (name === 'Read' || name === 'Glob' || name === 'Grep') {
@@ -248,7 +249,7 @@ The bot is an independent player with its own goals, its own memory and free tim
 2. Name the cause. Say which line does the wrong thing in which situation, and check that the evidence fits. If two causes fit, find what tells them apart.
 3. Show it failing. Write a new test file test/fix-<order key>.test.js that sets up that situation with a small made-up world and fails on the current code because of the fault. It has to call code that already exists (the step's own entry point), so that it fails by an assertion and not by a missing file. Run it and read the failure: it has to fail for the reason you named, not because the test is wrong.
 4. Fix the cause with the smallest change that does it. Do not tidy, rename or improve anything else.
-5. Run your test again, then run_tests with no filters. Everything has to pass. A test that passed before and fails now means your change broke something: fix the change, not that test.
+5. Run your test again, then run_tests with no filters. A test that passed before and fails now means your change broke something: fix the change, not that test. A test that fails without your change too is not yours: name it in your summary, leave it alone, and carry on (the checks compare with main).
 6. If you cannot make it fail, do not guess a fix. Add what would catch it next time instead: a journal event or a telemetry flag that records the missing fact, with a test that it is recorded. Answer "telemetry".
 7. If neither is possible, change nothing and answer "gave-up". Say exactly what you tried; the next attempt starts from your notes.
 
@@ -359,7 +360,16 @@ function check({ dir, outcome, run = sh, words }) {
     if (r.code !== 0) return fail(`${t} fails with the change`, r.out)
   }
   const all = run(nodeExe(), [path.join(dir, 'scripts', 'run-tests.js')], { cwd: dir, timeout: LIMITS.suiteMs, env: cleanEnv() })
-  if (all.code !== 0) return fail('the test suite fails with the change', all.out.split('\n').filter(l => /^(FAIL|fail|not ok)\b|failed/.test(l.trim())).slice(0, 30).join('\n') || all.out)
+  if (all.code !== 0) {
+    // a test that fails on main too is not this change's doing (a real trial, 2026-11-11: another merge had left one red, and a sound fix was refused for it)
+    const lines = all.out.split('\n').filter(l => /^(FAIL|fail|not ok)\b|failed/.test(l.trim())).slice(0, 30).join('\n') || all.out
+    const red = [...new Set(all.out.split('\n').map(l => /^FAIL\s+(\S+\.test\.js)/.exec(l.trim())).filter(Boolean).map(m => m[1]))].filter(f => fs.existsSync(path.join(dir, f)))
+    if (!red.length || red.length > 8) return fail('the test suite fails with the change', lines)
+    const b = failingOnMain(dir, red.filter(f => !res.tests.includes(f)), run)
+    const mine = red.filter(f => res.tests.includes(f) || !(b.failed || []).includes(f))
+    if (b.error || mine.length) return fail(`the test suite fails with the change${mine.length ? ` (${mine.join(', ')} passes on main)` : ''}`, lines)
+    res.redOnMain = red
+  }
   return { ...res, ok: true }
 }
 
@@ -375,7 +385,8 @@ const slugOf = (cfg) => cfg.fixSlug || repoSlug(cfg.fixRepo || REPO)            
 const repoSlug = (url) => { const m = /github\.com[:/]+([^/]+\/[^/]+?)(?:\.git)?\/?$/.exec(String(url || '')); return m ? m[1] : null }
 function prBody({ o, answer, checked, hold }) {
   const L = [`Work order \`${o.key}\`: ${o.title}`, '', '## Cause', answer.rootCause || '(not found: this change adds what will catch it next time)', '', '## Change', answer.summary || '', '', '## Checks the fixer job ran before opening this',
-    checked.failedOnMain.length ? `- ${checked.failedOnMain.join(', ')} fails on main and passes with this change` : `- new tests pass: ${checked.tests.join(', ')}`, '- the whole test suite passes', `- ${checked.lines} changed lines in ${checked.files.length} files, all inside what the fixer may change`]
+    checked.failedOnMain.length ? `- ${checked.failedOnMain.join(', ')} fails on main and passes with this change` : `- new tests pass: ${checked.tests.join(', ')}`,
+    (checked.redOnMain || []).length ? `- the test suite passes except ${checked.redOnMain.join(', ')}, which fails on main without this change too` : '- the whole test suite passes', `- ${checked.lines} changed lines in ${checked.files.length} files, all inside what the fixer may change`]
   if (hold.length) L.push('', '## Left open for a person', ...hold.map(h => `- ${h}`))
   L.push('', '---', '_Opened by the fixer job of the Bot Dashboard app: an unattended Claude session on the laptop that takes the most costly work order (docs/MEMORY-LOOP.md). The deployer puts it on the bots and reverts it if the journal says it made things worse._')
   return L.join('\n')
@@ -526,6 +537,7 @@ async function runFix(cfg, { agent = null, ask = null, run = sh, now = Date.now(
       return done({ ok: true, order: o.key, outcome: 'ready', branch, gh: pub.gh, summary: `${o.key}: a checked ${answer.outcome === 'telemetry' ? 'telemetry change' : 'fix'} is on ${branch} in the working copy. ${pub.note}` })
     }
     note(cfg, o.key, 'pr', { pr: pub.pr, merged: !!pub.merged, branch, outcome: answer.outcome, hold: checked.hold, title, costUsd: cost || undefined }, now)
+    if ((checked.redOnMain || []).length) askOnce(cfg, `The test suite on main is failing (${checked.redOnMain.join(', ')}), so the deployer will not put anything on the bots until that is fixed.`, o.key)
     if (checked.hold.length) askOnce(cfg, `The fixer's pull request #${pub.pr} for "${cut(o.title, 80)}" needs a look before it is merged: ${checked.hold.join('; ')}.`, o.key)
     return done({ ok: true, order: o.key, outcome: answer.outcome, pr: pub.pr, merged: !!pub.merged, gh: pub.gh, summary: `${o.key}: ${pub.note}` })
   } finally { if (!dryRun) { try { fs.unlinkSync(lock) } catch { /* gone */ } } }

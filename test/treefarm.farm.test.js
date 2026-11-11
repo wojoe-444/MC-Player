@@ -181,8 +181,10 @@ test('naturalPolicy: natural trees may only be felled as bootstrap, never once t
   await farm.build(ctx(), { home: { x: 0, y: 64, z: 0 }, quiet: true })
   assert.strictEqual(farm.naturalPolicy({ logs: 3 }).natural, true, 'farm planted, nothing grown, short of wood: bootstrap')
   assert.strictEqual(farm.naturalPolicy({ logs: 40 }).natural, false, 'enough wood in the bag')
-  const s = spotsOf(state.farms[0])[0]
-  growTree(bot, { x: s.x, z: s.z, h: 6, species: 'birch' })
+  const spots = spotsOf(state.farms[0])
+  growTree(bot, { x: spots[0].x, z: spots[0].z, h: 6, species: 'birch' })
+  assert.strictEqual(farm.naturalPolicy({ logs: 0 }).natural, true, 'one grown tree gives a few logs only: still short of wood, natural trees allowed')
+  for (const s of spots.slice(1, 4)) growTree(bot, { x: s.x, z: s.z, h: 6, species: 'birch' })
   const p = farm.naturalPolicy({ logs: 0 })
   assert.strictEqual(p.natural, false); assert.ok(/harvest/.test(p.why))
   r.stop()

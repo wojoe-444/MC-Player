@@ -33,7 +33,7 @@ function PhaseBar({ p }: { p: RoadmapPhase }) {
   const w = (n: number) => (p.total ? `${(100 * n) / p.total}%` : "0%")
   return (
     <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label={`${p.done} done, ${open} open, ${unmeasured} not measured of ${p.total}`}>
-      <div className="h-full bg-primary" style={{ width: w(p.done) }} />
+      <div className="h-full bg-success" style={{ width: w(p.done) }} />
       <div className="h-full bg-muted-foreground/40" style={{ width: w(open) }} />
     </div>
   )

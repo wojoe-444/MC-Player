@@ -22,7 +22,7 @@ function world() {
   write(origin, 'brain/autopilot/whimsy.js', `module.exports = { freeTime: true }\n`)
   write(origin, 'brain/gate/rules.json', '{}\n')
   write(origin, 'test/half.test.js', `const test = require('node:test'), assert = require('node:assert')\nconst { half } = require('../brain/iron/half')\ntest('half of 4', () => assert.equal(half(4), 2))\n`)
-  write(origin, 'scripts/run-tests.js', `const fs = require('fs'), path = require('path'), { spawnSync } = require('child_process')\nconst dir = path.join(__dirname, '..', 'test'); let bad = 0\nfor (const f of fs.readdirSync(dir).filter(f => f.endsWith('.test.js'))) { const r = spawnSync(process.execPath, ['--test', path.join(dir, f)], { encoding: 'utf8' }); if (r.status !== 0) { bad++; console.log('FAIL ' + f) } }\nprocess.exit(bad ? 1 : 0)\n`)
+  write(origin, 'scripts/run-tests.js', `const fs = require('fs'), path = require('path'), { spawnSync } = require('child_process')\nconst dir = path.join(__dirname, '..', 'test'); let bad = 0\nfor (const f of fs.readdirSync(dir).filter(f => f.endsWith('.test.js'))) { const r = spawnSync(process.execPath, ['--test', path.join(dir, f)], { encoding: 'utf8' }); if (r.status !== 0) { bad++; console.log('FAIL test/' + f) } }\nprocess.exit(bad ? 1 : 0)\n`)
   write(origin, 'CLAUDE.md', '# the bot is an independent player\n')
   write(origin, '.gitignore', 'node_modules/\n')
   git(origin, 'init', '-q'); git(origin, 'add', '-A'); git(origin, 'commit', '-q', '-m', 'start')
@@ -181,6 +181,21 @@ test('a session that ends in prose instead of the answer form: one short call re
   assert.equal(r2.ok, false); assert.match(r2.summary, /not structured JSON/)
   const log2 = JSON.parse(fs.readFileSync(path.join(w2.cfg.loopDir, 'fixer', 'sessions', fs.readdirSync(path.join(w2.cfg.loopDir, 'fixer', 'sessions'))[0]), 'utf8'))
   assert.equal(log2.rounds[0].text, 'I fixed half() and all tests pass.'); assert.match(log2.diff, /Math\.floor/)
+})
+
+test('a test that already fails on main is not held against the fix; one the change breaks still is', async () => {
+  const w = world()
+  write(w.origin, 'test/stale.test.js', `const test = require('node:test'), assert = require('node:assert')\ntest('stale', () => assert.equal(1, 2))\n`)
+  git(w.origin, 'add', '-A'); git(w.origin, 'commit', '-q', '-m', 'somebody left main red')
+  w.order('step-iron'); const seen = []
+  const r = await fixer.runFix({ ...w.cfg, fixMode: 'merge' }, { agent: goodAgent, run: fakeGitHub(seen), now: NOW, words: [] })
+  assert.equal(r.merged, true, r.summary)
+  assert.match(fs.readFileSync(path.join(w.cfg.loopDir, 'fixer', 'pr-body.md'), 'utf8'), /passes except test\/stale.test.js, which fails on main without this change too/)
+  assert.match(fs.readFileSync(path.join(w.cfg.loopDir, 'digest-question.txt'), 'utf8'), /test suite on main is failing \(test\/stale.test.js\)/)
+  // a repair session may edit the test it wrote in the first round (the checks staged it, which once made it look like an existing test)
+  const wc = fixer.prepare(w.cfg, 'fix/t2'); write(wc.dir, 'test/fix-new.test.js', '1'); git(wc.dir, 'add', '-A')
+  const gate = fixer.gateFor({ dir: wc.dir, evidence: w.root })
+  assert.equal(gate('Edit', { file_path: path.join(wc.dir, 'test/fix-new.test.js') }).allow, true); assert.equal(gate('Edit', { file_path: path.join(wc.dir, 'test/stale.test.js') }).allow, false)
 })
 
 test('a lock held by a live run skips this one; a lock left by a run that died does not', async () => {

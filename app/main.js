@@ -1,5 +1,5 @@
 // Electron entry: starts (or attaches to) the dashboard server, shows it in a window, and runs background triggers.
-const { app, BrowserWindow, WebContentsView, Menu, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { spawn } = require('child_process')
@@ -8,6 +8,7 @@ const { startDashboard } = require('./lib/dashboard-process')
 const { TriggerManager } = require('./lib/triggers')
 const { createReviewTrigger, listReviews } = require('./lib/review')
 const { UpdateManager } = require('./lib/updater')
+const { startControlServer } = require('./lib/control')
 const { loopState, loadLib, JOB_IDS } = require('./lib/loop')
 
 // Packaged: electron-builder copies dashboard/ into resources/. From source: the repo root is one level up.
@@ -21,7 +22,7 @@ const loopLib = loadLib(REVIEWER_DIR)
 const ICON = path.join(__dirname, 'build', 'icon.ico')
 let config, dash, triggers, reviewsDir
 let mainWin = null
-let updates
+let updates, control
 
 const log = (...a) => console.log(new Date().toISOString(), ...a)
 
@@ -38,58 +39,37 @@ function lockDown(win, allowOrigin) {
   })
 }
 
-// One window with a tab bar (Dashboard | Claude reviews | Memory loop | Settings). Each tab is its own web view, so the dashboard keeps its state while you look at another tab.
-const TAB_H = 42
-const TABS = [['dashboard', 'Dashboard'], ['reviews', 'Claude reviews'], ['loop', 'Memory loop'], ['settings', 'Settings']]
-let tabsView = null, views = {}, activeTab = 'dashboard'
+// One window showing the dashboard web app (dashboard/web). Its pages for Claude reviews, Memory loop and Settings talk to this process
+// through window.botApp (preload.js), so there are no separate tab views any more. The menu shortcuts ask the page to switch (the 'navigate' message).
+const PAGES = { dashboard: '/', reviews: '/reviews', loop: '/loop', settings: '/settings' }
+const sendUI = (channel, payload) => { if (mainWin && !mainWin.isDestroyed() && !mainWin.webContents.isDestroyed()) mainWin.webContents.send(channel, payload) }
 
-function tabsState() {
-  const u = updates ? updates.state() : null
-  return { active: activeTab, tabs: TABS.map(([id, label]) => ({ id, label })), badges: { settings: !!u && (u.status === 'available' || u.status === 'downloading' || u.status === 'ready') } }
+// Only the dashboard page itself may use window.botApp: it can install scheduled tasks and updates, so ignore any other frame or origin.
+function fromDashboard(e) {
+  try { return new URL(e.senderFrame.url).origin === new URL(dash.url).origin } catch { return false }
 }
-const sendTabs = () => { if (tabsView) tabsView.webContents.send('tabs', tabsState()) }
-const sendTo = (id, channel, payload) => { const v = views[id]; if (v && !v.webContents.isDestroyed()) v.webContents.send(channel, payload) }
-
-function layoutTabs() {
-  if (!mainWin) return
-  const [w, h] = mainWin.getContentSize()
-  tabsView.setBounds({ x: 0, y: 0, width: w, height: TAB_H })
-  for (const v of Object.values(views)) v.setBounds({ x: 0, y: TAB_H, width: w, height: Math.max(0, h - TAB_H) })
-}
-
-function selectTab(id) {
-  if (!views[id]) return
-  activeTab = id
-  for (const [k, v] of Object.entries(views)) v.setVisible(k === id)
-  if (mainWin && !mainWin.isDestroyed()) mainWin.setTitle(id === 'dashboard' ? 'Bot Dashboard' : 'Bot Dashboard: ' + TABS.find(t => t[0] === id)[1])
-  sendTabs()
+function handle(channel, fn) {
+  ipcMain.handle(channel, (e, ...args) => {
+    if (!fromDashboard(e)) throw new Error('not allowed')
+    return fn(...args)
+  })
 }
 
 function openMain(tab) {
-  if (mainWin) { if (mainWin.isMinimized()) mainWin.restore(); mainWin.focus(); if (tab) selectTab(tab); return }
+  const page = PAGES[tab] || null
+  if (mainWin) {
+    if (mainWin.isMinimized()) mainWin.restore()
+    mainWin.focus()
+    if (page) sendUI('navigate', page)
+    return
+  }
   mainWin = new BrowserWindow({
-    width: 1400, height: 900, title: 'Bot Dashboard', icon: ICON, backgroundColor: '#0b0d10',
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+    width: 1400, height: 900, title: 'Bot Dashboard', icon: ICON, backgroundColor: '#f5f1e8',
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: path.join(__dirname, 'preload.js') },
   })
-  const preload = path.join(__dirname, 'preload.js')
-  const mk = (webPreferences) => { const v = new WebContentsView({ webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, ...webPreferences } }); v.setBackgroundColor('#0b0d10'); mainWin.contentView.addChildView(v); return v }
-  views.dashboard = mk({})
-  views.reviews = mk({ preload })
-  views.loop = mk({ preload })
-  views.settings = mk({ preload })
-  tabsView = mk({ preload })
-  lockDown(views.dashboard, dash.url)
-  views.dashboard.webContents.loadURL(dash.url)
-  for (const id of ['reviews', 'loop', 'settings']) { lockDown(views[id], 'file://'); views[id].webContents.loadFile(path.join(__dirname, 'renderer', id + '.html')) }
-  lockDown(tabsView, 'file://')
-  tabsView.webContents.loadFile(path.join(__dirname, 'renderer', 'tabs.html'))
-  mainWin.on('resize', layoutTabs)
-  mainWin.on('closed', () => {
-    for (const v of [...Object.values(views), tabsView]) { try { v.webContents.close() } catch {} }
-    mainWin = null; tabsView = null; views = {}
-  })
-  layoutTabs()
-  selectTab(tab || 'dashboard')
+  lockDown(mainWin, dash.url)
+  mainWin.webContents.loadURL(dash.url + (page && page !== '/' ? '#' + page : ''))
+  mainWin.on('closed', () => { mainWin = null })
 }
 const openReviews = () => openMain('reviews')
 const openSettings = () => openMain('settings')
@@ -110,7 +90,7 @@ function runReviewerNow() {
   const child = spawn(process.execPath, [path.join(REVIEWER_DIR, 'run.js'), '--once', '--force'], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', BOT_OZO_DIR: d.ozoDir, BOT_SMEO_DIR: d.smeoDir }, windowsHide: true, stdio: 'ignore',
   })
-  const done = () => { reviewerRunning = false; reviewerState().then(r => sendTo('reviews', 'reviewer', r)) }
+  const done = () => { reviewerRunning = false; reviewerState().then(r => sendUI('reviewer', r)) }
   child.once('exit', done); child.once('error', done)
   return true
 }
@@ -129,7 +109,7 @@ function runLoopJob(id) {
   const child = spawn(process.execPath, [path.join(REVIEWER_DIR, 'run.js'), ...loopLib.schedule.JOBS[id].args, '--force'], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', BOT_OZO_DIR: d.ozoDir, BOT_SMEO_DIR: d.smeoDir, LOOP_DIR: loopDir(), BOT_CODE_DIR: codeDir(), FIXER_MODE: fixMode() }, windowsHide: true, stdio: 'ignore',
   })
-  const done = () => { loopRunning[id] = false; getLoopState().then(s => sendTo('loop', 'loop', s)) }
+  const done = () => { loopRunning[id] = false; getLoopState().then(s => sendUI('loop', s)) }
   child.once('exit', done); child.once('error', done)
   return true
 }
@@ -138,7 +118,7 @@ function snapshot() {
   return { triggers: triggers.list(), reviews: listReviews(reviewsDir), dashboard: { url: dash.url, attached: dash.attached }, claude: config.data.claude }
 }
 
-const activeWc = () => (views[activeTab] && !views[activeTab].webContents.isDestroyed() ? views[activeTab].webContents : null)
+const activeWc = () => (mainWin && !mainWin.isDestroyed() ? mainWin.webContents : null)
 
 function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
@@ -172,11 +152,11 @@ app.whenReady().then(async () => {
 
   triggers = new TriggerManager(config, {})
   triggers.register(createReviewTrigger({ reviewsDir, getConfig: () => config.data }))
-  triggers.on('update', () => sendTo('reviews', 'state', snapshot()))
+  triggers.on('update', () => sendUI('state', snapshot()))
 
-  ipcMain.handle('state', () => snapshot())
-  ipcMain.handle('trigger:run', (_e, id) => { triggers.runNow(String(id)).catch(() => {}); return true })
-  ipcMain.handle('trigger:set', (_e, id, patch) => {
+  handle('state', () => snapshot())
+  handle('trigger:run', (id) => { triggers.runNow(String(id)).catch(() => {}); return true })
+  handle('trigger:set', (id, patch) => {
     const clean = {}
     if (typeof patch.enabled === 'boolean') clean.enabled = patch.enabled
     if (Number.isFinite(patch.intervalMin)) clean.intervalMin = Math.min(1440, Math.max(1, Math.round(patch.intervalMin)))
@@ -184,36 +164,36 @@ app.whenReady().then(async () => {
     return snapshot()
   })
 
-  ipcMain.handle('reviewer:state', () => reviewerState())
-  ipcMain.handle('reviewer:run', () => runReviewerNow())
-  ipcMain.handle('reviewer:install', async (_e, minutes) => {
+  handle('reviewer:state', () => reviewerState())
+  handle('reviewer:run', () => runReviewerNow())
+  handle('reviewer:install', async (minutes) => {
     if (!schedule) return { ok: false, error: 'reviewer folder not found' }
     const r = await schedule.install({ scriptPath: path.join(REVIEWER_DIR, 'run.js'), minutes: Math.min(120, Math.max(1, Math.round(Number(minutes) || 10))) })
     return { ...r, state: await reviewerState() }
   })
-  ipcMain.handle('reviewer:uninstall', async () => (schedule ? { ...(await schedule.uninstall()), state: await reviewerState() } : { ok: false }))
+  handle('reviewer:uninstall', async () => (schedule ? { ...(await schedule.uninstall()), state: await reviewerState() } : { ok: false }))
 
-  ipcMain.handle('loop:state', () => getLoopState())
-  ipcMain.handle('loop:run', (_e, id) => runLoopJob(String(id)))
-  ipcMain.handle('loop:install', async (_e, id, minutes) => {
+  handle('loop:state', () => getLoopState())
+  handle('loop:run', (id) => runLoopJob(String(id)))
+  handle('loop:install', async (id, minutes) => {
     if (!loopLib || !JOB_IDS.includes(String(id))) return { ok: false, error: 'the reviewer folder was not found next to the app' }
     const job = loopLib.schedule.JOBS[String(id)]
     fs.mkdirSync(loopDir(), { recursive: true })
     const r = await loopLib.schedule.install({ scriptPath: path.join(REVIEWER_DIR, 'run.js'), minutes: Number(minutes) || job.minutes, job })
     return { ...r, state: await getLoopState() }
   })
-  ipcMain.handle('loop:codeDir', async (_e, dir) => {
+  handle('loop:codeDir', async (dir) => {
     const v = String(dir || '').trim()
     if (v && !fs.existsSync(v)) return { ok: false, error: 'that folder does not exist', state: await getLoopState() }
     config.set('loop.codeDir', v || undefined)
     return { ok: true, state: await getLoopState() }
   })
-  ipcMain.handle('loop:fixMode', async (_e, mode) => {
+  handle('loop:fixMode', async (mode) => {
     if (!['merge', 'pr', 'local'].includes(String(mode))) return { ok: false, error: 'unknown mode', state: await getLoopState() }
     config.set('loop.fixMode', String(mode))
     return { ok: true, state: await getLoopState() }
   })
-  ipcMain.handle('loop:uninstall', async (_e, id) => {
+  handle('loop:uninstall', async (id) => {
     if (!loopLib || !JOB_IDS.includes(String(id))) return { ok: false }
     return { ...(await loopLib.schedule.uninstall(undefined, loopLib.schedule.JOBS[String(id)])), state: await getLoopState() }
   })
@@ -222,13 +202,13 @@ app.whenReady().then(async () => {
   let autoUpdater = null
   if (app.isPackaged) { try { ({ autoUpdater } = require('electron-updater')) } catch (e) { log('electron-updater not available:', e.message) } }
   updates = new UpdateManager({ autoUpdater, currentVersion: app.getVersion(), isPackaged: app.isPackaged, log, beforeInstall: () => { if (dash) dash.stop(); if (triggers) triggers.stop() } })
-  updates.on('update', (s) => { sendTo('settings', 'update', s); sendTabs() })
-  ipcMain.handle('update:state', () => updates.state())
-  ipcMain.handle('update:check', () => updates.check())
-  ipcMain.handle('update:install', () => { updates.install().catch(() => {}); return updates.state() })
-  ipcMain.handle('tabs:state', () => tabsState())
-  ipcMain.handle('tabs:select', (_e, id) => { selectTab(String(id)); return tabsState() })
-  ipcMain.handle('app:info', () => ({ version: app.getVersion(), packaged: app.isPackaged, dataDir: userData, dashboardUrl: dash.url }))
+  updates.on('update', (s) => sendUI('update', s))
+  handle('update:state', () => updates.state())
+  handle('update:check', () => updates.check())
+  handle('update:install', () => { updates.install().catch(() => {}); return updates.state() })
+  // Local control endpoint (127.0.0.1 + token file): lets a Claude session on this laptop check/download/install updates. See lib/control.js.
+  if (config.data.control.enabled) control = await startControlServer({ updates, info: () => ({ version: app.getVersion(), packaged: app.isPackaged }), dataDir: userData, port: config.data.control.port, log })
+  handle('app:info', () => ({ version: app.getVersion(), packaged: app.isPackaged, dataDir: userData, dashboardUrl: dash.url }))
 
   buildMenu()
   openMain()
@@ -239,4 +219,4 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => app.quit())
-app.on('before-quit', () => { if (triggers) triggers.stop(); if (dash) dash.stop() })
+app.on('before-quit', () => { if (triggers) triggers.stop(); if (dash) dash.stop(); if (control) control.close() })

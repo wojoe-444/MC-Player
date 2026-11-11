@@ -1,0 +1,9 @@
+{
+  "name": "bases",
+  "version": 1,
+  "kind": "observer",
+  "summary": "Records which waypoints are bases (bot-shared/bases.json) and, inside each base, every block the bot digs (bot-shared/base-dug/<base>.jsonl) so the dashboard can draw the base as a cast of its dug and built space. Never moves the bot or touches the world.",
+  "requires": ["nav"],
+  "provides": [],
+  "claims": []
+}

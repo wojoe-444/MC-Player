@@ -162,6 +162,69 @@ test('updater: check and download errors are reported in plain words and can be 
   assert.ok(au.calls.includes('install:true,true'))
 })
 
+// ---- local control endpoint ----
+const http = require('http')
+const { startControlServer } = require('../lib/control')
+
+function req(port, route, { method = 'GET', headers = {}, token, host } = {}) {
+  return new Promise((resolve, reject) => {
+    const h = { ...headers }
+    if (token) h.Authorization = 'Bearer ' + token
+    if (host) h.Host = host
+    const r = http.request({ host: '127.0.0.1', port, path: route, method, headers: h }, (res) => {
+      let b = ''; res.on('data', d => b += d); res.on('end', () => resolve({ code: res.statusCode, body: b ? JSON.parse(b) : null }))
+    })
+    r.on('error', reject); r.end()
+  })
+}
+
+test('control endpoint: token, host and origin checks; check/apply drive the update manager; token persists', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ctl-'))
+  const pointer = path.join(dir, 'ptr', 'app-control.json')
+  const au = fakeAutoUpdater({ latest: '0.1.9' })
+  const order = []
+  au.quitAndInstall = (...a) => order.push('install')
+  const u = new UpdateManager({ autoUpdater: au, currentVersion: '0.1.1', isPackaged: true, beforeInstall: () => order.push('stop') })
+  const c = await startControlServer({ updates: u, info: () => ({ version: '0.1.1', packaged: true }), dataDir: dir, port: 0, pointerFile: pointer })
+  try {
+    assert.ok(c.token.length >= 32)
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(pointer, 'utf8')).token, c.token)
+    assert.strictEqual((await req(c.port, '/v1/status')).code, 401)
+    assert.strictEqual((await req(c.port, '/v1/status', { token: 'wrong' })).code, 401)
+    assert.strictEqual((await req(c.port, '/v1/status', { token: c.token, headers: { Origin: 'http://evil.example' } })).code, 403)
+    assert.strictEqual((await req(c.port, '/v1/status', { token: c.token, host: 'evil.example' })).code, 403)
+    assert.strictEqual((await req(c.port, '/v1/nope', { token: c.token })).code, 404)
+    assert.strictEqual((await req(c.port, '/v1/update/apply', { token: c.token })).code, 404) // POST only
+
+    let r = await req(c.port, '/v1/status', { token: c.token })
+    assert.deepStrictEqual([r.code, r.body.app.version, r.body.update.status], [200, '0.1.1', 'idle'])
+    r = await req(c.port, '/v1/update/check', { method: 'POST', token: c.token })
+    assert.deepStrictEqual([r.body.update.status, r.body.update.latest], ['available', '0.1.9'])
+    r = await req(c.port, '/v1/update/apply', { method: 'POST', token: c.token })
+    assert.strictEqual(r.code, 200)
+    await new Promise(r => setTimeout(r, 50))
+    assert.deepStrictEqual(order, ['stop', 'install'])
+  } finally { await c.close() }
+  // same token after a restart, so a tool that read it earlier still works
+  const c2 = await startControlServer({ updates: u, info: () => ({}), dataDir: dir, port: 0, pointerFile: pointer })
+  assert.strictEqual(c2.token, c.token); await c2.close()
+})
+
+test('control endpoint: up to date and unsupported do nothing; port in use is not fatal', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ctl-'))
+  const au = fakeAutoUpdater()
+  const u = new UpdateManager({ autoUpdater: au, currentVersion: '0.1.1', isPackaged: true })
+  const c = await startControlServer({ updates: u, info: () => ({}), dataDir: dir, port: 0, pointerFile: path.join(dir, 'p.json') })
+  const r = await req(c.port, '/v1/update/apply', { method: 'POST', token: c.token })
+  assert.strictEqual(r.body.update.status, 'up-to-date')
+  assert.deepStrictEqual(au.calls, ['check'])
+  const clash = await startControlServer({ updates: u, info: () => ({}), dataDir: dir, port: c.port, pointerFile: path.join(dir, 'p2.json') })
+  assert.strictEqual(clash, null)
+  await c.close()
+  const src = new UpdateManager({ autoUpdater: null, currentVersion: '0.1.1', isPackaged: false })
+  assert.strictEqual((await src.apply()).status, 'unsupported')
+})
+
 test('memory loop tab: jobs, ranked work orders, each bot\'s memory and last check, and the run log, all read from this computer', async () => {
   const { loopState, loadLib, JOB_IDS } = require('../lib/loop')
   const lib = loadLib(path.join(__dirname, '..', '..', 'reviewer'))
@@ -196,4 +259,24 @@ test('memory loop tab: jobs, ranked work orders, each bot\'s memory and last che
   assert.strictEqual(s.runs[0].summary, 'OzoGo444: 2 calls')
   assert.strictEqual(s.bots[0].memory, '# Now\nSmelt iron.\n'); assert.strictEqual(s.bots[0].brief.ask, 'A chest of my own?'); assert.strictEqual(s.bots[0].lastCheck.changes.length, 1)
   assert.deepStrictEqual([s.bots[1].memory, s.bots[1].brief, s.bots[1].lastCheck], [null, null, null])
+})
+
+test('dashboard process: only attaches to a server that serves the redesigned UI', async () => {
+  const http = require('http')
+  const { servesCurrentUi, startDashboard, UI_MARKER } = require('../lib/dashboard-process')
+  const serve = (html) => new Promise((resolve) => { const s = http.createServer((_q, r) => r.end(html)); s.listen(0, '127.0.0.1', () => resolve(s)) })
+  const fresh = await serve(`<head><meta ${UI_MARKER} content="2"></head>`)
+  const old = await serve('<title>old dashboard</title>')
+  const url = (s) => `http://127.0.0.1:${s.address().port}`
+  try {
+    assert.strictEqual(await servesCurrentUi(url(fresh)), true)
+    assert.strictEqual(await servesCurrentUi(url(old)), false)
+    assert.strictEqual(await servesCurrentUi('http://127.0.0.1:1'), false)
+    const d = await startDashboard({ port: fresh.address().port }, { repoRoot: __dirname, log: () => {} })
+    assert.deepStrictEqual([d.attached, d.url], [true, url(fresh)])
+    // an older dashboard on the port: the app must not attach (it would start its own on another port, which needs the real server, so only check it tried)
+    const logs = []
+    await assert.rejects(startDashboard({ port: old.address().port, ozoDir: tmp(), smeoDir: tmp(), codeDir: tmp() }, { repoRoot: path.join(tmp(), 'missing'), log: (m) => logs.push(m) }), /did not start|spare port/)
+    assert.ok(logs.some(m => /older version/.test(m)))
+  } finally { fresh.close(); old.close() }
 })

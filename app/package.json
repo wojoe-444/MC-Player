@@ -28,7 +28,6 @@
       "main.js",
       "preload.js",
       "lib/**",
-      "renderer/**",
       "build/icon.ico",
       "package.json"
     ],
@@ -82,6 +81,8 @@
         "filter": [
           "server.js",
           "progress.js",
+          "basecast.js",
+          "worldcast.js",
           "public/**",
           "web/dist/**"
         ]
