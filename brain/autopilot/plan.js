@@ -18,6 +18,7 @@ module.exports = function plan(G, S, M, api, log) {
   const cnt = (re) => S.count(re)
   M.st = st                                                       // mining.js keeps seen spawners in the plan state
   const cobbleRe = /^(cobblestone|cobbled_deepslate)$/
+  const IRONKIT = require('./ironkit')
   const ids = (re) => bot.registry.blocksArray.filter(b => re.test(b.name)).map(b => b.id)
 
   // ---------- shared sleep status (both bots run this code; the file sits in the code folder they share) ----------
@@ -228,7 +229,7 @@ module.exports = function plan(G, S, M, api, log) {
 
     // ---- tools never run out: both pickaxes wore out at y23 and inventory (2x2) crafting is unreliable on this server, so the bot was stranded.
     // Keep a spare pickaxe and a crafting table in the bag; with no tool and no table, walk back to a remembered table first. ----
-    { id: 'tool-kit', budget: 240000, need: () => (tier('pickaxe') < 1 && (cnt(cobbleRe) >= 3 || S.logs() + S.planks() >= 3)) || (!S.has('crafting_table') && S.logs() + S.planks() >= 2) || (S.count(/^(stone|iron|diamond)_pickaxe$/) < 2 && cnt(cobbleRe) >= 3 && S.logs() + S.planks() + S.count('stick') >= 2), cool: 60000, run: async () => {
+    { id: 'tool-kit', budget: 240000, need: () => (tier('pickaxe') < 1 && (cnt(cobbleRe) >= 3 || S.logs() + S.planks() >= 3)) || (!S.has('crafting_table') && S.logs() + S.planks() >= 2) || (S.count(/^(stone|iron|diamond)_pickaxe$/) < 2 && cnt(cobbleRe) >= 3 && S.logs() + S.planks() + S.count('stick') >= 2) || IRONKIT.wants(S), cool: 60000, run: async () => {
       const tbl = S.tableNear(4.5)
       if (tbl) { const p = tbl.position; st.tables = [[p.x, p.y, p.z]].concat((st.tables || []).filter(q => q[0] !== p.x || q[2] !== p.z)).slice(0, 6) }
       if (!tbl && !S.has('crafting_table')) {
@@ -239,8 +240,10 @@ module.exports = function plan(G, S, M, api, log) {
       if (!S.has('crafting_table')) await S.craft('crafting_table', 1)
       if (cnt(cobbleRe) >= 3) await S.craft('stone_pickaxe', Math.min(2, S.count('stone_pickaxe') + Math.floor(cnt(cobbleRe) / 3)))
       else if (tier('pickaxe') < 1) await S.craft('wooden_pickaxe', 1)
+      // the iron pickaxe and the ladders: the bag held the ingots and sticks for 14 h and no step made them (brain/autopilot/ironkit.js)
+      if (IRONKIT.wants(S)) { if (!tbl && S.has('crafting_table') === false) await S.craft('crafting_table', 1); await IRONKIT.make(S, note) }
       note(`tool-kit: pickaxes ${S.count(/_pickaxe$/)}, table in bag ${S.has('crafting_table')}`)
-      return tier('pickaxe') >= 1 } },
+      return tier('pickaxe') >= 1 && !IRONKIT.wants(S) } },   // the kit still missing something it was asked for is a failed run, so the picker backs off instead of re-arming at once
 
     // ---- wood stock: logs feed charcoal -> torches -> the mine. With no logs the whole chain stopped and the bot wandered (and drowned exploring). ----
     { id: 'wood-stock', budget: 300000, need: () => !S.isNight() && S.logs() * 4 + S.planks() < Math.max(48, (st.wantLogs || 0) * 4), cool: 90000,   // (more when the laddered shaft needs it)
