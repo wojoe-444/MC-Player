@@ -244,7 +244,10 @@ module.exports = function makeGoals(S, M, api, log) {
         if (ir && G.role !== 'assistant' && st.mine && bot.entity.position.y < 56) { let ok = false; try { ok = !!ir.need() } catch {} if (ok) { G.lastStep = 'iron'; await S.wait(5000); return } } }
       // idle by day: extend the lit area around home (dark ground is where the creepers and skeletons come from) before wandering off
       const lh = steps.find(x => x.id === 'light-home')
-      if (lh && G.role !== 'assistant' && st.home && S.count('torch') >= 8 && Date.now() - (G.idleLightAt || 0) > 60000) { G.idleLightAt = Date.now(); G.lastStep = 'light-home'; note('nothing to do: lighting more ground around home'); st.lightAt = 0; S.stepDeadline = Date.now() + 150000; try { await lh.run() } catch (e) { if (S.isAbort(e)) throw e } finally { S.stepDeadline = 0 } return }
+      // (only when the step's own need() holds: 16 torches, near home, rest over. At 8-13 torches its routine places nothing and only computed,
+      // and clearing its rest timer made that pass repeat every minute while idle)
+      let lhReady = false; if (lh && G.role !== 'assistant' && st.home) { try { lhReady = !!lh.need() } catch {} }
+      if (lhReady && Date.now() - (G.idleLightAt || 0) > 60000) { G.idleLightAt = Date.now(); G.lastStep = 'light-home'; note('nothing to do: lighting more ground around home'); S.stepDeadline = Date.now() + 150000; try { await lh.run() } catch (e) { if (S.isAbort(e)) throw e } finally { S.stepDeadline = 0 } return }
       // random exploring kept walking it into the sea (drowned, 06:34) and caves: with a home, idle time is spent there, not wandering
       if (st.home) { G.lastStep = 'home'; const h = v(st.home[0], st.home[1], st.home[2]); if (S.dist(h) > 6) { note('nothing to do: back home'); if (G.enterShelter && st.shelterDoor && G.role !== 'assistant') await G.enterShelter(); else await S.goto(new goals.GoalNear(h.x, h.y, h.z, 3), { dig: false, ms: 60000 }) } await S.wait(4000); return }
       if (G.role === 'assistant') { G.lastStep = 'home'; await S.wait(5000); return }
