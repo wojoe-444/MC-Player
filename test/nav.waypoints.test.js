@@ -130,14 +130,18 @@ test('name normalisation', () => {
 })
 
 test('real data: Walter\'s Xaero folder and waypoints.json (skipped when not on this machine)', (t) => {
+  // This reads the waypoints on the machine it runs on, and the deployer runs the suite on that machine before it puts main on the live bots. The first version
+  // asserted names and counts from one day of Walter's Xaero folder ("lava depot 1", at least 21 overworld points); he edits that folder, the test went red on
+  // 2026-11-11 and with it every deploy. It now checks what must hold of any real folder: it loads, and a name taken from the data is found again.
   let xaero
   try { xaero = require('../xaero') } catch { return t.skip('xaero.js unavailable') }
   const world = 'HOME DEPOT GOD-EMPEROR'
   if (!xaero.listWorlds().some(w => w.name === world)) return t.skip('Xaero world not found')
   const b = new WaypointBook({ dir: path.resolve(__dirname, '..'), xaero, world })
-  assert.ok(b.all(0).length >= 21)
-  assert.ok(b.all(-1).length >= 10)
-  assert.ok(b.find('seaside winter village', { dim: 0 }).match)
-  assert.ok(b.find('lava depot 1', { dim: 0 }).match)
-  assert.ok(b.portalPairs().length >= 8)
+  const points = b.all(0)
+  if (!points.length) return t.skip('the Xaero world has no overworld waypoints right now')
+  assert.ok(Array.isArray(b.all(-1)))
+  const named = points.find(p => p && typeof p.name === 'string' && p.name.trim().length > 2)
+  if (named) assert.ok(b.find(named.name, { dim: 0 }).match, `a waypoint read from the folder (${named.name}) is found by its own name`)
+  assert.ok(Array.isArray(b.portalPairs()))
 })
