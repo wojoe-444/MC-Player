@@ -315,6 +315,13 @@ function diffOf(dir, run = sh) {
   return { files: names, added, removed, lines: added.length + removed.length }
 }
 const isTest = (p) => /^test\/[^/]+\.test\.js$/.test(p)
+// Take a borrowed-modules link off before a checkout around it is deleted: `git worktree remove --force` follows a junction and empties the real folder
+// (2026-11-11, tools/deployer.js deleted 20 packages from the live bots' node_modules that way). -> true when no link is left, so deleting is safe.
+function dropLink(p) {
+  try { if (!fs.lstatSync(p).isSymbolicLink()) return true } catch { return true }
+  try { fs.unlinkSync(p) } catch { try { fs.rmdirSync(p) } catch { /* checked below */ } }
+  try { fs.lstatSync(p); return false } catch { return true }
+}
 // run the changed tests on main's code: a worktree of origin/main with only those test files copied over it -> the files that fail there
 function failingOnMain(dir, tests, run = sh) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fixer-base-')), wt = path.join(tmp, 'wt'), failed = [], missing = []
@@ -328,7 +335,11 @@ function failingOnMain(dir, tests, run = sh) {
       if (r2.code !== 0) { failed.push(t); if (/Cannot find module|MODULE_NOT_FOUND/.test(r2.out)) missing.push(t) }
     }
     return { failed, missing }
-  } finally { run('git', ['worktree', 'remove', '--force', wt], { cwd: dir }); try { fs.rmSync(tmp, { recursive: true, force: true }) } catch { /* next run's problem */ } run('git', ['worktree', 'prune'], { cwd: dir }) }
+  } finally {
+    // the borrowed node_modules is a link into the live clone: `git worktree remove` would empty the real folder through it (same helper as tools/deployer.js; the app bundles reviewer/ without tools/)
+    if (dropLink(path.join(wt, 'node_modules'))) { run('git', ['worktree', 'remove', '--force', wt], { cwd: dir }); try { fs.rmSync(tmp, { recursive: true, force: true }) } catch { /* next run's problem */ } }
+    run('git', ['worktree', 'prune'], { cwd: dir })
+  }
 }
 // -> { ok, fail?, detail?, hold: [reasons the pull request must wait for a person], files, lines, tests, failedOnMain }
 function check({ dir, outcome, run = sh, words }) {
@@ -554,4 +565,4 @@ function fixState(cfg) {
     orders: Object.fromEntries(list.map(o => { const p = progress(o); return [o.key, { attempts: p.attempts.length, waiting: p.waiting, ready: p.ready ? { branch: p.ready.branch, why: p.ready.why } : null }] })) }
 }
 
-module.exports = { runFix, sh, shAsync, pick, progress, prepare, writeEvidence, gateFor, toolsFor, check, diffOf, leaks, privateWords, publish, prBody, taskPrompt, fixState, cleanEnv, mayChange, repoSlug, ghReady, workDir, fixDir, SYSTEM, SCHEMA, LIMITS, MAX_ATTEMPTS, ALLOWED, PROTECTED, REPO }
+module.exports = { dropLink, runFix, sh, shAsync, pick, progress, prepare, writeEvidence, gateFor, toolsFor, check, diffOf, leaks, privateWords, publish, prBody, taskPrompt, fixState, cleanEnv, mayChange, repoSlug, ghReady, workDir, fixDir, SYSTEM, SCHEMA, LIMITS, MAX_ATTEMPTS, ALLOWED, PROTECTED, REPO }

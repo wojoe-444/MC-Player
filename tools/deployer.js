@@ -73,6 +73,15 @@ function notify(code, runtimes, action, why, { restartCmd, dryRun } = {}) {
   return done
 }
 
+// A scratch checkout borrows the clone's node_modules through a link (a junction on Windows). `git worktree remove --force` and a recursive delete can follow that
+// link and empty the real folder: on 2026-11-11 the first two deploy runs deleted 20 packages out of the live bots' node_modules. Take the link off first, and only
+// delete the tree when no link is left. -> true when it is safe to delete what is around it.
+function dropLink(p) {
+  try { if (!fs.lstatSync(p).isSymbolicLink()) return true } catch { return true }
+  try { fs.unlinkSync(p) } catch { try { fs.rmdirSync(p) } catch { /* checked below */ } }
+  try { fs.lstatSync(p); return false } catch { return true }
+}
+
 function runTests(code, commit, testCmd) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'deploy-'))
   try {
@@ -81,7 +90,9 @@ function runTests(code, commit, testCmd) {
     try { if (fs.existsSync(path.join(code, 'node_modules'))) fs.symlinkSync(path.join(code, 'node_modules'), path.join(dir, 'wt', 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir') } catch { /* tests will say */ }
     const r = spawnSync(testCmd, { shell: true, cwd: path.join(dir, 'wt'), timeout: 30 * 60000, encoding: 'utf8' })
     return { ok: r.status === 0, status: r.status, tail: String(r.stdout || '').split('\n').filter(Boolean).slice(-6).join('\n') + String(r.stderr || '').slice(-300) }
-  } finally { try { git(code, 'worktree', 'remove', '--force', dir + '/wt') } catch { /* leave it */ } try { fs.rmSync(dir, { recursive: true, force: true }) } catch { /* ignore */ } }
+  } finally {
+    if (dropLink(path.join(dir, 'wt', 'node_modules'))) { try { git(code, 'worktree', 'remove', '--force', dir + '/wt') } catch { /* leave it */ } try { fs.rmSync(dir, { recursive: true, force: true }) } catch { /* ignore */ } }
+  }
 }
 
 function deploy(o) {
@@ -168,4 +179,4 @@ if (require.main === module) {
   try { const r = o.cmd === 'deploy' ? deploy(o) : o.cmd === 'judge' ? judge(o) : status(o); if (o.cmd !== 'deploy') console.log(JSON.stringify(r, null, 1)); process.exit(o.cmd === 'deploy' && ['red', 'drift', 'diverged'].includes(r.result) ? 1 : 0) } catch (e) { console.error('deployer: ' + e.message); process.exit(1) }
 }
 
-module.exports = { classify, weigh, verdict, deploy, judge, status, RELOADABLE }
+module.exports = { dropLink, classify, weigh, verdict, deploy, judge, status, RELOADABLE }
