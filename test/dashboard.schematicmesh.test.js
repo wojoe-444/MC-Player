@@ -71,3 +71,20 @@ test('mesher: the real mob farm. Scenery can be turned off; water is translucent
   const n = d.size[0] * d.size[1] * d.size[2]; for (const m of [on.opaque, on.trans, off.opaque]) assert.ok(m.quadCell.every(c => c >= 0 && c < n))
   assert.ok(on.opaque.positions.every(Number.isFinite) && on.opaque.uvs.every(v => v >= 0 && v <= 1))
 })
+
+test('catalog: search words, mode and category filters, groups by category label', async () => {
+  const C = await import(lib('catalog.ts'))
+  const mk = (id, name, category, mode, tags = [], purpose = '') => ({ id, name, kind: category, category, tags, mode, purpose, size: [3, 3, 3], world: null })
+  const list = [mk('a', 'Smeo farm', 'mobfarm', 'functional'), mk('b', 'Zombie grinder', 'mobfarm', 'functional', ['night']), mk('c', 'Starter hut', 'house', 'aesthetic', ['oak'], 'a cosy cabin'), mk('d', 'Wheat plot', 'farm', 'functional'), mk('e', 'Iron golem tower', 'weird_stuff', 'functional')]
+  const q = (o) => C.filterEntries(list, { q: '', mode: 'all', categories: new Set(), ...o }).map(e => e.id)
+  assert.deepStrictEqual(q({}), ['a', 'b', 'c', 'd', 'e'])
+  assert.deepStrictEqual(q({ q: 'FARM' }), ['a', 'b', 'd'], 'case-insensitive, name or category label (mob farms and farms)')
+  assert.deepStrictEqual(q({ q: 'mob farm' }), ['a', 'b'], 'every word must match (the category label "Mob farms" counts)')
+  assert.deepStrictEqual(q({ q: 'farm night' }), ['b'], 'all words')
+  assert.deepStrictEqual(q({ q: 'oak cabin' }), ['c'], 'tags and purpose are searched')
+  assert.deepStrictEqual(q({ mode: 'aesthetic' }), ['c']); assert.deepStrictEqual(q({ mode: 'functional', categories: new Set(['mobfarm']) }), ['a', 'b'])
+  assert.deepStrictEqual(q({ q: 'exact' }), ['c'], '"exact" finds the aesthetic builds')
+  const g = C.groupEntries(list)
+  assert.deepStrictEqual(g.map(x => x.label), ['Farms', 'Houses', 'Mob farms', 'Weird stuff'], 'groups sorted by label; an unnamed category is capitalised')
+  assert.deepStrictEqual(g[2].items.map(e => e.id), ['a', 'b'], 'items by name'); assert.deepStrictEqual(C.categoryCounts(list).find(c => c.category === 'mobfarm').n, 2)
+})

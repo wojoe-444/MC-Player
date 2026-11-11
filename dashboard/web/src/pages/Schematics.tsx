@@ -4,10 +4,10 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { PageHeader } from "@/components/common"
+import { SchematicPicker, useCatalogState } from "@/components/SchematicPicker"
 import { SchematicView, type Hover, type SchematicViewHandle } from "@/components/SchematicView"
 import { useJson } from "@/pages/Bases"
 import { iconOf } from "@/lib/schematic/appearance"
@@ -187,21 +187,13 @@ function Body({ data, picker }: { data: SchematicDetail; picker: React.ReactNode
 }
 
 export function Schematics() {
-  const { data, state } = useJson<{ schematics: SchematicSummary[] }>("/api/schematics", 120_000, (d) => d.schematics.map((s) => s.id).join())
+  const { data, state } = useJson<{ schematics: SchematicSummary[] }>("/api/schematics", 120_000, (d) => d.schematics.map((s) => s.id + s.name + s.category + s.mode).join())
   const [pick, setPick] = useState<string | null>(null)
   const list = data?.schematics ?? []
   const current = list.find((s) => s.id === pick) ?? list[0] ?? null
-  // a few builds: tabs, as in the reference; many: a dropdown
-  const picker = list.length > 1 ? (
-    list.length <= 4
-      ? <ToggleGroup type="single" value={current?.id} onValueChange={(v) => v && setPick(v)} variant="outline" className="grid w-full items-stretch" spacing={0} style={{ gridTemplateColumns: `repeat(${list.length}, minmax(0, 1fr))` }}>
-        {list.map((s) => <ToggleGroupItem key={s.id} value={s.id} className="h-auto min-w-0 flex-1 px-2 py-1.5 text-xs leading-tight whitespace-normal">{s.name.split(/[(:]/)[0].trim()}</ToggleGroupItem>)}
-      </ToggleGroup>
-      : <Select value={current?.id} onValueChange={setPick}>
-        <SelectTrigger className="w-full" aria-label="Choose a schematic"><SelectValue placeholder="Choose a schematic" /></SelectTrigger>
-        <SelectContent>{list.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
-      </Select>
-  ) : null
+  // one build needs no catalog; with more, a searchable list grouped by category
+  const catalog = useCatalogState()
+  const picker = list.length > 1 ? <SchematicPicker list={list} currentId={current?.id ?? null} onPick={setPick} state={catalog} /> : null
   return (
     <>
       <PageHeader title="Schematics" description="What the bots consider a build to be, block by block. Every cell shows a specific block; its role says what else may stand there (a wall accepts any solid, light-blocking, non-flammable block)." />
