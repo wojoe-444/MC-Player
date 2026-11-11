@@ -8,9 +8,9 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { AppSidebar } from "@/components/AppSidebar"
 import { DashboardProvider } from "@/DashboardContext"
-import { BotBehavior, BotInventory, BotLayout, BotLive, BotReplay, BotStructure, Logs, Memory, Overview } from "@/pages"
+import { BotBehavior, BotInventory, BotLayout, BotLive, BotReplay, BotStructure, Logs, Memory, Overview, Progress } from "@/pages"
 
-const NAMES: Record<string, string> = { ozo: "OzoGo444", smeo: "Smeo444", logs: "Logs", memory: "Memory and data" }
+const NAMES: Record<string, string> = { ozo: "OzoGo444", smeo: "Smeo444", logs: "Logs", memory: "Memory and data", progress: "Progress" }
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 function Crumbs() {
@@ -57,6 +57,7 @@ export default function App() {
             <main className="mx-auto w-full min-w-0 max-w-[96rem] p-6 lg:p-8">
               <Routes>
                 <Route path="/" element={<Overview />} />
+                <Route path="/progress" element={<Progress />} />
                 <Route path="/logs" element={<Logs />} />
                 <Route path="/memory" element={<Memory />} />
                 <Route path="/bot/:id" element={<BotLayout />}>

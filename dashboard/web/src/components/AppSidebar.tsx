@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom"
 import {
-  BoxesIcon, ClapperboardIcon, BrainCircuitIcon, DatabaseIcon, EyeIcon, LayoutDashboardIcon, NetworkIcon, PackageIcon, ScrollTextIcon,
+  BoxesIcon, ClapperboardIcon, BrainCircuitIcon, DatabaseIcon, EyeIcon, LayoutDashboardIcon, NetworkIcon, PackageIcon, TrendingUpIcon, ScrollTextIcon,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -46,6 +46,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <Item to="/" label="Overview" icon={LayoutDashboardIcon} />
+              <Item to="/progress" label="Progress" icon={TrendingUpIcon} />
               <Item to="/logs" label="Logs" icon={ScrollTextIcon} />
               <Item to="/memory" label="Memory and data" icon={DatabaseIcon} />
             </SidebarMenu>

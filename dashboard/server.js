@@ -14,6 +14,8 @@ const BOTS = {
   ozo:  { id: 'ozo',  name: 'OzoGo444', dir: DIR_OZO, viewer: 3007 },
   smeo: { id: 'smeo', name: 'Smeo444',  dir: DIR_SMEO, viewer: 3008 },
 };
+// The shared registry (shafts, rooms) both bots write: Downloads/bot-shared/registry.json, a sibling of the bot folders; BOT_REGISTRY overrides.
+const REGISTRY = process.env.BOT_REGISTRY || [path.join(DIR_OZO, '..', 'bot-shared', 'registry.json'), path.join(ROOT, '..', 'bot-shared', 'registry.json')].find(f => fs.existsSync(f)) || path.join(DIR_OZO, '..', 'bot-shared', 'registry.json');
 const VIEWS = (b) => path.join(b.dir, 'brain', 'state', 'views');
 const RING = 2000;
 
@@ -380,6 +382,16 @@ function acquired(windowKey) {
   return { window: key, since, now, trackingSince, bots };
 }
 
+// Progress page: roadmap phases, builds with their inspection verdicts, per-day numbers (dashboard/progress.js). Cached for 10 s.
+const { buildProgress } = require('./progress');
+let progressCache = null;
+function progress() {
+  if (progressCache && Date.now() - progressCache.at < 10000) return progressCache.v;
+  const v = buildProgress({ bots: Object.values(BOTS), codeDir: CODE, registryFile: REGISTRY });
+  progressCache = { at: Date.now(), v };
+  return v;
+}
+
 // Item icons: the prismarine-viewer texture pack for 1.21.6 already on disk (read-only), items first, then block faces.
 const TEX = path.join(CODE, "node_modules", "prismarine-viewer", "public", "textures", "1.21.6");
 const texCache = new Map();
@@ -432,6 +444,7 @@ http.createServer((req, res) => {
   // spectator reviewer (reviewer/): latest findings per bot, and the in-bot telemetry summary they are based on
   if (p === '/api/findings') return send(res, 200, JSON.stringify(Object.fromEntries(Object.values(BOTS).map(b => [b.id, readJson(path.join(stateDirOf(b), 'review', 'findings.json'))]))), 'application/json');
   if ((sm = p.match(/^\/api\/telemetry\/(ozo|smeo)$/))) return send(res, 200, JSON.stringify(readJson(path.join(stateDirOf(BOTS[sm[1]]), 'telemetry', 'summary.json'))), 'application/json');
+  if (p === '/api/progress') return send(res, 200, JSON.stringify(progress()), 'application/json');
   if (p === '/api/acquired') return send(res, 200, JSON.stringify(acquired(u.searchParams.get('window'))), 'application/json');
   if (p === '/api/snapshot') return send(res, 200, JSON.stringify(snapshot()), 'application/json');
   let m;

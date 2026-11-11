@@ -33,3 +33,54 @@ export type BotSnap = {
 }
 
 export type LogEntry = { id: number; bot: BotId; t: string | null; kind: string; text: string }
+
+// /api/progress (dashboard/progress.js)
+export type RoadmapItem = { id: string; phase: string; title: string; status: "done" | "open" | "unmeasured"; needs: string | null }
+export type RoadmapPhase = { id: string; name: string; blurb: string; total: number; measured: number; done: number; items: RoadmapItem[] }
+export type BuildRow = {
+  id: string
+  kind: string
+  label: string
+  pos: number[] | null
+  by?: string | null
+  at?: string | null
+  depth?: number | null
+  chests?: number
+  hasReset?: boolean
+  detail?: string
+  status: "passes" | "faults" | "unchecked" | "built" | "working" | "digging"
+  inspection: { at: string | null; faults: number; warns: number; headline: string[] } | null
+}
+export type GameDay = { day: number; iron: number; ingots: number; tunnels: number; deaths: number; armor: string | null; commits: string[]; done: boolean }
+export type RealDay = {
+  date: string
+  journal: boolean
+  deaths: number | null
+  stalledMin: number | null
+  alarms: number | null
+  flagsHigh: number | null
+  commits: number | null
+  activeMin: number | null
+  topSteps: { id: string; minutes: number; runs: number; fail: number }[]
+  iron: number | null
+  ingots: number | null
+  diamonds: number | null
+  items: number | null
+}
+export type BotProgress = {
+  id: BotId
+  name: string
+  roadmap: { source: "bot" | "live" | "stale"; at: string | null; phases: RoadmapPhase[] } | null
+  inspectionAt: string | null
+  ownBuilds: BuildRow[]
+  gameDays: GameDay[] | null
+  days: RealDay[]
+  hasJournal: boolean
+}
+export type Progress = {
+  generatedAt: string
+  phases: { id: string; name: string; blurb: string }[]
+  registry: { found: boolean; shared: boolean }
+  builds: BuildRow[]
+  bots: Record<BotId, BotProgress>
+}

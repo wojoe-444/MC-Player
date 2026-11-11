@@ -59,6 +59,7 @@
         "to": "dashboard",
         "filter": [
           "server.js",
+          "progress.js",
           "public/**",
           "web/dist/**"
         ]
