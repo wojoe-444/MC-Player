@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom"
 import {
-  BotIcon, BrainCircuitIcon, ClapperboardIcon, DatabaseIcon, EyeIcon, LayoutDashboardIcon, NetworkIcon, PackageIcon,
+  BotIcon, BrainCircuitIcon, ClapperboardIcon, DatabaseIcon, EyeIcon, LayoutDashboardIcon, MountainIcon, NetworkIcon, PackageIcon,
   ScrollTextIcon, SettingsIcon, RepeatIcon, SparklesIcon, TrendingUpIcon,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -17,6 +17,7 @@ export const GROUPS: { label: string; items: Omit<Entry, "dot" | "badge">[] }[] 
   { label: "Monitor", items: [
     { to: "/", label: "Dashboard", icon: LayoutDashboardIcon },
     { to: "/progress", label: "Progress", icon: TrendingUpIcon },
+    { to: "/bases", label: "Bases", icon: MountainIcon },
     { to: "/logs", label: "Logs", icon: ScrollTextIcon },
   ] },
   { label: "Selected bot", items: [

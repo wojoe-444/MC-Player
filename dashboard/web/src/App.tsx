@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { lazy, Suspense, useEffect } from "react"
 import { Route, Routes, useLocation, useNavigate } from "react-router-dom"
 import { MoonIcon, SunIcon } from "lucide-react"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
@@ -19,6 +19,9 @@ import { useFresh } from "@/components/BotParts"
 import { Badge } from "@/components/ui/badge"
 import { BOT_IDS } from "@/types"
 import { ThemeProvider, ThemeSelect, useTheme } from "@/components/ThemePicker"
+
+// three.js is large: the Bases page loads on first visit
+const Bases = lazy(() => import("@/pages/Bases").then((m) => ({ default: m.Bases })))
 
 const PER_BOT = ["/progress", "/live", "/inventory", "/replay", "/behavior", "/structure", "/memory"]
 
@@ -75,6 +78,7 @@ function Shell() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/progress" element={<Progress />} />
+            <Route path="/bases" element={<Suspense fallback={null}><Bases /></Suspense>} />
             <Route path="/logs" element={<Logs />} />
             <Route path="/live" element={<Live />} />
             <Route path="/inventory" element={<Inventory />} />

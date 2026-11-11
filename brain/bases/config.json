@@ -1,0 +1,7 @@
+{
+  "bases": ["Chicago"],
+  "radius": 110,
+  "syncMs": 300000,
+  "flushMs": 5000,
+  "ignore": "(_log|_wood|_stem|_hyphae|_leaves|_sapling|_roots|_planks)$|^(grass|short_grass|tall_grass|fern|large_fern|dead_bush|vine|snow|snow_block|sugar_cane|cactus|bamboo|kelp|kelp_plant|seagrass|tall_seagrass|wheat|carrots|potatoes|beetroots|melon|pumpkin|torch|wall_torch|ladder|chest|crafting_table|furnace|hopper|barrel|oak_fence|oak_fence_gate|lily_pad|moss_carpet|glow_lichen|sweet_berry_bush|brown_mushroom|red_mushroom|dandelion|poppy|azure_bluet|oxeye_daisy|cornflower|lily_of_the_valley|leaf_litter|water|lava)$|(_flower|_tulip|_orchid|_bush|_carpet)$"
+}

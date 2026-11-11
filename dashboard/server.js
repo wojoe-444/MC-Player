@@ -393,6 +393,18 @@ function progress() {
 }
 
 // Item icons: the prismarine-viewer texture pack for 1.21.6 already on disk (read-only), items first, then block faces.
+// Bases page: the ant-farm cast of a base (dashboard/basecast.js). The base list and the dug-block log live next to the registry in bot-shared/.
+const basecast = require('./basecast');
+const castCache = new Map();
+function castOpts() { return { sharedDir: path.dirname(REGISTRY), registryFile: REGISTRY, botDirs: Object.values(BOTS), codeDir: CODE }; }
+function castCached(id, fn) {
+  const c = castCache.get(id);
+  if (c && Date.now() - c.at < 15000) return c.v;
+  const v = fn();
+  castCache.set(id, { at: Date.now(), v });
+  return v;
+}
+
 const TEX = path.join(CODE, "node_modules", "prismarine-viewer", "public", "textures", "1.21.6");
 const texCache = new Map();
 function texture(name) {
@@ -444,6 +456,11 @@ http.createServer((req, res) => {
   // spectator reviewer (reviewer/): latest findings per bot, and the in-bot telemetry summary they are based on
   if (p === '/api/findings') return send(res, 200, JSON.stringify(Object.fromEntries(Object.values(BOTS).map(b => [b.id, readJson(path.join(stateDirOf(b), 'review', 'findings.json'))]))), 'application/json');
   if ((sm = p.match(/^\/api\/telemetry\/(ozo|smeo)$/))) return send(res, 200, JSON.stringify(readJson(path.join(stateDirOf(BOTS[sm[1]]), 'telemetry', 'summary.json'))), 'application/json');
+  if (p === '/api/bases') return send(res, 200, JSON.stringify(castCached('*', () => basecast.basesIndex(castOpts()))), 'application/json');
+  if ((sm = p.match(/^\/api\/bases\/([\w.-]+)$/))) {
+    const cast = castCached('base:' + sm[1], () => basecast.baseCast(castOpts(), sm[1]));
+    return cast ? send(res, 200, JSON.stringify(cast), 'application/json') : send(res, 404, 'no such base');
+  }
   if (p === '/api/progress') return send(res, 200, JSON.stringify(progress()), 'application/json');
   if (p === '/api/acquired') return send(res, 200, JSON.stringify(acquired(u.searchParams.get('window'))), 'application/json');
   if (p === '/api/snapshot') return send(res, 200, JSON.stringify(snapshot()), 'application/json');
