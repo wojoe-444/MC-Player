@@ -178,6 +178,7 @@ module.exports = function makeGoals(S, M, api, log) {
   const SURFACE = new Set(['tool-kit', 'iron-smelt', 'furnace', 'cook', 'harvest', 'berries', 'tend', 'seeds', 'farm', 'grove', 'light-home', 'tidy', 'wood-stock', 'scout', 'hunt-memory', 'food', 'fish', 'storage', 'stash', 'restock', 'night-home', 'rebed', 'take-cover', 'wood'])
   // the assistant's routine: keep itself alive and equipped, keep the base fed, lit, stocked and tidy; no mining trips, no exploring, no long goals
   const ASSISTANT_STEPS = new Set(['eat', 'take-cover', 'rebed', 'recover', 'cook', 'night-home', 'restock', 'reset-restock', 'tool-kit', 'site-work', 'mob-farm', 'harvest', 'berries', 'tend', 'seeds', 'wooden-tools', 'stone-tools', 'furnace', 'torches', 'wood-stock', 'storage', 'stash', 'grove', 'light-home', 'tidy', 'wear', 'shield'])
+  const BRIEF = require('../memory/brief')
   G.pick = () => {
     const t = Date.now()
     const slowNeed = []
@@ -191,22 +192,37 @@ module.exports = function makeGoals(S, M, api, log) {
     // chat requests); OzoGo444 is the hillclimber with the full step list. Missing file = hillclimber.
     if (Date.now() - (G.roleAt || 0) > 10000) { G.roleAt = Date.now(); try { const pr = api.profile ? api.profile.get() : JSON.parse(require('fs').readFileSync(api.statePath('role.json'), 'utf8')); G.role = pr.role || 'hillclimber'; G.roleSteps = Array.isArray(pr.steps) ? new Set(pr.steps) : null } catch { G.role = 'hillclimber'; G.roleSteps = null } }
     const assistant = G.role === 'assistant'
-    for (const s of steps) {
-      if ((night || dawn) && G.role !== 'assistant' && (NIGHT_SKIP.has(s.id) || DAWN_SKIP.has(s.id))) continue
-      if (night && NIGHT_SKIP.has(s.id)) continue
-      if (assistant && !(G.roleSteps || ASSISTANT_STEPS).has(s.id)) continue
+    // the dawn brief (brain/memory): null without a fresh one, and then nothing below differs from the plain list
+    const brief = BRIEF.active(G.brief, { now: t, day: bot.time && bot.time.day })
+    const eligible = (s) => {
+      if ((night || dawn) && G.role !== 'assistant' && (NIGHT_SKIP.has(s.id) || DAWN_SKIP.has(s.id))) return false
+      if (night && NIGHT_SKIP.has(s.id)) return false
+      if (assistant && !(G.roleSteps || ASSISTANT_STEPS).has(s.id)) return false
+      if (brief && brief.held.has(s.id) && !BRIEF.UNHOLDABLE.has(s.id)) return false       // on hold in today's brief (never a survival step, never free time)
       let need = false
       const nt = Date.now()
       try { need = !!s.need() } catch (e) { log('GOAL_NEED_ERR', `${s.id}: ${e.message}`) }
       if (Date.now() - nt > 500) log('SLOW', `need() of ${s.id} took ${Date.now() - nt} ms`)
-      if (!need) continue
-      if ((G.cool[s.id] || 0) > t) continue
+      if (!need) return false
+      if ((G.cool[s.id] || 0) > t) return false
       // committed to a step that the picker keeps leaving for this one (A,B,A,B): let it finish before this one comes back
-      if (G.commit.skips(s.id, (id) => { const b = steps.find(x => x.id === id); return b && (G.cool[id] || 0) <= t && !((night || dawn) && G.role !== 'assistant' && (NIGHT_SKIP.has(id) || DAWN_SKIP.has(id))) && b.need() })) continue
-      return s
+      if (G.commit.skips(s.id, (id) => { const b = steps.find(x => x.id === id); return b && (G.cool[id] || 0) <= t && !((night || dawn) && G.role !== 'assistant' && (NIGHT_SKIP.has(id) || DAWN_SKIP.has(id))) && b.need() })) return false
+      return true
     }
-    return null
+    let first = null
+    for (const s of steps) if (eligible(s)) { first = s; break }
+    if (!brief || !first || BRIEF.SURVIVAL.has(first.id)) return first
+    // The brief may bring one step forward: the bot's free time (once a day, its own slot) or a focus step. Only a step that wants to run anyway
+    // (its own need() is true), and never while a survival step is waiting anywhere in the list.
+    const forward = [steps.find(x => x.id === 'whimsy'), ...brief.focus.map(id => steps.find(x => x.id === id))].filter(Boolean)
+    const jump = forward.find(s => s === first || eligible(s))
+    if (!jump || jump === first) return first
+    if (steps.some(s => BRIEF.SURVIVAL.has(s.id) && eligible(s))) return first
+    if (G.briefPick !== jump.id) { G.briefPick = jump.id; note(`brief: ${jump.id} first (${jump.id === 'whimsy' ? 'free time' : 'focus'}), ahead of ${first.id}`) }
+    return jump
   }
+  // the step ids this bot's role may run: what a brief is allowed to name
+  G.stepIds = () => steps.filter(s => G.role !== 'assistant' || (G.roleSteps || ASSISTANT_STEPS).has(s.id)).map(s => s.id)
 
   G.step = async () => {
     const s = G.pick()

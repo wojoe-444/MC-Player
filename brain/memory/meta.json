@@ -1,0 +1,9 @@
+{
+  "name": "memory",
+  "version": 1,
+  "kind": "planner",
+  "summary": "The bot's memory folder (global.md and notes, with hard size caps) and its dawn brief: asks a laptop job for the day's plan, checks the answer in code, and hands focus, holds and a free-time choice to the routine picker. No brief means the step list plays as before.",
+  "requires": [],
+  "provides": [],
+  "claims": []
+}

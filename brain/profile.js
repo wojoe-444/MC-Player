@@ -7,6 +7,7 @@
 //   role             'hillclimber' (broad autonomy, the full step list) | 'assistant' (fixed routine: base upkeep and chat requests)
 //   stance           'task' (chat tasks + routines, the autopilot is gated off) | 'autonomous' (the autopilot plays its own goals)
 //   planner.enabled  false = no model planner layer (what the think-off file did)
+//   planner.brief    true/false = the dawn brief on or off for this bot (brain/memory); unset = on for a hillclimber, off for an assistant
 //   steps            the assistant's allowed routine step ids (null = built-in list)
 //   disabledModules  brain modules not to load (what disabled-modules.json did)
 //   persona          optional override of the planner's one-line self description
@@ -65,7 +66,7 @@ function createProfile({ stateDir, env = process.env, botName = null, now = Date
     const name = pf.name || botName || null; src.name = pf.name ? 'profile.json' : (botName ? 'bot.username' : 'default')
     return {
       name, role, stance, steps, disabledModules,
-      planner: { enabled: plannerEnabled },
+      planner: { enabled: plannerEnabled, brief: pf.planner && typeof pf.planner.brief === 'boolean' ? pf.planner.brief : null },      // brief: the dawn brief (brain/memory); null = on for a hillclimber, off for an assistant
       persona: pf.persona || null,
       router: { mode: pf.router && pf.router.mode || null },
       director: { mode: pf.director && pf.director.mode || null },

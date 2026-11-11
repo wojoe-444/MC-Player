@@ -32,6 +32,8 @@ Every event has `at` (ISO time, UTC) and `k` (kind). `day` is the in-game day wh
 | `commit` | `commit`, `subject`, `same` (a restart on the same code) | `runlog/commits.jsonl` | |
 | `registry` | `added`, `removed` | the shared `registry.json` | always |
 | `chat` | `from`, `text` | chat from another player | the speaker is a person, not a bot |
+| `brief` | `text` (the intent), `focus`, `holds`, `freeTime`, `ask`, `dropped` | the dawn brief being applied (`brain/memory`) | always |
+| `whimsy` | `choice`, `did`, `note`, `pos` | the bot's free-time step | |
 | `note` | `tag`, `text` | any other `lessons.md` entry (`[think]`, `[inspect]`, ...) | |
 
 Another module can add an event with `bot._journal.add(kind, fields, { sal })`.

@@ -22,8 +22,8 @@ The plan has five parts, each useful on its own:
 
 1. **A journal**: one searchable event log per bot per day, built from logs the bot already writes. No model.
 2. **A small memory folder per bot with a hard size cap, and a model call at dawn that reads it and sets the day's plan.** This is the missing reader.
-3. **A dream job every six hours** that checks the memory against the journal, corrects and prunes it, and writes a work order for anything only code can fix.
-4. **A fixer on a schedule in the Claude app** that takes the top work order to a merged PR, with the existing deployer on a schedule to ship it and judge it.
+3. **A dream job every two hours** that checks the memory against the journal, corrects and prunes it, and writes a work order for anything only code can fix.
+4. **A fixer on a schedule on the laptop** that takes the top work order to a merged PR, with the existing deployer on a schedule to ship it and judge it.
 5. **One digest a day** for Walter, and the same dreaming applied to the project's own memory.
 
 ## What the article found, and what it means here
@@ -192,14 +192,10 @@ flowchart LR
     dream --> orders[("Work orders")]
     deployer["Deployer: every 30 min"] --> play
     deployer --> orders
+    orders --> fixer["Fixer: every 3 h"]
+    fixer -- "PR to main, merged" --> deployer
+    orders --> digest["Digest: daily"]
   end
-  subgraph app [Claude app]
-    fixer["Fixer: every 3 h"]
-    digest["Digest and memory upkeep: daily"]
-  end
-  orders -- sync --> fixer
-  orders -- sync --> digest
-  fixer -- "PR to main" --> deployer
   digest --> walter(["Walter"])
 ```
 
@@ -207,16 +203,15 @@ flowchart LR
 
 | # | Job | Runs | When | Model | State |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Journal | inside the bot | always | none | new, small |
+| 1 | Journal | inside the bot | always | none | built |
 | 2 | Review | laptop, Task Scheduler | every 10 min | Haiku 5.5 | exists |
-| 3 | Dawn brief | laptop, started by the bot | hourly at an in-game dawn, and on respawn | Haiku 5.5 | new |
+| 3 | Dawn brief | laptop, on the reviewer's Task Scheduler entry, when a bot has asked | a bot asks at an in-game dawn (at most hourly) and after a respawn | Haiku 5.5 | built |
 | 4 | Dream | laptop, Task Scheduler | every 2 h | Haiku 5.5 | new |
-| 5 | Sync | laptop, Task Scheduler | hourly | none | new, small |
-| 6 | Fixer | Claude app scheduled task, new session each time | every 3 h | Haiku 5.5 | new |
-| 7 | Deployer | laptop, Task Scheduler | every 30 min | none | exists, not scheduled |
-| 8 | Digest and memory upkeep | Claude app scheduled task | daily | Haiku 5.5 | digest exists, not scheduled |
+| 5 | Fixer | laptop, Task Scheduler, a fresh session each time | every 3 h | Haiku 5.5 | new |
+| 6 | Deployer | laptop, Task Scheduler | every 30 min | none | exists, not scheduled |
+| 7 | Digest and memory upkeep | laptop, Task Scheduler | daily | Haiku 5.5 | digest exists, not scheduled |
 
-The laptop jobs use the reviewer's pattern: one Task Scheduler entry each, installed and removed from the Bot Dashboard app, running the Claude Agent SDK on Walter's Claude login with no API key. Model, effort and cadence for all of them live in one config file.
+**Everything runs on the laptop** (Walter, 2026-11-11). Every job uses the reviewer's pattern: a Task Scheduler entry installed and removed with a button in the Bot Dashboard app, a tab in the app that shows its runs, and the Claude Agent SDK on Walter's Claude login with no API key. Model, effort and cadence for all of them live in one config file. Bot data never leaves the laptop: journals and memory stay in each bot's folder, and the loop's own files (work orders, run logs, the fixer's working copy of the code) live under AppData beside the app's settings. The only thing that goes to GitHub is a fixer PR to MC-Player. There is no private repo and no sync job.
 
 **One model for every job: Haiku 5.5 at XHigh effort** (Walter, 2026-11-10: cheap enough to schedule at will, and it must not drain usage). The reviewer already runs this way. What the choice asks of the design:
 - **Narrow jobs.** The dream runs its five steps as five short calls, each with one question and only the files it needs, in place of one long session.
@@ -234,12 +229,15 @@ The laptop jobs use the reviewer's pattern: one Task Scheduler entry each, insta
 
 **2. Review.** Unchanged, except its findings gain the two consumers below and a finding closes with a reason: went quiet, or fixed by a named PR.
 
-**3. Dawn brief.** This is the session start, and the bot speaking for itself.
-- Reads (about 8 KB): the rule text generated from `rules.json`, `global.md`, the last day's rollup beside what the last brief planned, open roadmap items, its open findings, a short state line, and the list of step names.
-- Writes: `brief.json`, edits to its own notes, and at most one ask for Walter.
-- Feeds back: `G.pick` in `goals.js` reads `brief.json`. A step on hold is skipped. Focus steps are tried first when their own `need()` is true. The free-time choice gives `whimsy` a real step.
-- Limits, checked in code: a hold cannot name a survival step (eat, take cover, recover, rebed, night home), every hold expires within three in-game days, and a brief older than a day is ignored.
-- It runs as a separate process. If the call is slow or fails, the step list plays exactly as it does today.
+**3. Dawn brief.** This is the session start, and the bot speaking for itself. Built: `brain/memory`, `reviewer/lib/brief.js`, `brain/autopilot/whimsy.js`.
+- The bot asks. At an in-game dawn (at most once an hour), after a respawn (at most every 10 minutes) and on first run, `brain/memory` writes `brief-request.json`: the rule text generated from `rules.json`, `global.md`, what the journal says happened since the last brief beside what that brief planned, the reviewer's open findings, open roadmap items, a short state line, and the step names it may use. About 9 KB.
+- The laptop answers. The reviewer's Task Scheduler entry answers any waiting request before it reviews: one Haiku 5.5 XHigh call with no tools, into `brief-answer.json`. Trial calls on Ozo's data took 50 to 80 seconds and cost about one cent.
+- The bot checks and applies. It writes `brief.json`, edits its own memory under the caps, records at most one ask for Walter, and puts a `brief` event in the journal.
+- Feeds back: `G.pick` in `goals.js` reads the brief. A step on hold is skipped. A focus step goes first when its own `need()` is true. Free time is the new `whimsy` step: once per in-game day, in daylight, the bot does what it chose (walk to high ground and save the vantage point, a short wander, or stay home).
+- Limits, checked in code when the answer arrives and again at every pick: a hold cannot name a survival step (eat, take cover, recover, rebed, night home, food, cook, shelter, move home) or free time; step names must be real; at most three holds of at most three in-game days; a focus step never jumps ahead of a survival step that is waiting; a brief stops counting three hours after it was written.
+- Off switch: `planner.brief` in the bot's profile. Unset, it is on for a hillclimber and off for an assistant.
+- If the job is not installed, is slow or fails, there is no brief and the step list plays exactly as it does today.
+- The model call shuts out ambient memory (`autoMemoryEnabled: false`, memory variables removed from its environment). A trial brief quoted a rule that was only in the surrounding session's memory, so the reviewer now runs the same way.
 
 An illustration of a brief:
 
@@ -248,7 +246,7 @@ An illustration of a brief:
   "intent": "Iron is stuck and the diamond pursuit keeps failing. Smelt what I have and finish the farm.",
   "focus": ["iron-smelt", "mob-farm-build"],
   "holds": [{ "step": "pursue", "days": 2, "why": "failed 8 times at y -7 (review 22:21Z)" }],
-  "freeTime": "find a vantage point east of home and save it",
+  "freeTime": { "choice": "vantage", "note": "east of home, to see the mob farm from above" },
   "ask": null }
 ```
 
@@ -265,9 +263,7 @@ It never edits "My own projects and wishes". Every change is a commit with the j
 
 A work order holds a stable key, the evidence and counts, the snapshot ids to rebuild it from, the cost in lost minutes over the last day, and its history (PRs, deploys, verdicts). Orders are ranked by cost.
 
-**5. Sync.** Copies a small bundle to where the app's agents can read it: rollups, open findings, work orders with their snapshots, dream reports, the memory files, and the tail of `deploys.jsonl`. No chat logs, no logins, no raw logs. See the first decision below for where it goes.
-
-**6. Fixer.** A fresh session each time. It takes the top open work order and follows the debug loop Walter already approved:
+**5. Fixer.** A fresh session each time, on the laptop, in its own working copy of the code under AppData. It takes the top open work order and follows the debug loop Walter already approved:
 1. Rebuild the snapshot on the trial server and show the scenario failing.
 2. Fix it and show the pass rate over 30 runs.
 3. Open the PR and merge when the tests and the scenario are green.
@@ -275,11 +271,11 @@ A work order holds a stable key, the evidence and counts, the snapshot ids to re
 
 One work order per run. After two failed attempts the order is parked with what was tried, which is memory for the next attempt. It never changes the rules, `CLAUDE.md` or the free-time slot. A question of taste goes to the digest.
 
-**7. Deployer.** `tools/deployer.js deploy` and `judge` as they are. It pulls `main`, hot-reloads or restarts the bots, compares weighted flags per hour with the same bot's hours before, reverts a change that made it worse, and writes the verdict into the work order.
+**6. Deployer.** `tools/deployer.js deploy` and `judge` as they are. It pulls `main`, hot-reloads or restarts the bots, compares weighted flags per hour with the same bot's hours before, reverts a change that made it worse, and writes the verdict into the work order.
 
-**8. Digest and memory upkeep.**
+**7. Digest and memory upkeep.**
 - Posts the digest `tools/digest.js` already builds: phase progress, top lost minutes, what was fixed and what reverted itself, and at most one question.
-- Then does for the maintainer what the dream does for the bot: checks each `MEMORY.md` line against the repo and the bundle, rewrites the file as a dashboard, and moves history into topic files.
+- Then does for the maintainer what the dream does for the bot: checks each `MEMORY.md` line against the repo and the work orders, rewrites the file as a dashboard, and moves history into topic files.
 - Reads the day's threads and merged PRs for new preferences from Walter and files each one as a rules entry to propose.
 
 ### What feeds back into the bot
@@ -322,23 +318,20 @@ Each phase is useful alone, is one or two PRs, and ships switched on.
 
 | Phase | What | Outcome |
 | --- | --- | --- |
-| 0 | Journal and rollup. The memory folder with caps and its git history. `global.md` seeded from `strategy.md` and corrected to today's rules. Rule text generated from `rules.json`. Deployer and digest put on a schedule. | A searchable record. Deploys without hands. |
-| 1 | Dawn brief for Ozo, with the picker hook and a real free-time step. Findings feed the brief. | Memory has a reader. Review findings reach the bot within the hour. |
+| 0 | Journal and rollup (built). The memory folder with caps and its git history (built). `global.md` seeded from `strategy.md` and corrected to today's rules (built). Rule text generated from `rules.json` (built). Deployer and digest put on a schedule. | A searchable record. Deploys without hands. |
+| 1 | Dawn brief for Ozo, with the picker hook and a real free-time step. Findings feed the brief. (Built.) | Memory has a reader. Review findings reach the bot within the hour. |
 | 2 | Dream job, work orders, the ledger, and findings that close with a reason. | Memory is checked. Bugs are ranked by cost. |
-| 3 | Sync, the fixer and the daily upkeep job. | Walter is out of the bug loop. |
+| 3 | The fixer and the daily upkeep job, each with its button and runs tab in the Bot Dashboard app. | Walter is out of the bug loop. |
 | 4 | Tune the schedules from the measures above. Add Smeo. Use the same model call when the watchdog escalates past its first fix, instead of a blind kick. | |
 
 The build-inspection sense being added in the thread "Teach bots to see broken builds" plugs in as one more source of journal events and findings. It needs no special path.
 
-## Decisions for Walter
+## Decisions, as Walter made them
 
-1. **Where the synced bundle lives.**
-   - Recommended: a new private repo (for example `mc-player-memory`) that the laptop pushes to hourly and the app's agents read. It doubles as a backup and a history of the bots' memory.
-   - Alternative: run the fixer on the laptop as well, with no sync at all. That costs laptop time while Minecraft is running, and the runs are not visible in the app.
-2. **Model use on Walter's Claude login.** Answered 2026-11-10: Haiku 5.5 at XHigh effort for every job. Per day: review 144 runs (as now), brief about 24 per bot plus respawns, dream 12 runs of five short calls, fixer 8, digest 1. Every number is one line in a config file.
-3. **The deployer taking over `MC-Player-live`** from hand copying, and two more Task Scheduler entries (dream, sync) installed from the app like the reviewer's.
-
-Phases 0 to 2 touch only bot code and the bot's own folders, apart from the Task Scheduler entries in item 3.
+1. **Build all of it** (2026-11-11).
+2. **Everything on the laptop.** The fixer runs from Task Scheduler, installed from the Bot Dashboard app, which also shows its runs. No private repo and no sync: bot data stays on the laptop, with the loop's own files under AppData. Only a fixer PR goes to GitHub.
+3. **Haiku 5.5 at XHigh effort for every job** (2026-11-10). Per day: review 144 runs (as now), brief about 24 per bot plus respawns, dream 12 runs of five short calls, fixer 8, digest 1. Every number is one line in a config file.
+4. **The deployer takes over `MC-Player-live`** from hand copying. Its Task Scheduler entry, and the dream's and the fixer's, are installed by Walter with a button in the app, never by a thread.
 
 ## What already exists and is reused
 
