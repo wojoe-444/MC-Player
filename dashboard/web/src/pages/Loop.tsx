@@ -157,6 +157,43 @@ function BotCard({ b }: { b: LoopBot }) {
   )
 }
 
+// Jobs that are not installed in Task Scheduler never run, and the page used to show that only as a small badge inside each job's card, far down the page
+// (Walter 2026-11-11: he missed installs and could not find the buttons). This is the first thing on the page whenever any are missing.
+function MissingJobs({ s }: { s: LoopState }) {
+  const { installLoopJob, installReviewer } = useApp()
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const rt = s.reviewTask
+  const missing = [
+    ...(rt && !rt.task?.installed && !rt.task?.unsupported ? [{ id: "review", title: rt.title || "Review and dawn briefs", minutes: 10, about: "Watches both bots and answers their dawn briefs. Without it the bots get no plan for the day." }] : []),
+    ...(s.jobs || []).filter((j) => !j.task?.installed && !j.task?.unsupported).map((j) => ({ id: j.id, title: j.title, minutes: j.minutes, about: j.about })),
+  ]
+  if (!missing.length) return null
+  const install = async (m: { id: string; minutes: number }) => (m.id === "review" ? installReviewer(m.minutes) : installLoopJob(m.id, m.minutes))
+  const run = async (list: typeof missing, key: string) => {
+    setBusy(key); setError(null)
+    for (const m of list) { const err = await install(m); if (err) { setError(`${m.title}: ${err}`); break } }
+    setBusy(null)
+  }
+  return (
+    <section id="loop-missing" role="alert" className="flex flex-col gap-3 rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="flex-1 text-lg font-semibold">{`${missing.length} of the loop's ${missing.length === 1 ? "jobs is" : "jobs are"} not installed, so ${missing.length === 1 ? "that step" : "those steps"} never run`}</h2>
+        {missing.length > 1 && <Button disabled={!!busy} onClick={() => run(missing, "all")}>{busy === "all" ? "Installing…" : "Install all"}</Button>}
+      </div>
+      <ul className="flex flex-col gap-2">
+        {missing.map((m) => (
+          <li key={m.id} className="flex flex-wrap items-center gap-3 rounded-md bg-background/60 p-3 text-sm">
+            <div className="min-w-0 flex-1"><div className="font-medium">{m.title}</div>{m.about && <div className="text-xs text-muted-foreground">{m.about}</div>}</div>
+            <Button variant="outline" size="sm" disabled={!!busy} onClick={() => run([m], m.id)}>{busy === m.id ? "Installing…" : `Install (every ${m.minutes} min)`}</Button>
+          </li>
+        ))}
+      </ul>
+      {error && <p className="text-sm text-destructive">{`Could not install: ${error}`}</p>}
+    </section>
+  )
+}
+
 export function Loop() {
   const app = useApp()
   const { loop: s, refreshLoop } = app
@@ -175,6 +212,8 @@ export function Loop() {
   return (
     <>
       <PageHeader title="Memory loop" description={`The bots keep a journal, plan each dawn from a small memory file, and a check compares that memory with the journal every two hours. What memory cannot fix becomes a work order, ranked by lost minutes. Everything on this page stays on this computer (${s.loopDir}).`} />
+
+      <MissingJobs s={s} />
 
       <section className="flex flex-col gap-4">
         <h2 className="text-lg font-semibold">How the loop feeds itself</h2>
