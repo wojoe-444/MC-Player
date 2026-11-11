@@ -1,0 +1,9 @@
+{
+  "name": "ledger",
+  "version": 1,
+  "kind": "observer",
+  "summary": "The provenance ledger: every block a bot digs or places is recorded as it happens (which bot, when, which job, which named space), so 'who made this block?' is a lookup and a block with no record is known not to be ours. Never moves the bot or touches the world.",
+  "requires": [],
+  "provides": ["ledger"],
+  "claims": []
+}

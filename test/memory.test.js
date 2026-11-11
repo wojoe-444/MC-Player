@@ -240,7 +240,7 @@ test('the laptop job: answers a fresh unanswered request once with the reviewer\
 
 test('wiring: memory is a registered module after journal, whimsy is loaded into the step list, the profile carries the brief switch, the model call shuts out ambient memory', () => {
   const idx = fs.readFileSync(path.join(__dirname, '..', 'brain', 'index.js'), 'utf8')
-  assert.match(idx, /const MODULES = \[[^\]]*'journal', 'memory'(, 'bases')?\]/); assert.strictEqual(register.meta.name, 'memory')
+  assert.match(idx, /const MODULES = \[[^\]]*'journal', 'memory'(, '[a-z-]+')*\]/); assert.strictEqual(register.meta.name, 'memory')
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'brain', 'autopilot', 'plan.js'), 'utf8'), /G\.steps\.push\(require\('\.\/whimsy'\)\(G, S, M, api, log\)\)/)
   const { createProfile } = require('../brain/profile'); const d = tmp('prof-')
   fs.writeFileSync(path.join(d, 'profile.json'), JSON.stringify({ name: 'X', role: 'hillclimber', planner: { enabled: false, brief: false } })); assert.strictEqual(createProfile({ stateDir: d }).get().planner.brief, false)

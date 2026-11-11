@@ -1,0 +1,13 @@
+{
+  "bots": ["OzoGo444", "Smeo444"],
+  "flushMs": 5000,
+  "refreshMs": 10000,
+  "reconcileMs": 60000,
+  "digTtlMs": 20000,
+  "placeTtlMs": 8000,
+  "useTtlMs": 4000,
+  "compactAfter": 20000,
+  "foreignPer5Min": 300,
+  "skipDug": "^(short_grass|tall_grass|grass|fern|large_fern|dead_bush|vine|snow|seagrass|tall_seagrass|kelp|kelp_plant|glow_lichen|dandelion|poppy|azure_bluet|oxeye_daisy|cornflower|lily_of_the_valley|leaf_litter|moss_carpet)$|(_flower|_tulip|_orchid)$",
+  "skipForeign": "(_log|_wood|_stem|_hyphae|_leaves|_sapling|_roots)$|^(short_grass|tall_grass|grass|fern|large_fern|dead_bush|vine|snow|seagrass|tall_seagrass|kelp|kelp_plant|sugar_cane|cactus|bamboo|lily_pad|glow_lichen|sweet_berry_bush|brown_mushroom|red_mushroom|dandelion|poppy|azure_bluet|oxeye_daisy|cornflower|lily_of_the_valley|leaf_litter|moss_carpet|wheat|carrots|potatoes|beetroots|melon|pumpkin)$|(_flower|_tulip|_orchid|_bush)$"
+}
