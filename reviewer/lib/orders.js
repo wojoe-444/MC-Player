@@ -17,6 +17,9 @@ const SCHEMATIC_STUCK_MIN = 30             // a stuck schematic build: a flat ha
 const DEATH_MIN = 10                       // what one death is counted as: the walk back and the lost bag. A constant, not a measurement.
 const TRAMPLE_MIN = 3                      // lost minutes per trampled farmland block: the walk to re-till and re-plant it, and the crop it carried
 const MIN_TRAMPLES = 2
+const LEFT_BLOCK_MIN = 1.5                 // lost minutes per scaffold block still standing: the eyesore Walter would have to point out, and the trip to take it down
+const LEFT_TREE_MIN = 10                   // per half-felled tree: the logs and the canopy they keep alive, and the walk back to finish it
+const MIN_STRAY_BLOCKS = 4                 // loose single blocks only count from this many; one pillar or tower is already an order
 const MIN_LOSS = 10, MIN_FAILS = 5, MIN_ALARMS = 5, MIN_DEATHS = 2, MIN_FLAGS = 10, MIN_FINDING_RUNS = 6
 const QUIET_DREAMS = 6                     // an order nobody has seen for this many dreams of a running bot closes as "went quiet" (12 h at one dream per 2 h)
 const REASK_MS = 24 * 3600000
@@ -75,6 +78,38 @@ function candidates({ rollup, events = [], findings = [], snapshots = [] }) {
         suggestion: 'brain/nav/movements.js prices drops onto farmland and brain/nav/farmland.js holds in-place hops, so look for what bypasses them: a control state set before nav attached, a non-nav move (motor, build, mining hop), or a step that walks diagonally off a ledge. The evidence names the step.' },
     })
   }
+  // Mess a bot left standing (brain/leftovers: scaffolding the ledger says a bot placed and never took down, trees cut only part of the way up). Walter 2026-11-11: the loop
+  // must catch these before he does. Like the trample order this one carries its own problem statement, written from the journal numbers, and is opened without a model.
+  const lo = rollup && rollup.leftovers
+  const pillars = Object.entries((lo && lo.scaffold && lo.scaffold.ids) || {}).map(([id, c]) => ({ id, ...c })), towers = pillars.filter(c => c.kind === 'pillar' || c.kind === 'tower')
+  const scaffoldBlocks = pillars.reduce((s, c) => s + (c.n || 0), 0)
+  if (towers.length || scaffoldBlocks >= MIN_STRAY_BLOCKS) {
+    const tall = pillars.slice().sort((a, b) => (b.h - a.h) || (b.n - a.n)), by = {}, via = {}
+    for (const c of pillars) { if (c.by) by[c.by] = (by[c.by] || 0) + c.n; if (c.via) via[c.via] = (via[c.via] || 0) + c.n }
+    const top = (m) => Object.entries(m || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} x${v}`).join(', ')
+    out.push({
+      key: 'leftover-scaffold', type: 'leftover', step: null, costMin: round1(scaffoldBlocks * LEFT_BLOCK_MIN), counts: { leftovers: pillars.length, blocks: scaffoldBlocks },
+      line: `${pillars.length} scaffolding leftover(s), ${scaffoldBlocks} blocks, tallest ${tall[0] ? tall[0].h : 0} high, left standing by ${top(by) || 'a bot'}${top(via) ? ` (during ${top(via)})` : ''}`,
+      evidence: tall.slice(0, 4).map(c => `${String(c.at).slice(11, 16)}Z ${c.kind} of ${c.block || 'filler'} at ${(c.pos || []).join(',')}: ${c.n} blocks, ${c.h} high, standing ${c.standingMin} min`), snapshots: snaps(s2 => s2.kind === 'leftover_scaffold'),
+      auto: { isBug: true, kind: 'bug', title: 'Scaffolding pillars are left standing',
+        problem: cut(`${pillars.length} cluster(s) of filler blocks (${scaffoldBlocks} blocks, tallest ${tall[0] ? tall[0].h : 0}) that a bot placed to climb or bridge stood 10+ minutes in the open outside any named space, per the provenance ledger (by ${top(by) || 'a bot'}; during ${top(via) || 'unknown'}). Nothing took them down: Walter had to point them out.`, 600),
+        suggestion: 'The teardown is the tidy step in brain/autopilot/plan.js (tidyList0 and the step run) fed by bot._leftovers.scaffold(); nav Reach.pillar (brain/nav/reach.js) and the pathfinder place the blocks. Look for what keeps a cluster off the tidy list (home-box, shelter, 40-block and cover rules) or out of reach (a column taller than the bot can dig from the ground).' },
+    })
+  }
+  const trees = Object.entries((lo && lo.trees && lo.trees.ids) || {}).map(([id, c]) => ({ id, ...c }))
+  if (trees.length) {
+    const logs = trees.reduce((s, c) => s + (c.n || 0), 0), leaves = trees.reduce((s, c) => s + (c.leaves || 0), 0)
+    const by = {}; for (const c of trees) if (c.by) by[c.by] = (by[c.by] || 0) + 1
+    const who = Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} x${v}`).join(', ')
+    out.push({
+      key: 'leftover-trees', type: 'leftover', step: null, costMin: round1(trees.length * LEFT_TREE_MIN), counts: { leftovers: trees.length, logs, leaves },
+      line: `${trees.length} half-felled tree(s): ${logs} log(s) stand on nothing and hold up about ${leaves} leaves${who ? ` (cut by ${who})` : ''}`,
+      evidence: trees.slice(0, 4).map(c => `${String(c.at).slice(11, 16)}Z ${c.species || 'a'} tree at ${(c.pos || []).join(',')}: ${c.n} log(s) up to ${c.h} high, ${c.leaves} leaves held up`), snapshots: snaps(s2 => s2.kind === 'leftover_trees'),
+      auto: { isBug: true, kind: 'bug', title: 'Trees are cut only part of the way up',
+        problem: cut(`${trees.length} tree(s) were felled from the bottom only: ${logs} log(s) still stand on nothing (${who || 'cut by a bot'}) and keep about ${leaves} leaves alive, so the woods near the base grows over. A tree is only felled when the whole connected tree is gone.`, 600),
+        suggestion: 'The fallback chopper S.chopTree (brain/autopilot/skills.js) skips logs more than 6 above the bot and used to stop there; the whole-tree felling with a pillar, the canopy pass and the descent lives in brain/treefarm/engine.js (chopTree, finishRemnant). Look for a caller that fells without finishing, or a remnant finishRemnant cannot reach (no dirt to climb, logs behind walls).' },
+    })
+  }
   for (const [kind, n] of Object.entries((rollup && rollup.flags) || {})) {
     if (n < MIN_FLAGS) continue
     const last = events.filter(e => e.k === 'flag' && e.kind === kind).slice(-2).map(e => `${String(e.at).slice(11, 16)}Z ${cut(e.msg, 120)}`)
@@ -119,7 +154,7 @@ function candidates({ rollup, events = [], findings = [], snapshots = [] }) {
   }
   return out.sort((a, b) => (b.costMin - a.costMin) || (weight(b) - weight(a)))
 }
-const weight = (c) => (c.counts.deaths || 0) * 100 + (c.counts.alarms || 0) + (c.counts.fail || 0) + (c.counts.timeout || 0) + (c.counts.trampled || 0) + (c.counts.flags || 0) / 10 + (c.counts.seenRuns || 0) / 10
+const weight = (c) => (c.counts.deaths || 0) * 100 + (c.counts.alarms || 0) + (c.counts.fail || 0) + (c.counts.timeout || 0) + (c.counts.trampled || 0) + (c.counts.leftovers || 0) + (c.counts.flags || 0) / 10 + (c.counts.seenRuns || 0) / 10
 
 function load(loopDir, key) { return readJson(fileOf(loopDir, key)) }
 function list(loopDir, { status = null } = {}) {

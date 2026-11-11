@@ -596,6 +596,52 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
     }
   }
 
+  // ---------- finishing a tree somebody started ----------
+  // A tree cut only part of the way up (the autopilot's S.chopTree used to stop at the first log it could not reach from the ground) leaves its upper logs and limbs
+  // standing on nothing, and every one of them keeps the leaves within reach alive: the overgrown look Walter pointed out on 2026-11-11. This takes such a remnant the rest
+  // of the way down with the same machinery as a whole felling (pillar from the trunk column, hidden-leaf clearing, the canopy by hand, the descent, the drops). It is only ever
+  // used on logs that stand on nothing, i.e. a tree that is already felled: a living tree is never started on from here.
+  function remnantTree(pos) {
+    const t = T.scanTree(bot, new Vec3(pos.x, pos.y, pos.z), C)
+    if (!t.species || !t.logs.length) return null
+    if (t.bases.length) return null                                                   // it stands on soil: a living tree (or a stump we leave to the felling that owns it)
+    const low = t.logs[0]                                                             // scanTree sorts by y
+    let gy = low.y - 1
+    for (let i = 0; i < 40; i++) { const b = bot.blockAt(new Vec3(low.x, gy, low.z)); if (!b) return null; if (b.boundingBox === 'block' && !T.isLeaves(b) && !T.logSpecies(b.name)) break; gy-- }
+    t.trunk = new Vec3(low.x, gy + 1, low.z)                                          // the cell on the ground under the lowest remaining log: where the pillar goes up
+    t.ok = true
+    return t
+  }
+  async function finishRemnant(ctx, pos) {
+    if (running) return { status: 'busy', logs: 0, left: 0 }
+    running = true; stopFlag = false
+    const sum = newSum()
+    try {
+      if (util.dimOf(bot) !== 'overworld') return { status: 'skipped', logs: 0, left: 0 }
+      await safehand.stow()
+      const wasUp = !!S.pillar
+      await descend(ctx)
+      if (wasUp) { await ctx.sleep(C.fallSettleMs ?? 300); await collectDrops(ctx, bot.entity.position, 5, 8, C.scaffold) }
+      guard()
+      const tree = remnantTree(pos)
+      if (!tree) return { status: 'gone', logs: 0, left: 0 }
+      const cut = await chopTree(ctx, tree, sum, false, null)
+      note(`REMNANT ${key(pos)} ${tree.species}: cut ${cut} of ${tree.logs.length}, left ${sum.leftLogs}, leaves cleared ${sum.leavesCleared}`)
+      return { status: 'done', logs: cut, left: sum.leftLogs, leaves: sum.leavesCleared, noScaffold: !!sum.noScaffold }
+    } catch (e) {
+      if (e && e.name === 'AbortError') throw e
+      if (e instanceof Danger) return { status: 'danger', why: e.why, logs: 0, left: 0 }
+      if (e instanceof Full) return { status: 'full', logs: 0, left: 0 }
+      log(`REMNANT_ERROR ${e && e.stack || e}`)
+      return { status: 'error', why: e && e.message, logs: 0, left: 0 }
+    } finally {
+      running = false
+      if (S.pillar) { try { await descend(null) } catch (e) { log(`descend failed: ${e.message}`) } }      // never stay up on a pillar, even when aborted
+      save()
+      try { await safehand.stow() } catch { /* hand already safe */ }
+    }
+  }
+
   // ---------- finding trees ----------
   function discover(center, radius) {
     const ids = T.LOG_NAMES.map(n => bot.registry.blocksByName[n] && bot.registry.blocksByName[n].id).filter(Boolean)
@@ -861,7 +907,7 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
     }
   }
 
-  return { run, plantGrove, growGrove, dueKind, abort, due, snapshot, markSite, forgetSites, descend, replantPending, unload, discover, farm, isRunning: () => running }
+  return { run, plantGrove, growGrove, finishRemnant, remnantTree, dueKind, abort, due, snapshot, markSite, forgetSites, descend, replantPending, unload, discover, farm, isRunning: () => running }
 }
 module.exports.Danger = Danger
 module.exports.Full = Full

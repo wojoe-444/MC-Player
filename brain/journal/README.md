@@ -29,6 +29,7 @@ Every event has `at` (ISO time, UTC) and `k` (kind). `day` is the in-game day wh
 | `items` | `items: { name: count }`, one event per 10 minutes | `acquired.jsonl` | |
 | `first` | `what` (`item` or `step`), `id` | the first time this bot got that item or ran that step | always |
 | `trample` | `pos`, `by` (`bot` or `unknown`), `how` (`jump`, `drop`, `hop`, `none`), `dist`, `fall`, `space`, `step`, `task`, `held`, `ledger` | `telemetry`: a farmland block within 4 blocks of the bot's feet became dirt, and the ledger shows the bot did not dig, hoe or build on it | `by` is `bot`: the bot jumped, dropped or hopped onto it just before |
+| `leftover` | `what` (`scaffold` or `tree`), `id`, `kind` (`pillar`, `tower`, `stray`, `ungrounded`), `pos`, `n`, `h`, `leaves`, `species`, `block`, `by`, `via`, `standingMin`, `again` | `brain/leftovers`: scaffolding a bot placed and never took down (per the ledger), or logs of a tree cut part way up standing on nothing, in view for 5+ minutes | the first report of a cluster; again every 3 hours (not salient) |
 | `gate` | `rule`, `packet`, `blocked`, `n`, `why`, `owner`, `site` | `gate-log.json` | a packet was blocked |
 | `commit` | `commit`, `subject`, `same` (a restart on the same code) | `runlog/commits.jsonl` | |
 | `registry` | `added`, `removed` | the shared `registry.json` | always |
@@ -41,7 +42,7 @@ Another module can add an event with `bot._journal.add(kind, fields, { sal })`.
 
 ## Rollup
 
-`steps[id]`: `runs`, `minutes`, `ok`, `fail`, `timeout`, `other`, `alarms`, `stalledMin`. `alarms`: raised, cleared, stalled minutes, worst fix level, by type. `flags` by kind and `flagsHigh`. `trampled`: `n`, `byHow`, `bySpace`, `byStep`, `last` (only those where `by` is `bot`). `deaths`, `items`, `firsts`, `gate`, `commits` (distinct), `starts`, `chat`, `reflexes`, `notes`. `salient`: up to 80 one-line summaries. `gameDays[day]`: the same in brief, per in-game day.
+`steps[id]`: `runs`, `minutes`, `ok`, `fail`, `timeout`, `other`, `alarms`, `stalledMin`. `alarms`: raised, cleared, stalled minutes, worst fix level, by type. `flags` by kind and `flagsHigh`. `trampled`: `n`, `byHow`, `bySpace`, `byStep`, `last` (only those where `by` is `bot`). `leftovers.scaffold` and `leftovers.trees`: `ids` (one entry per cluster id, the latest report of it) and `last`. `deaths`, `items`, `firsts`, `gate`, `commits` (distinct), `starts`, `chat`, `reflexes`, `notes`. `salient`: up to 80 one-line summaries. `gameDays[day]`: the same in brief, per in-game day.
 
 ## Reading it
 

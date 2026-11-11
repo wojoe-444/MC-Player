@@ -1,0 +1,9 @@
+{
+  "name": "leftovers",
+  "version": 1,
+  "kind": "observer",
+  "summary": "Finds the mess a bot leaves behind without being told: scaffolding pillars and strays it placed and never took down (from the provenance ledger), and trees cut only part of the way up (logs standing on nothing, keeping a canopy alive). Reports through telemetry flags, journal events and brain/state/leftovers.json so the memory loop opens work orders by itself. Never moves the bot or touches a block.",
+  "requires": [],
+  "provides": ["leftovers"],
+  "claims": []
+}
