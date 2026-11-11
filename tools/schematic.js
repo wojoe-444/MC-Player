@@ -7,7 +7,7 @@
 //   node tools/schematic.js diff    --save <World folder> <schematic.json> [--at x,y,z]     cell by cell; --at moves the schematic (default: where it was captured)
 //   node tools/schematic.js design  --id chicago-design --out file [--ox -6018 --oz -2355 --dx -1 --dz 0 --yp 59]   the bots' own mob farm design (brain/mobfarm/geometry.js) as a schematic
 //   node tools/schematic.js hut     --out file                          the built-for-looks example (an oak hut in a fenced yard) as an aesthetic schematic
-//   node tools/schematic.js import  <file.schem> [--id x] [--name "..."] [--kind house] [--mode aesthetic|functional] [--scenery dirt,grass_block] [--purpose "..."] [--out file]   a Sponge .schem (WorldEdit / Litematica) as format 2; default out: brain/schematic/library/<id>.json
+//   node tools/schematic.js import  <file.schem> [--id x] [--name "..."] [--kind house] [--category Builds] [--tags a,b] [--mode aesthetic|functional] [--scenery dirt,grass_block] [--purpose "..."] [--out file]   a Sponge .schem (WorldEdit / Litematica) as format 2; default out: brain/schematic/library/<id>.json
 //   node tools/schematic.js hoppers --save <World folder> --x X --z Z [--r 48]          where the hoppers and chests are near a point (to find a farm)
 'use strict'
 const fs = require('fs')
@@ -62,7 +62,7 @@ else if (cmd === 'diff') {
   // a Sponge .schem (WorldEdit, Litematica) as a format 2 schematic; written to --out (default brain/schematic/library/<id>.json)
   const Sp = require('../brain/schematic/sponge')
   const id = require('../brain/schematic/store').safeId(opt('id', path.basename(positional, path.extname(positional))))
-  Sp.read(positional, { id, name: opt('name'), kind: opt('kind', 'build'), mode: opt('mode', 'aesthetic'), purpose: opt('purpose', ''), scenery: opt('scenery') ? opt('scenery').split(',') : null, world: opt('world'), by: opt('by'), notes: opt('note') ? [opt('note')] : [] }).then(s => {
+  Sp.read(positional, { id, name: opt('name'), kind: opt('kind', 'build'), category: opt('category'), tags: opt('tags') ? opt('tags').split(',') : [], mode: opt('mode', 'aesthetic'), purpose: opt('purpose', ''), scenery: opt('scenery') ? opt('scenery').split(',') : null, world: opt('world'), by: opt('by'), notes: opt('note') ? [opt('note')] : [] }).then(s => {
     const out = opt('out', path.join(__dirname, '..', 'brain', 'schematic', 'library', `${s.id}.json`)); fs.writeFileSync(out, JSON.stringify(s))
     console.log(`wrote ${out}: ${s.size.join('x')}, ${s.palette.length - 1} kinds of block, ${fs.statSync(out).size} bytes`)
   }).catch(e => { console.error('import failed: ' + e.message); process.exit(1) })

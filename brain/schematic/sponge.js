@@ -57,7 +57,7 @@ function fromSimplified(root, meta = {}) {
   }
   if (run) { rle.push(prev, run); counts[prev] = (counts[prev] || 0) + run }
   const md = r.Metadata || {}
-  return { v: 2, id: meta.id || 'schematic', name: meta.name || md.Name || meta.id || 'schematic', kind: meta.kind || 'build', mode: aesthetic ? 'aesthetic' : 'functional', purpose: meta.purpose || '',
+  return { v: 2, id: meta.id || 'schematic', name: meta.name || md.Name || meta.id || 'schematic', kind: meta.kind || 'build', ...(meta.category ? { category: meta.category } : {}), ...(meta.tags && meta.tags.length ? { tags: meta.tags } : {}), mode: aesthetic ? 'aesthetic' : 'functional', purpose: meta.purpose || '',
     source: { world: meta.world || 'imported schematic file', save: null, file: meta.file || null, capturedAt: meta.capturedAt || new Date().toISOString(), by: meta.by || (md.Author ? md.Author : 'brain/schematic/sponge.js'), box: { x0: 0, y0: 0, z0: 0, x1: W - 1, y1: H - 1, z1: L - 1 }, dataVersion: r.DataVersion || null },
     origin: [0, 0, 0], size: [W, H, L], palette, rle, counts, notes: meta.notes || [], unknownCells: 0 }
 }
