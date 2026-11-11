@@ -22,6 +22,12 @@ function prsBetween(code, from, to, run = execFileSync) {
   try { return [...new Set(run('git', ['log', '--format=%s', `${from}..${to}`], { cwd: code, timeout: 20000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().split('\n').flatMap(s => [...s.matchAll(/\(#(\d+)\)/g)].map(m => Number(m[1]))))] } catch { return [] }
 }
 
+// A lock whose process is gone is stale at once: on 2026-11-11 an app update killed a deploy in the middle of its tests and its lock then held every deploy back for 45 minutes.
+function alive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return true                 // an old-format lock: trust the clock
+  try { process.kill(pid, 0); return true } catch (e) { return !!(e && e.code === 'EPERM') }
+}
+
 // deps: { tool: the deployer module (injected in tests), now, log, prs(code, from, to) }
 async function runDeploy(cfg, { tool = null, now = Date.now(), log = () => {}, prs = prsBetween, tests = true } = {}) {
   const code = cfg.codeDir, toolFile = path.join(code || '', 'tools', 'deployer.js')
@@ -32,7 +38,7 @@ async function runDeploy(cfg, { tool = null, now = Date.now(), log = () => {}, p
     try { tool = require(toolFile) } catch (e) { return fail(`could not load ${toolFile}: ${cut(e.message, 160)}`) }
   }
   const lock = path.join(cfg.loopDir, 'deploy.lock')
-  try { fs.mkdirSync(cfg.loopDir, { recursive: true }); const j = JSON.parse(fs.readFileSync(lock, 'utf8')); if (now - j.at < LOCK_MS) return { ok: true, skipped: 'another deploy is running' } } catch { /* no lock */ }
+  try { fs.mkdirSync(cfg.loopDir, { recursive: true }); const j = JSON.parse(fs.readFileSync(lock, 'utf8')); if (now - j.at < LOCK_MS && alive(j.pid)) return { ok: true, skipped: 'another deploy is running' } } catch { /* no lock */ }
   fs.writeFileSync(lock, JSON.stringify({ pid: process.pid, at: now }))
   try {
     const runtimes = cfg.bots.map(b => b.dir).filter(d => fs.existsSync(d))
@@ -83,4 +89,4 @@ function deployLog(code, limit = 20) {
   try { return fs.readFileSync(path.join(code, 'deploys.jsonl'), 'utf8').split('\n').filter(Boolean).slice(-limit).map(l => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean) } catch { return [] }
 }
 
-module.exports = { runDeploy, prsBetween, deployLog, lastDeploy }
+module.exports = { alive, runDeploy, prsBetween, deployLog, lastDeploy }
