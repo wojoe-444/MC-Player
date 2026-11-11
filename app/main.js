@@ -2,7 +2,7 @@
 const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
-const { spawn } = require('child_process')
+const { spawn, spawnSync } = require('child_process')
 const { Config } = require('./lib/config')
 const { startDashboard } = require('./lib/dashboard-process')
 const { TriggerManager } = require('./lib/triggers')
@@ -82,14 +82,27 @@ async function reviewerState() {
   }))
   return { available: !!schedule, bots, task: schedule ? await schedule.status() : null, taskName: schedule && schedule.TASK_NAME }
 }
+// Child processes this app started for reviewer / loop jobs. They are Bot Dashboard.exe themselves (ELECTRON_RUN_AS_NODE), so the installer
+// would otherwise find "Bot Dashboard.exe" still running and wait for it before it can replace anything.
+const jobChildren = new Set()
+const track = (child) => { jobChildren.add(child); child.once('exit', () => jobChildren.delete(child)); return child }
+function stopJobs() {
+  for (const c of jobChildren) {
+    try {
+      if (process.platform === 'win32' && c.pid) spawnSync('taskkill', ['/PID', String(c.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore', timeout: 5000 }) // also the Claude process it started
+      else c.kill()
+    } catch {}
+  }
+  jobChildren.clear()
+}
 let reviewerRunning = false
 function runReviewerNow() {
   if (reviewerRunning || !schedule) return false
   reviewerRunning = true
   const d = config.data.dashboard
-  const child = spawn(process.execPath, [path.join(REVIEWER_DIR, 'run.js'), '--once', '--force'], {
+  const child = track(spawn(process.execPath, [path.join(REVIEWER_DIR, 'run.js'), '--once', '--force'], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', BOT_OZO_DIR: d.ozoDir, BOT_SMEO_DIR: d.smeoDir }, windowsHide: true, stdio: 'ignore',
-  })
+  }))
   const done = () => { reviewerRunning = false; reviewerState().then(r => sendUI('reviewer', r)) }
   child.once('exit', done); child.once('error', done)
   return true
@@ -106,9 +119,9 @@ function runLoopJob(id) {
   if (!loopLib || !JOB_IDS.includes(id) || loopRunning[id]) return false
   loopRunning[id] = true
   const d = config.data.dashboard
-  const child = spawn(process.execPath, [path.join(REVIEWER_DIR, 'run.js'), ...loopLib.schedule.JOBS[id].args, '--force'], {
+  const child = track(spawn(process.execPath, [path.join(REVIEWER_DIR, 'run.js'), ...loopLib.schedule.JOBS[id].args, '--force'], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', BOT_OZO_DIR: d.ozoDir, BOT_SMEO_DIR: d.smeoDir, LOOP_DIR: loopDir(), BOT_CODE_DIR: codeDir(), FIXER_MODE: fixMode() }, windowsHide: true, stdio: 'ignore',
-  })
+  }))
   const done = () => { loopRunning[id] = false; getLoopState().then(s => sendUI('loop', s)) }
   child.once('exit', done); child.once('error', done)
   return true
@@ -201,7 +214,7 @@ app.whenReady().then(async () => {
   // Updates: only the installed (packaged) app can update itself; from source the page says to use git pull.
   let autoUpdater = null
   if (app.isPackaged) { try { ({ autoUpdater } = require('electron-updater')) } catch (e) { log('electron-updater not available:', e.message) } }
-  updates = new UpdateManager({ autoUpdater, currentVersion: app.getVersion(), isPackaged: app.isPackaged, log, beforeInstall: () => { if (dash) dash.stop(); if (triggers) triggers.stop() } })
+  updates = new UpdateManager({ autoUpdater, currentVersion: app.getVersion(), isPackaged: app.isPackaged, log, beforeInstall: () => { if (dash) dash.stop(); if (triggers) triggers.stop(); stopJobs() } })
   updates.on('update', (s) => sendUI('update', s))
   handle('update:state', () => updates.state())
   handle('update:check', () => updates.check())

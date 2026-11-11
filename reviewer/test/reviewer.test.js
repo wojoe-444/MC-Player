@@ -218,3 +218,14 @@ test('findings.merge: a resolved key that returns keeps its first-seen time and 
   assert.deepStrictEqual(bots[0].recentlyResolved.map(x => x.key), ['ozo-old'])
   assert.match(SYSTEM_PROMPT, /KEYS ARE IDENTITY/); assert.match(SYSTEM_PROMPT, /reset process/)
 })
+
+test('findClaudeExecutable: leaves the SDK alone when its own binary is bundled, otherwise finds the installed Claude Code', () => {
+  const { findClaudeExecutable } = require('../lib/claude')
+  const base = { platform: 'win32', arch: 'x64', home: 'C:\\Users\\w', env: { PATH: 'C:\\a;C:\\b' } }
+  assert.strictEqual(findClaudeExecutable({ ...base, resolve: () => 'x' }), undefined)
+  const missing = () => { throw new Error('not found') }
+  assert.strictEqual(findClaudeExecutable({ ...base, resolve: missing, exists: f => f === 'C:\\b\\claude.exe' }), 'C:\\b\\claude.exe')
+  assert.strictEqual(findClaudeExecutable({ ...base, resolve: missing, exists: f => f === 'C:\\Users\\w\\.local\\bin\\claude.exe' }), 'C:\\Users\\w\\.local\\bin\\claude.exe')
+  assert.strictEqual(findClaudeExecutable({ ...base, resolve: missing, exists: () => false }), undefined)
+  assert.strictEqual(findClaudeExecutable({ ...base, env: { REVIEWER_CLAUDE_PATH: 'D:\\c.exe' }, resolve: missing }), 'D:\\c.exe')
+})

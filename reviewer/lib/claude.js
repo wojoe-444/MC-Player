@@ -4,6 +4,22 @@
 const hint = (msg) => /login|auth|credential|401|api key/i.test(msg) ? `${msg} (run \`claude\` once in a terminal to log in)` : msg
 async function loadSdk() { return import('@anthropic-ai/claude-agent-sdk') }
 
+// The SDK ships its own 350 MB claude binary as a separate package. The installed Bot Dashboard leaves that package out (it made every
+// update's uninstall + extract take minutes), so when it is missing, use the Claude Code that is installed on this computer instead.
+// deps is injectable for tests: { env, platform, arch, home, exists, resolve }.
+function findClaudeExecutable(deps = {}) {
+  const fs = require('fs'), path = require('path'), os = require('os')
+  const env = deps.env || process.env, platform = deps.platform || process.platform, arch = deps.arch || process.arch
+  const home = deps.home || os.homedir(), exists = deps.exists || ((f) => { try { return fs.statSync(f).isFile() } catch { return false } })
+  const resolve = deps.resolve || ((m) => require.resolve(m))
+  if (env.REVIEWER_CLAUDE_PATH) return env.REVIEWER_CLAUDE_PATH
+  try { resolve(`@anthropic-ai/claude-agent-sdk-${platform}-${arch}/package.json`); return undefined } catch {} // the SDK's own binary is there: let it use it
+  const win = platform === 'win32', exe = win ? 'claude.exe' : 'claude', j = win ? path.win32.join : path.join
+  const candidates = [...String(env.PATH || env.Path || '').split(win ? ';' : ':').filter(Boolean).map(d => j(d, exe)), j(home, '.local', 'bin', exe)]
+  if (win && env.APPDATA) candidates.push(j(env.APPDATA, 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'bin', exe))
+  return candidates.find(exists)
+}
+
 function childEnv(env = process.env) {
   const e = { ...env }
   for (const k of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX']) delete e[k]
@@ -13,6 +29,8 @@ function childEnv(env = process.env) {
   e.CLAUDE_AGENT_SDK_CLIENT_APP = 'mc-player-reviewer/0.1.0'
   return e
 }
+
+const claudePathOption = (opts) => { const p = opts.claudePath || (opts.sdk ? undefined : findClaudeExecutable()); return p ? { pathToClaudeCodeExecutable: p } : {} }
 
 // opts: { systemPrompt, prompt, schema, model, effort, cwd, timeoutMs, claudePath, sdk? }  -> { ok, data, costUsd, durationMs, error }
 async function askClaude(opts) {
@@ -28,7 +46,7 @@ async function askClaude(opts) {
         tools: [], allowedTools: [], settingSources: [], settings: { autoMemoryEnabled: false }, persistSession: false, maxTurns: 4,
         outputFormat: { type: 'json_schema', schema: opts.schema },
         cwd: opts.cwd, env: childEnv(opts.env), abortController: ac,
-        ...(opts.claudePath ? { pathToClaudeCodeExecutable: opts.claudePath } : {}),
+        ...claudePathOption(opts),
       },
     })
     let result = null
@@ -91,7 +109,7 @@ async function runAgent(opts) {
         canUseTool: async (name) => ({ behavior: 'deny', message: `${name} is not available in this session` }),      // only reached when the hook did not decide
         outputFormat: { type: 'json_schema', schema: opts.schema },
         cwd: opts.cwd, env: { ...childEnv(opts.env), MCP_TOOL_TIMEOUT: String(toolMs) }, abortController: ac,
-        ...(opts.claudePath ? { pathToClaudeCodeExecutable: opts.claudePath } : {}),
+        ...claudePathOption(opts),
       },
     })
     let result = null
@@ -112,4 +130,4 @@ async function runAgent(opts) {
   } finally { clearTimeout(timer) }
 }
 
-module.exports = { askClaude, runAgent, childEnv }
+module.exports = { askClaude, runAgent, childEnv, findClaudeExecutable }

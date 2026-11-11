@@ -2,7 +2,7 @@
 // (published by .github/workflows/release-app.yml). Pure Node apart from the injected autoUpdater, so it can be unit tested.
 //
 // Flow: check() asks GitHub for latest.yml and compares versions; install() (the "Update and restart" button)
-// downloads the new installer, stops the dashboard child process, then quits, runs the installer silently and relaunches.
+// downloads the new installer, stops the dashboard child process, then quits, runs the installer (with its progress window) and relaunches.
 const { EventEmitter } = require('events')
 
 const firstLine = (s) => String(s || '').split('\n').map(x => x.trim()).find(Boolean) || ''
@@ -66,7 +66,9 @@ class UpdateManager extends EventEmitter {
     }
     this.set({ status: 'ready', progress: 100 })
     try { this.beforeInstall() } catch (e) { this.log('beforeInstall failed:', e.message) }
-    this.au.quitAndInstall(true, true) // isSilent, isForceRunAfter
+    // Not silent: the one-click installer then shows a progress window, so the gap between the app closing and coming back is visible
+    // (a silent install looked like the app had vanished). isForceRunAfter relaunches the app when it finishes.
+    this.au.quitAndInstall(false, true)
     return this.state()
   }
 
