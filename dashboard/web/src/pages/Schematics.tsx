@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { CameraIcon, Loader2Icon, RotateCwIcon } from "lucide-react"
+import { CameraIcon, Loader2Icon, PencilIcon, PlusIcon, RotateCwIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -9,6 +9,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Toggle } from "@/components/ui/toggle"
 import { PageHeader } from "@/components/common"
 import { SchematicPicker, useCatalogState } from "@/components/SchematicPicker"
+import { AgentPanel, RequestSheet, useAgent, type Prefill } from "@/components/SchematicAgent"
 import { SchematicView, type Hover, type SchematicViewHandle } from "@/components/SchematicView"
 import { useJson } from "@/pages/Bases"
 import { iconOf } from "@/lib/schematic/appearance"
@@ -17,7 +18,7 @@ import { displayName } from "@/lib/schematic/names"
 import type { BomRow, SchematicDetail, SchematicSummary } from "@/lib/schematic/types"
 import { cn } from "@/lib/utils"
 
-const sig = (d: SchematicDetail) => `${d.id}:${d.rle.length}:${d.palette.length}:${d.bom.map((r) => r.cells).join(",")}`
+const sig = (d: SchematicDetail) => `${d.id}:${d.variant}:${d.variants.map((v) => v.id).join()}:${d.rle.length}:${d.palette.length}:${d.bom.map((r) => r.cells).join(",")}`
 const iconCache = new Map<string, string>()
 const icon = (block: string) => { let u = iconCache.get(block); if (u == null) { u = iconOf(block); iconCache.set(block, u) } return u }
 const n0 = (n: number) => n.toLocaleString()
@@ -44,16 +45,16 @@ const OTHER_SHOWN = 6
 const BOM_SHOWN = 14
 const VIEW_H = "h-[28rem] @3xl:h-[min(68vh,44rem)] @6xl:h-[calc(100vh-15rem)]"
 
-function Viewer({ item }: { item: SchematicSummary }) {
-  const { data, state } = useJson<SchematicDetail>(`/api/schematics/${encodeURIComponent(item.id)}`, 120_000, sig)
+function Viewer({ item, variant, onVariant, onAsk }: { item: SchematicSummary; variant: string | null; onVariant: (v: string) => void; onAsk: (p: Prefill) => void }) {
+  const { data, state } = useJson<SchematicDetail>(`/api/schematics/${encodeURIComponent(item.id)}${variant ? `?variant=${encodeURIComponent(variant)}` : ""}`, 120_000, sig)
   if (state === "failed") return <div className={AREA.view}><Empty><EmptyHeader><EmptyTitle>Could not load the schematic</EmptyTitle><EmptyDescription>The dashboard server did not answer. It will keep trying.</EmptyDescription></EmptyHeader></Empty></div>
   if (state === "missing") return <div className={AREA.view}><Empty><EmptyHeader><EmptyTitle>No such schematic</EmptyTitle><EmptyDescription>The list changed; pick another one.</EmptyDescription></EmptyHeader></Empty></div>
   if (!data) return <Card className={cn("flex items-center justify-center gap-3 text-sm text-muted-foreground", AREA.view, VIEW_H)} role="status"><Loader2Icon className="size-6 animate-spin" />Loading the schematic…</Card>
-  return <Body key={data.id} data={data} />
+  return <Body key={`${data.id}/${data.variant}`} data={data} onVariant={onVariant} onAsk={onAsk} />
 }
 
 /** Returns two grid children (the viewer, the details) so the page can lay them out beside the list. */
-function Body({ data }: { data: SchematicDetail }) {
+function Body({ data, onVariant, onAsk }: { data: SchematicDetail; onVariant: (v: string) => void; onAsk: (p: Prefill) => void }) {
   const [W, H, D] = data.size
   const prep = useMemo(() => prepare({ size: data.size, cells: decodeCells(data.rle, data.size), palette: data.palette }), [data])
   const [mode, setMode] = useState<"up" | "single">("up")
@@ -139,6 +140,18 @@ function Body({ data }: { data: SchematicDetail }) {
           </div>
         </div>
 
+        <Section title="Variants">
+          <ToggleGroup type="single" value={data.variant} onValueChange={(v) => v && onVariant(v)} variant="outline" size="sm" spacing={0} className="flex w-full flex-wrap justify-start gap-1" aria-label="Variant">
+            {data.variants.map((v) => <ToggleGroupItem key={v.id} value={v.id} title={v.description || `${v.size[0]} × ${v.size[2]} × ${v.size[1]}`} className="rounded-md! border!">{v.name}</ToggleGroupItem>)}
+          </ToggleGroup>
+          {data.variantDescription && <p className="text-xs text-muted-foreground">{data.variantDescription}</p>}
+          {data.variants.length === 1 && <p className="text-xs text-muted-foreground">One variant. Add another for a smaller, larger or differently built version.</p>}
+          <div className="flex flex-wrap gap-1.5">
+            <Button variant="outline" size="xs" onClick={() => onAsk({ kind: "variant", id: data.id, variant: data.variant })}><PlusIcon />Add a variant</Button>
+            <Button variant="outline" size="xs" onClick={() => onAsk({ kind: "edit", id: data.id, variant: data.variant })}><PencilIcon />Change this one</Button>
+          </div>
+        </Section>
+
         <Section title="Layer slicer">
           <ToggleGroup type="single" value={mode} onValueChange={(v) => v && setMode(v as "up" | "single")} variant="outline" className="grid w-full grid-cols-2" spacing={0}>
             <ToggleGroupItem value="up">Up to layer</ToggleGroupItem>
@@ -196,26 +209,38 @@ function Body({ data }: { data: SchematicDetail }) {
 }
 
 export function Schematics() {
-  const { data, state } = useJson<{ schematics: SchematicSummary[] }>("/api/schematics", 120_000, (d) => d.schematics.map((s) => s.id + s.name + s.category + s.mode).join())
+  const agent = useAgent()
+  // a request that finishes adds to the catalog: ask for the list again when the number of finished requests changes
+  const finished = agent.info?.requests.filter((r) => r.status === "done").length ?? 0
+  const { data, state } = useJson<{ schematics: SchematicSummary[] }>(`/api/schematics?finished=${finished}`, 20_000, (d) => d.schematics.map((s) => s.id + s.name + s.category + s.mode + s.variants.map((v) => v.id).join("+")).join())
   const [pick, setPick] = useState<string | null>(null)
+  const [variant, setVariant] = useState<string | null>(null)
   const list = data?.schematics ?? []
   const current = list.find((s) => s.id === pick) ?? list[0] ?? null
   const catalog = useCatalogState()
+  const [ask, setAsk] = useState<Prefill | null>(null)
+  const [lastAsk, setLastAsk] = useState<Prefill>({ kind: "new" })
+  const openAsk = (p: Prefill) => { setLastAsk(p); setAsk(p) }
+  // a schematic and the variant being viewed: picking another schematic starts at its default variant; a variant that is gone falls back to the default
+  const choose = (id: string, v: string | null = null) => { setPick(id); setVariant(v) }
+  const variantNow = current && variant && current.variants.some((x) => x.id === variant) ? variant : null
   return (
     <>
-      <PageHeader title="Schematics" description="What the bots consider a build to be, block by block. Every cell shows a specific block; its role says what else may stand there (a wall accepts any solid, light-blocking, non-flammable block)." />
+      <PageHeader title="Schematics" description="What the bots consider a build to be, block by block. Every cell shows a specific block; its role says what else may stand there (a wall accepts any solid, light-blocking, non-flammable block). Every schematic is a collection of variants." />
+      <AgentPanel agent={agent} onNew={() => openAsk({ kind: "new" })} onOpen={(id, v) => choose(id, v)} />
+      <RequestSheet open={!!ask} onOpenChange={(o) => !o && setAsk(null)} info={agent.info} list={list} prefill={ask ?? lastAsk} onCreated={agent.reload} />
       {state === "loading" && <Card className="flex h-40 items-center justify-center gap-3 text-sm text-muted-foreground" role="status"><Loader2Icon className="size-6 animate-spin" />Loading the schematics…</Card>}
       {state === "failed" && <Empty><EmptyHeader><EmptyTitle>Could not load the schematics</EmptyTitle><EmptyDescription>The dashboard server did not answer. It will keep trying.</EmptyDescription></EmptyHeader></Empty>}
-      {state === "ok" && !current && <Empty><EmptyHeader><EmptyTitle>No schematics saved yet</EmptyTitle><EmptyDescription>A bot saves one with the save_schematic skill, or run tools/schematic.js on a world save.</EmptyDescription></EmptyHeader></Empty>}
+      {state === "ok" && !current && <Empty><EmptyHeader><EmptyTitle>No schematics saved yet</EmptyTitle><EmptyDescription>Ask the agent for one with the New schematic button, or a bot saves one with the save_schematic skill, or run tools/schematic.js on a world save.</EmptyDescription></EmptyHeader></Empty>}
       {current && (
         // three panels (list, viewer, details) when the page is wide, the list beside the viewer with the details under it when it is medium, stacked when narrow: by the page's own width, not the window's
         <div className="@container">
           <div className="grid gap-4 @3xl:grid-cols-[16rem_minmax(0,1fr)] @3xl:[grid-template-areas:'list_view'_'list_details'] @6xl:grid-cols-[16rem_minmax(0,1fr)_21rem] @6xl:[grid-template-areas:'list_view_details']">
             <Card className={cn("gap-3 p-3 max-h-80 @3xl:self-start @3xl:sticky @3xl:top-4 @3xl:max-h-[calc(100vh-8rem)] @6xl:h-[calc(100vh-15rem)] @6xl:max-h-none", AREA.list)}>
               <div className="flex items-baseline justify-between px-1"><h2 className="text-sm font-semibold">Schematics</h2><span className="text-xs text-muted-foreground tabular-nums">{list.length}</span></div>
-              <SchematicPicker list={list} currentId={current.id} onPick={setPick} state={catalog} />
+              <SchematicPicker list={list} currentId={current.id} onPick={(id) => choose(id)} state={catalog} />
             </Card>
-            <Viewer key={current.id} item={current} />
+            <Viewer key={current.id} item={current} variant={variantNow} onVariant={setVariant} onAsk={openAsk} />
           </div>
         </div>
       )}

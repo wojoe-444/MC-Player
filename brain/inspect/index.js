@@ -101,7 +101,7 @@ module.exports = function register(api) {
     // the exact check: cell by cell against the room's own blueprint (a schematic saved for it), or against the design when it has none (then only a note: the
     // specific checks above already say what is wrong, this says how much of the design is in place)
     try {
-      const explicit = room.schematic ? SC.load(SC.dirsFor({ sharedDir: path.dirname(registryFile), stateDir: path.dirname(api.statePath('x')) }), room.schematic) : null
+      const explicit = room.schematic ? SC.load(SC.dirsFor({ sharedDir: path.dirname(registryFile), stateDir: path.dirname(api.statePath('x')) }), room.schematic, room.schematicVariant || undefined) : null
       const schem = explicit || designs.mobfarmDesign(L, { id: 'design-' + room.id })
       const ex = exact.check(schem, schem.origin, g, { fault: !!explicit })
       res.findings.push(...ex.findings); res.stats = { ...res.stats, exact: ex.stats }

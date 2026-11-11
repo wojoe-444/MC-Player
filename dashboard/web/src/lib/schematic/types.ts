@@ -12,9 +12,14 @@ export type PaletteEntry = {
 }
 export type BomRow = { key: string; block: string; name: string; cells: number; indices: number[]; role: string; subs: string | null; fluid: boolean }
 export type RawLine = { id: string; label: string; verb: string; amount: number; stacks: number }
-export type SchematicSummary = { id: string; name: string; kind: string; category: string; tags: string[]; mode: string; purpose: string; size: number[]; origin: number[]; world: string | null; capturedAt: string | null; by: string | null }
+export type VariantInfo = { id: string; name: string; description: string; size: number[]; mode: string }
+export type SchematicSummary = { variants: VariantInfo[]; defaultVariant: string; id: string; name: string; kind: string; category: string; tags: string[]; mode: string; purpose: string; size: number[]; origin: number[]; world: string | null; capturedAt: string | null; by: string | null }
 export type SchematicDetail = SchematicSummary & {
   v: number
+  /** the variant these cells are (a schematic with one build has the variant Main) */
+  variant: string
+  variantName: string
+  variantDescription: string
   source: { world?: string; capturedAt?: string; by?: string }
   notes: string[]
   palette: PaletteEntry[]
@@ -23,4 +28,19 @@ export type SchematicDetail = SchematicSummary & {
   counts: Record<string, number>
   bom: BomRow[]
   raw: { lines: RawLine[]; other: { name: string; amount: number }[]; note: string }
+}
+
+/** The schematic agent (dashboard/schematicagent.js, /api/schematic-agent) */
+export type AgentRequest = {
+  id: string; createdAt: string; startedAt?: string; finishedAt?: string; source: "user" | "bot"; by: string; prompt: string
+  kind: "new" | "edit" | "variant"; target: { id: string; variant: string | null } | null; model: string; effort: string
+  status: "queued" | "running" | "cancelling" | "done" | "failed" | "cancelled"; error?: string; costUsd?: number; calls: number; lastCall: { tool: string } | null
+  result?: { schematicId: string; variantId: string; name: string; size: number[]; cells: number; summary?: string; issues?: string[] }
+}
+export type AgentInfo = {
+  available: boolean; unavailableWhy: string | null; running: string | null
+  models: { id: string; label: string }[]; efforts: string[]; defaults: { model: string; effort: string }
+  config: { botDailyCap: number; botMaxPending: number; botModel: string; botEffort: string }
+  quota: { date: string; used: number; cap: number; remaining: number; byBot: Record<string, number> }
+  requests: AgentRequest[]
 }

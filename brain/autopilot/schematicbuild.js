@@ -63,7 +63,7 @@ module.exports = function schematicbuild(G, S, M, api, log) {
     return ok()
   }
   async function approachSite(job) {
-    const s = SC().load(job.id); if (!s) return false
+    const s = SC().load(job.id, job.variant); if (!s) return false
     const c = [job.at[0] + Math.floor(s.size[0] / 2), job.at[1] + Math.floor(s.size[1] / 2), job.at[2] + Math.floor(s.size[2] / 2)]
     const r = await S.goto(new goals.GoalNear(c[0], c[1], c[2], 8), { dig: false, ms: 90000, escalate: true })
     return !!r.ok
@@ -259,7 +259,7 @@ module.exports = function schematicbuild(G, S, M, api, log) {
   // a finished farm stops spawning when the bot stands within 24 blocks of its pads: leave the build
   async function goRest() {
     const j = SC().job(); if (!j || j.kind !== 'mobfarm') return
-    const s = SC().load(j.id); if (!s) return
+    const s = SC().load(j.id, j.variant); if (!s) return
     const c = [j.at[0] + s.size[0] / 2, j.at[2] + s.size[2] / 2]
     if (Math.hypot(bot.entity.position.x - c[0], bot.entity.position.z - c[1]) > 40) return
     const home = st.home; if (Array.isArray(home)) await S.goto(new goals.GoalNear(home[0], home[1], home[2], 4), { dig: false, ms: 60000, escalate: true })

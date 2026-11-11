@@ -42,9 +42,11 @@ function candidates(kind, dirs) {
 }
 
 // -> { ok, schematic, follow, why } for a decided build
-function choose({ kind, id = null, explicit = false, dirs }) {
+function choose({ kind, id = null, explicit = false, dirs, variant = null }) {
   const list = id ? S.list(dirs).map(e => e.schematic).filter(s => s.id === id) : candidates(kind, dirs)
-  const schem = list[0]
+  let schem = list[0]
+  // a schematic is a collection of variants: the one asked for (by id), else its default
+  if (schem && variant && variant !== schem.variant) { const v = S.load(dirs, schem.id, variant); if (!v || v.variant !== variant) return { ok: false, follow: false, why: `"${schem.id}" has no variant "${variant}"` }; schem = v }
   if (!schem) return { ok: false, follow: false, why: id ? `no schematic "${id}" in the catalog` : `the catalog has no schematic for "${kind}"` }
   const p = policy({ kind: kind || schem.kind, explicit: explicit || !!id, schem })
   if (!p.follow) return { ok: false, follow: false, why: p.why, schematic: schem }

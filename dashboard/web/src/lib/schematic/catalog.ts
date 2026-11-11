@@ -3,7 +3,7 @@ export type Entry = { id: string; name: string; kind: string; category: string; 
 export type Query = { q: string; mode: "all" | "functional" | "aesthetic"; categories: ReadonlySet<string> }
 export type Group = { category: string; label: string; items: Entry[] }
 
-const LABELS: Record<string, string> = { mobfarm: "Mob farms", farm: "Farms", house: "Houses", base: "Bases", shaft: "Shafts", room: "Rooms", tunnel: "Tunnels", mine: "Mines", build: "Other builds", import: "Imported" }
+const LABELS: Record<string, string> = { mobfarm: "Mob farms", farm: "Farms", house: "Houses", base: "Bases", shaft: "Shafts", room: "Rooms", tunnel: "Tunnels", mine: "Mines", build: "Other builds", import: "Imported", tower: "Towers", wall: "Walls", bridge: "Bridges", statue: "Statues", garden: "Gardens", storage: "Storage" }
 /** 'mobfarm' -> 'Mob farms'; a category nobody named gets its own words capitalised */
 export const categoryLabel = (c: string): string => LABELS[c] ?? (c ? c[0].toUpperCase() + c.slice(1).replace(/[_-]+/g, " ") : "Other builds")
 
