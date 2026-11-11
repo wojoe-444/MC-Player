@@ -8,6 +8,7 @@ const { startDashboard } = require('./lib/dashboard-process')
 const { TriggerManager } = require('./lib/triggers')
 const { createReviewTrigger, listReviews } = require('./lib/review')
 const { UpdateManager } = require('./lib/updater')
+const { startControlServer } = require('./lib/control')
 const { loopState, loadLib, JOB_IDS } = require('./lib/loop')
 
 // Packaged: electron-builder copies dashboard/ into resources/. From source: the repo root is one level up.
@@ -21,7 +22,7 @@ const loopLib = loadLib(REVIEWER_DIR)
 const ICON = path.join(__dirname, 'build', 'icon.ico')
 let config, dash, triggers, reviewsDir
 let mainWin = null
-let updates
+let updates, control
 
 const log = (...a) => console.log(new Date().toISOString(), ...a)
 
@@ -199,6 +200,8 @@ app.whenReady().then(async () => {
   handle('update:state', () => updates.state())
   handle('update:check', () => updates.check())
   handle('update:install', () => { updates.install().catch(() => {}); return updates.state() })
+  // Local control endpoint (127.0.0.1 + token file): lets a Claude session on this laptop check/download/install updates. See lib/control.js.
+  if (config.data.control.enabled) control = await startControlServer({ updates, info: () => ({ version: app.getVersion(), packaged: app.isPackaged }), dataDir: userData, port: config.data.control.port, log })
   handle('app:info', () => ({ version: app.getVersion(), packaged: app.isPackaged, dataDir: userData, dashboardUrl: dash.url }))
 
   buildMenu()
@@ -210,4 +213,4 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => app.quit())
-app.on('before-quit', () => { if (triggers) triggers.stop(); if (dash) dash.stop() })
+app.on('before-quit', () => { if (triggers) triggers.stop(); if (dash) dash.stop(); if (control) control.close() })

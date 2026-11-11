@@ -69,6 +69,15 @@ class UpdateManager extends EventEmitter {
     this.au.quitAndInstall(true, true) // isSilent, isForceRunAfter
     return this.state()
   }
+
+  // Check, then (if a newer release exists) start the same flow as the "Update and restart" button without waiting for it:
+  // the app quits into the installer, so callers get the state as soon as the download has begun. Used by the local control endpoint.
+  async apply() {
+    if (this.s.status === 'unsupported' || this.busy()) return this.state()
+    const s = await this.check()
+    if (s.status === 'available') this.install().catch(() => {})
+    return this.state()
+  }
 }
 
 module.exports = { UpdateManager, friendlyError, notesText }

@@ -19,6 +19,8 @@ function defaults(home = os.homedir()) {
       model: 'haiku',
       timeoutMs: 3 * 60 * 1000,
     },
+    // Local endpoint (127.0.0.1, token) a Claude session can use to update the app; see lib/control.js
+    control: { enabled: true, port: 8766 },
     triggers: {
       review: { enabled: true, intervalMin: 5 },
     },
