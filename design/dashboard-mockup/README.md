@@ -19,7 +19,7 @@ Claude reviews and Settings talk to the Electron main process in the real app. T
 ## Design
 - shadcn/ui components (same set as the dashboard), Tailwind v4, Radix, Lucide.
 - MUI-style rhythm: 8px spacing (24px card padding and grid gutters), 64px app bar, 256px drawer, grouped navigation with an active highlight.
-- Palette: 28 switchable color schemes (12 + 12 + 4 true-neutral ones, every pair checked against WCAG AA) (picker in the app bar and an Appearance card in Settings), each in light and dark; the default is Indigo Ink (ink-navy chrome, indigo primary). Palettes are defined in `src/theme.ts` as a few parameters and expanded into the full token set, so adding one is one line. Status colors keep the same hues in every scheme.
+- Palette: 28 switchable color schemes (12 + 12 + 4 true-neutral ones, every pair checked against WCAG AA) (picker in the app bar and an Appearance card in Settings), each in light and dark; the default is Sand & Ink (cream paper, khaki accent, light drawer). Palettes are defined in `src/theme.ts` as a few parameters and expanded into the full token set, so adding one is one line. Status colors keep the same hues in every scheme.
 - Inter for text, JetBrains Mono for coordinates and ids.
 
 ## Run

@@ -50,7 +50,7 @@ export const PALETTES: Palette[] = [
   { id: "warm-stone", name: "Warm Stone", blurb: "Stone gray with a warm lean, muted clay accent", ph: 55, pc: 0.06, nh: 70, nc: 0.008, sidebar: "dark", sh: 65, neutral: true },
   { id: "sage", name: "Sage", blurb: "Gray-green neutrals, quiet sage accent", ph: 150, pc: 0.05, nh: 145, nc: 0.007, sidebar: "dark", sh: 150, neutral: true },
   { id: "true-gray", name: "True Gray", blurb: "Pure neutral gray, no tint at all", ph: 0, pc: 0, nh: 0, nc: 0, sidebar: "dark", sh: 0, neutral: true },
-  { id: "sand-ink", name: "Sand & Ink", blurb: "Cream paper, khaki accent, light drawer", ph: 80, pc: 0.07, nh: 85, nc: 0.01, sidebar: "light", neutral: true },
+  { id: "sand-ink", name: "Sand & Ink", blurb: "Default. Cream paper, khaki accent, light drawer", ph: 80, pc: 0.07, nh: 85, nc: 0.01, sidebar: "light", neutral: true },
 ]
 /** Display groups, in PALETTES order: first 12, next 12, then the 4 neutral schemes. */
 export const GROUPS: { label: string; from: number; to: number }[] = [
@@ -155,12 +155,12 @@ export function tokens(p: Palette, dark: boolean): Record<string, string> {
 }
 
 export type ThemeState = { palette: string; dark: boolean }
-const KEY = "mock-palette"
+const KEY = "mock-palette-v2"
 
 export function loadTheme(): ThemeState {
-  let palette = "indigo-ink"
+  let palette = "sand-ink"
   try { palette = localStorage.getItem(KEY) || palette } catch { /* ignore */ }
-  if (!PALETTES.some((p) => p.id === palette)) palette = "indigo-ink"
+  if (!PALETTES.some((p) => p.id === palette)) palette = "sand-ink"
   return { palette, dark: document.documentElement.classList.contains("dark") }
 }
 
