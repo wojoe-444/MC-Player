@@ -31,21 +31,22 @@ function world(blocks = {}) {
 const placed = (x, y, z, block = 'cobblestone', o = {}) => ({ x, y, z, op: 'p', block, by: 'OzoGo444', t: T0 - 30 * MIN, space: null, via: 'pillar', ...o })
 const ours = (n) => /^(OzoGo444|Smeo444)$/.test(n)
 
-test('scaffold: a column of placed cobble is a pillar; a wide one a tower; singles are strays; plugs, covered, young and named cells are not reported', () => {
+test('scaffold: a column of placed cobble is a pillar; a wide one a tower; singles are strays; plugs, covered, young, build-job, wall and foreign cells are not reported', () => {
   const wd = world()
   const cells = []
   for (let y = 64; y <= 68; y++) { cells.push(placed(10, y, 10)); wd.set(10, y, 10, 'cobblestone') }                   // 5-high pillar
   for (let y = 64; y <= 66; y++) for (const x of [20, 21, 22]) { cells.push(placed(x, y, 20, 'dirt')); wd.set(x, y, 20, 'dirt') }   // 3x3 wall: a tower
   cells.push(placed(30, 64, 30)); wd.set(30, 64, 30, 'cobblestone')                                                 // a stray
   cells.push(placed(40, 64, 40, 'cobblestone', { t: T0 - 2 * MIN })); wd.set(40, 64, 40, 'cobblestone')            // two minutes old: a climb in progress
-  cells.push(placed(50, 64, 50, 'cobblestone', { space: 'crops' })); wd.set(50, 64, 50, 'cobblestone')             // inside a named space
+  cells.push(placed(50, 64, 50, 'cobblestone', { space: 'schematic-1', via: 'schematic' })); wd.set(50, 64, 50, 'cobblestone')   // a build job's own block in a named space
   cells.push(placed(60, 64, 60)); wd.set(60, 64, 60, 'cobblestone'); wd.set(60, 66, 60, 'stone')                    // rock two above: under ground
-  cells.push(placed(70, 64, 70)); wd.set(70, 64, 70, 'cobblestone'); wd.set(71, 64, 70, 'oak_planks')              // touches the house
+  cells.push(placed(70, 64, 70)); wd.set(70, 64, 70, 'cobblestone'); wd.set(71, 64, 70, 'oak_planks')              // touches the house: a wall cell
   cells.push(placed(80, 64, 80)); wd.set(80, 64, 80, 'dirt')                                                        // someone swapped it: not what we placed
   cells.push({ ...placed(90, 64, 90), by: 'Walter' }); wd.set(90, 64, 90, 'cobblestone')                           // not ours
   const r = L.scaffold({ cells, read: wd.read, isOurs: ours, now: T0 })
   const by = Object.fromEntries(r.clusters.map(c => [c.pos.join(','), c]))
   assert.deepStrictEqual(Object.keys(by).sort(), ['10,64,10', '20,64,20', '30,64,30'])
+  assert.ok(r.reasons.buildJob === 1 && r.reasons.young === 1 && r.reasons.houseWall === 1 && r.reasons.covered === 1 && r.reasons.changed === 1 && r.reasons.notOurs === 1, 'every rejection is counted: ' + JSON.stringify(r.reasons))
   assert.strictEqual(by['10,64,10'].kind, 'pillar'); assert.strictEqual(by['10,64,10'].h, 5); assert.strictEqual(by['10,64,10'].n, 5)
   assert.strictEqual(by['20,64,20'].kind, 'tower'); assert.strictEqual(by['20,64,20'].n, 9)
   assert.strictEqual(by['30,64,30'].kind, 'stray')
@@ -209,4 +210,65 @@ test('tidy: a column comes down top first in one visit (the old rule took one bl
   assert.deepStrictEqual(stuck, ['14,72,10'], 'the top of the 9 high column is out of reach and is said so')
   assert.strictEqual([...wd.w].filter(([k, n]) => k.startsWith('14,') && n === 'cobblestone').length, 9, 'and the column stays whole (nothing is taken out from under it)')
   assert.ok(removed === 5)
+})
+
+
+test('scaffold: what the first version missed on the live base (2026-11-11): a pillar in a crop/tree-farm box, dirt that grew grass, a pillar against a wall, a pillar by the shelter', () => {
+  const wd = world(), cells = []
+  for (let y = 64; y <= 70; y++) { cells.push(placed(10, y, 10, 'dirt', { space: 'crops', via: 'autopilot' })); wd.set(10, y, 10, y === 70 ? 'grass_block' : 'dirt') }      // 7 high, in the crop plot's box, topped with grass
+  for (let y = 64; y <= 68; y++) { cells.push(placed(20, y, 20)); wd.set(20, y, 20, 'cobblestone') }; wd.set(21, 64, 20, 'oak_planks')   // the foot of the pillar touches a wall
+  for (let y = 64; y <= 67; y++) { cells.push(placed(30, y, 30)); wd.set(30, y, 30, 'cobblestone') }                                       // beside the shelter
+  const r = L.scaffold({ cells, read: wd.read, isOurs: ours, now: T0, skipCell: (x, y, z) => x === 30 })
+  const by = Object.fromEntries(r.clusters.map(c => [c.pos.join(','), c]))
+  assert.deepStrictEqual(Object.keys(by).sort(), ['10,64,10', '20,65,20'])
+  assert.strictEqual(by['10,64,10'].h, 7); assert.strictEqual(by['10,64,10'].kind, 'pillar')
+  assert.strictEqual(by['20,65,20'].h, 4, 'the cell that touches the wall stays with the wall, the rest of the pillar is reported')
+  assert.strictEqual(r.reasons.shelter, 4)
+})
+
+test('trees: a tree cut into and left standing (stump, a middle cut, a high limb) is found from the ledger; a regrown tree, an uncut tree and a far neighbour are not', () => {
+  const wd = world()
+  // oak A at 10,10: cut out of the middle (y 66..67 dug), stump y64..65 stands on soil, upper logs 68..72 above the gap
+  for (let y = 64; y <= 72; y++) if (y !== 66 && y !== 67) wd.set(10, y, 10, 'oak_log')
+  for (let x = 8; x <= 12; x++) for (let y = 69; y <= 74; y++) for (let z = 8; z <= 12; z++) if (!wd.w.has(`${x},${y},${z}`)) wd.set(x, y, z, 'oak_leaves')
+  // oak B at 14,10 (4 blocks away) is alive and untouched; its crown touches nothing of A's logs
+  for (let y = 64; y <= 70; y++) wd.set(14, y, 10, 'oak_log')
+  // oak C at 30,30 was felled and grew back: the ledger has dug cells at its trunk and logs stand there again
+  for (let y = 64; y <= 69; y++) wd.set(30, y, 30, 'oak_log')
+  const D = (x, y, z, o = {}) => ({ x, y, z, op: 'd', block: 'oak_log', by: 'OzoGo444', t: T0 - 20 * MIN, space: null, via: 'autopilot', ...o })
+  const dug = [D(10, 66, 10), D(10, 67, 10), D(30, 64, 30), D(30, 65, 30)]
+  const seeds = [...wd.w].filter(([, n]) => /_log$/.test(n)).map(([k]) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z } })
+  const get = (x, y, z) => dug.find(d => d.x === x && d.y === y && d.z === z) || null
+  const r = L.trees({ seeds, read: wd.read, get, dug, isOurs: ours, now: T0 })
+  assert.strictEqual(r.clusters.length, 1, JSON.stringify(r.clusters.map(c => [c.id, c.kind, c.n])))
+  const c = r.clusters[0]
+  assert.strictEqual(c.kind, 'ungrounded'); assert.strictEqual(c.species, 'oak'); assert.deepStrictEqual(c.pos, [10, 68, 10]); assert.strictEqual(c.n, 5, 'the upper logs; the stump below the cut is not part of it')
+  assert.ok(c.leaves > 20); assert.strictEqual(c.by, 'OzoGo444')
+  // a 2x2 trunk with one column cut out: the other three columns stand on soil (so it is not "standing on nothing"), only the ledger shows it was cut into
+  const w2 = world()
+  for (let y = 64; y <= 71; y++) for (const [x, z] of [[40, 40], [41, 40], [40, 41], [41, 41]]) if (!(x === 40 && z === 40 && y <= 66)) w2.set(x, y, z, 'dark_oak_log')
+  const dugE = [64, 65, 66].map(y => D(40, y, 40))
+  const seedsE = [...w2.w].filter(([, n]) => /_log$/.test(n)).map(([k]) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z } })
+  const e = L.trees({ seeds: seedsE, read: w2.read, dug: dugE, isOurs: ours, now: T0 })
+  assert.strictEqual(e.clusters.length, 1); assert.strictEqual(e.clusters[0].kind, 'cut'); assert.ok(e.clusters[0].n >= 20, 'n ' + e.clusters[0].n)
+  assert.strictEqual(L.trees({ seeds: seedsE, read: w2.read, dug: [], isOurs: ours, now: T0 }).clusters.length, 0, 'with no cut on record the grounded trunk is a living tree')
+  assert.strictEqual(L.trees({ seeds: seedsE, read: w2.read, dug: dugE.map(d => ({ ...d, t: T0 - MIN })), isOurs: ours, now: T0 }).clusters.length, 0, 'a log dug a minute ago is a felling in progress')
+  assert.strictEqual(L.trees({ seeds: seedsE, read: w2.read, dug: dugE.map(d => ({ ...d, by: 'Walter' })), isOurs: ours, now: T0 }).clusters.length, 0, 'a log a player dug is not ours to finish')
+})
+
+test('module: it looks around home as well as around the bot (the pillars are at the base, the bot is down the mine), and leftovers.json says why when it finds nothing', () => {
+  const r = rig()
+  r.bot.entity.position = new Vec3(500.5, 64, 500.5)                                  // far from the base
+  r.bot._ap = { G: { state: { home: [10, 64, 13], _shelterBox: { x0: 40, x1: 44, z0: 40, z1: 44, y: 64 } } } }
+  for (let y = 64; y <= 68; y++) r.place(10, y, 13, 'cobblestone')
+  for (let y = 64; y <= 67; y++) r.place(42, y, 42, 'cobblestone')                    // the shelter's own wall
+  r.place(12, 64, 13, 'cobblestone', 'Walter')                                          // a player's block
+  r.bot._ledger._store.bots.add('OzoGo444')
+  r.adv(11 * MIN); r.mod._tick.scan(); r.adv(6 * MIN)
+  const s = r.mod._tick.scan()
+  assert.deepStrictEqual(s.scaffold.map(c => c.pos.join(',')), ['10,64,13'], 'found at home from far away; the shelter and the player\'s block are left out')
+  assert.strictEqual(s.diag.centres, 2); assert.strictEqual(s.diag.reasons.shelter, 4); assert.strictEqual(s.diag.reasons.notOurs, 1)
+  const st = JSON.parse(fs.readFileSync(path.join(r.dir, 'leftovers.json'), 'utf8'))
+  assert.ok(st.diag && st.diag.reasons && st.diag.candidates === 5, JSON.stringify(st.diag))
+  r.stop()
 })

@@ -34,27 +34,48 @@ module.exports = function register(api) {
     try { return bot.findBlocks({ point: center, matching: ids, maxDistance: RADIUS, count: 1500 }).map(p => ({ x: p.x, y: p.y, z: p.z })) } catch { return [] }
   }
 
+  // where to look: around the bot, and around home when that is elsewhere (the pillars are at the base, the bot is often down the mine or out exploring)
+  const gstate = () => (bot._ap && bot._ap.G && bot._ap.G.state) || {}
+  const centres = (me) => {
+    const out = [me]
+    try { const h = gstate().home; if (Array.isArray(h) && h.length >= 3 && Math.hypot(h[0] - me.x, h[2] - me.z) > RADIUS / 2) out.push(new Vec3(h[0], h[1], h[2])) } catch {}
+    return out
+  }
+  // cells that belong to the shelter or the home build are not scaffolding even when the ledger calls them filler
+  const skipCell = (x, y, z) => { try { const sb = gstate()._shelterBox; return !!sb && x >= sb.x0 - 1 && x <= sb.x1 + 1 && z >= sb.z0 - 1 && z <= sb.z1 + 1 && y >= sb.y - 2 && y <= sb.y + 4 } catch { return false } }
+
   function scan() {
     const t = now(), me = bot.entity && bot.entity.position
     if (!me || !bot.blockAt) return last
     const led = bot._ledger
-    let sc = [], tr = [], err = null
-    try {
-      if (led && led.near) {
-        const cells = led.near(me, RADIUS).filter(c => c.op === 'p').slice(0, MAX_CELLS)
-        sc = L.scaffold({ cells, read, isOurs: ours, now: t }).clusters
-      }
-    } catch (e) { err = 'scaffold: ' + e.message }
-    try {
-      const get = (x, y, z) => { try { return led && led.at ? led.at({ x, y, z }) : null } catch { return null } }
-      tr = L.trees({ seeds: seedLogs(me), read, get, isOurs: ours, now: t }).clusters
-    } catch (e) { err = (err ? err + '; ' : '') + 'trees: ' + e.message }
+    let sc = [], tr = [], err = null, diag = { centres: 0, reasons: {}, candidates: 0, logSeeds: 0, dug: 0 }
+    const cs = centres(me); diag.centres = cs.length
+    const seenSc = new Set(), seenTr = new Set()
+    for (const c of cs) {
+      let cells = [], dug = []
+      try {
+        if (led && led.near) {
+          const all = led.near(c, RADIUS)
+          cells = all.filter(x => x.op === 'p').slice(0, MAX_CELLS)
+          dug = all.filter(x => x.op === 'd' && L.LOG.test(x.block || ''))
+        }
+        const r = L.scaffold({ cells, read, isOurs: ours, now: t, skipCell })
+        for (const k of Object.keys(r.reasons)) diag.reasons[k] = (diag.reasons[k] || 0) + r.reasons[k]
+        diag.candidates += r.candidates
+        for (const x of r.clusters) if (!seenSc.has(x.id)) { seenSc.add(x.id); sc.push(x) }
+      } catch (e) { err = 'scaffold: ' + e.message }
+      try {
+        const get = (x, y, z) => { try { return led && led.at ? led.at({ x, y, z }) : null } catch { return null } }
+        const seeds = seedLogs(c); diag.logSeeds += seeds.length; diag.dug += dug.length
+        for (const x of L.trees({ seeds, read, get, dug, isOurs: ours, now: t }).clusters) if (!seenTr.has(x.id)) { seenTr.add(x.id); tr.push(x) }
+      } catch (e) { err = (err ? err + '; ' : '') + 'trees: ' + e.message }
+    }
     const ids = new Set([...sc, ...tr].map(c => c.id))
     // gone (and it would have been in view): forget it, so a new one at the same spot is news. One out of range stays on the books.
-    for (const [id, f] of [...firstSeen]) if (!ids.has(id) && Math.hypot(f.pos[0] - me.x, f.pos[2] - me.z) < RADIUS - 8) { firstSeen.delete(id); reported.delete(id) }
+    for (const [id, f] of [...firstSeen]) if (!ids.has(id) && cs.some(c => Math.hypot(f.pos[0] - c.x, f.pos[2] - c.z) < RADIUS - 8)) { firstSeen.delete(id); reported.delete(id) }
     for (const c of [...sc, ...tr]) if (!firstSeen.has(c.id)) firstSeen.set(c.id, { t, pos: c.pos })
     const standing = (c) => t - firstSeen.get(c.id).t >= REPORT_AFTER_MS
-    last = { at: t, scaffold: sc.filter(standing), trees: tr.filter(standing), seen: { scaffold: sc.length, trees: tr.length }, err }
+    last = { at: t, scaffold: sc.filter(standing), trees: tr.filter(standing), seen: { scaffold: sc.length, trees: tr.length }, diag, err }
     report(t)
     persist(t)
     return last
@@ -80,7 +101,7 @@ module.exports = function register(api) {
       fs.mkdirSync(path.dirname(file), { recursive: true })
       const slim = (c) => { const { cells, logs, ...rest } = c; return rest }
       const tmp = file + '.tmp'
-      fs.writeFileSync(tmp, JSON.stringify({ updatedAt: new Date(t).toISOString(), scaffold: last.scaffold.map(c => ({ ...slim(c), cells: c.cells })), trees: last.trees.map(c => ({ ...slim(c), logs: c.logs })), seen: last.seen, err: last.err }))
+      fs.writeFileSync(tmp, JSON.stringify({ updatedAt: new Date(t).toISOString(), scaffold: last.scaffold.map(c => ({ ...slim(c), cells: c.cells })), trees: last.trees.map(c => ({ ...slim(c), logs: c.logs })), seen: last.seen, diag: last.diag, err: last.err }))
       fs.renameSync(tmp, file)
     } catch { /* a state file is a convenience */ }
   }
