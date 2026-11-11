@@ -13,6 +13,8 @@
 //   node run.js --dream --force     dream even when the journal has nothing new      --dream-dry-run   print the prompts and the candidates; no model call
 //   node run.js --orders            print the work orders, most costly first
 //   node run.js --deploy            the deployer on a schedule (lib/deploy.js): judge the last deploy, then put main on the live bots. Its own entry, every 30 min.
+//   node run.js --audit             the loop's own review (lib/audit.js): every six hours a stronger model (Sonnet 5.5 at high effort) reads the facts and the hard rules and says whether the
+//                                   loop works as intended and what only a person can unblock. Its own entry, every 6 h. --audit-dry-run prints the prompt; no model call.
 //   node run.js --digest            the daily digest (lib/digest.js): at most one a day, after 07:00; --force writes one now. Its own entry, checked hourly.
 //   node run.js --fix               the fixer (lib/fixer.js): take the most costly open work order, fix it in the loop folder's own copy of the code, check
 //                                   the fix, open the pull request. Its own entry, every 3 h. --only KEY takes that order; --fix-mode merge|pr|local;
@@ -30,7 +32,7 @@ const runs = require('./lib/runs')
 async function main() {
   const cfg = resolveConfig({ argv: process.argv.slice(2) })
   const f = cfg.args.flags
-  const job = schedule.JOBS[['dream', 'deploy', 'digest', 'fix'].find(j => f.has(j)) || 'review']
+  const job = schedule.JOBS[['dream', 'deploy', 'digest', 'fix', 'audit'].find(j => f.has(j)) || 'review']
   if (f.has('install-task')) {
     const r = await schedule.install({ scriptPath: path.resolve(__filename), outDir: cfg.outDir, minutes: cfg.args.opts.minutes ? cfg.minutes : job.minutes, job })
     console.log(r.ok ? `Installed Task Scheduler job "${job.name}": every ${r.minutes} min while you are logged in, hidden window, runs ${r.nodeExe} ${__filename} ${job.args.join(' ')}` : `Could not install: ${r.error}`)
@@ -42,6 +44,16 @@ async function main() {
   if (f.has('deploy')) {
     const r = await require('./lib/deploy').runDeploy(cfg, { log: (m) => logLine(cfg, m, Date.now()), tests: !f.has('no-tests') })
     console.log(JSON.stringify(r)); return r.ok ? 0 : 1
+  }
+  if (f.has('audit') || f.has('audit-dry-run')) {
+    const tasks = {}; for (const id of Object.keys(schedule.JOBS)) tasks[id] = await schedule.status(undefined, schedule.JOBS[id])
+    const r = await require('./lib/audit').runAudit(cfg, { ask: askClaude, task: tasks, dryRun: f.has('audit-dry-run'), log: (m) => logLine(cfg, m, Date.now()) })
+    if (r.dryRun) { console.log(`--- system ---
+${r.system}
+
+--- prompt ---
+${r.prompt}`); return 0 }
+    console.log(require('./lib/audit').toMarkdown(r.report)); return r.ok ? 0 : 1
   }
   if (f.has('digest')) {
     const r = require('./lib/digest').runDigest(cfg, { force: f.has('force'), log: (m) => logLine(cfg, m, Date.now()) })

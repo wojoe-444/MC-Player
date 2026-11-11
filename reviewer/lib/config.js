@@ -61,6 +61,8 @@ function resolveConfig({ argv = [], env = process.env, home = os.homedir(), exis
     // local = keep the checked fix on its branch in the working copy. Set on the app's Memory loop tab (loop.fixMode).
     fixMode: args.opts['fix-mode'] || env.FIXER_MODE || (app && app.loop && app.loop.fixMode) || 'merge',
     fixRepo: args.opts['fix-repo'] || env.FIXER_REPO || (app && app.loop && app.loop.fixRepo) || undefined,
+    // the loop's own review (lib/audit.js) is the one job that runs on a stronger model: Walter 2026-11-11, Sonnet 5.5 at high effort every six hours
+    auditModel: env.AUDIT_MODEL || 'claude-sonnet-5-5', auditEffort: env.AUDIT_EFFORT || 'high',
     model: args.opts.model || env.REVIEWER_MODEL || 'claude-haiku-5-5',
     effort: args.opts.effort || env.REVIEWER_EFFORT || 'xhigh',
     timeoutMs: Number(env.REVIEWER_TIMEOUT_MS) || 8 * 60000,

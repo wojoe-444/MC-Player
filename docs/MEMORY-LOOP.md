@@ -379,3 +379,8 @@ The build-inspection sense being added in the thread "Teach bots to see broken b
 - **Plumbing:** the deployer with judge and revert, the digest, snapshot rebuild, the scenario suite, the packet gate, and the Task Scheduler installer in the dashboard app.
 
 The article's own experiments ran on Claude Managed Agents with a mounted memory folder. That is an API product with its own billing, and nothing here needs it.
+
+
+## The loop's own review (added 2026-11-11)
+
+Walter asked for a standing check on the whole chain: `node reviewer/run.js --audit`, its own Task Scheduler entry ("MC-Player Bot Loop Audit", every 6 hours, install it from the Memory loop tab), run by Sonnet 5.5 at high effort on the Claude login. Code gathers the facts (which jobs are installed and when they last ran, whether each bot's journal is current, questions the bots asked, what happened to the work orders, deploys, missing modules in the live clone) and applies hard rules to them first. The model then judges whether the chain closes by itself and lists what only a person can unblock and what to change in the loop. Its verdict is never better than the worst hard rule. It has no tools and changes nothing. The report goes to `<loop dir>/audit/`, and the daily digest leads with its verdict.
