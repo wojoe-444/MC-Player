@@ -51,12 +51,31 @@ module.exports = function register(api) {
   }
   const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
+
+  // What the provenance ledger (brain/ledger) says about the blocks of this box: made blocks that no bot of ours recorded placing (an enderman, Walter, a flow, or
+  // older than the ledger), and blocks we placed that are not what we placed any more. Only meaningful for a build the ledger watched from the start.
+  function provenance(res, room, box, g) {
+    const lg = bot._ledger
+    if (!lg || !lg.coverageFrom) return
+    const from = lg.coverageFrom()
+    if (from == null || !(Number(room.at) >= from)) { res.stats.provenance = 'built before the ledger began, no record to compare'; return }
+    const a = lg.audit(box, (x, y, z) => g.name(x, y, z))
+    res.stats.provenance = { ours_placed: a.ours.placed, ours_dug: a.ours.dug, foreign: a.foreign.length, changed: a.changed.length }
+    const sample = (arr) => arr.slice(0, 8).map(c => [c.x, c.y, c.z])
+    if (a.changed.length) {
+      res.findings.push({ id: 'placed-changed', sev: 'warn', zone: 'box', count: a.changed.length, cells: sample(a.changed), msg: `${a.changed.length} block(s) a bot placed here are something else now (${a.changed.slice(0, 3).map(c => `${c.expected} -> ${c.found}`).join(', ')}): someone else changed our work` })
+    }
+    if (a.foreign.length) res.findings.push({ id: 'foreign-block', sev: 'note', zone: 'box', count: a.foreign.length, cells: sample(a.foreign), msg: `${a.foreign.length} made block(s) in the build that no bot recorded placing (${[...new Set(a.foreign.map(f => f.block))].slice(0, 4).join(', ')}): not our work, check before relying on them` })
+  }
+
   async function inspectRoom({ room, shaft }, opt = {}) {
     const L = mobfarm.layoutOfRoom(room, shaft)
     if (!L) return { id: room.id, skipped: 'cannot rebuild the design from the registry record (shaft or platform level missing)' }
     const g = await grid.fromBot(bot, L.box, MARGIN, { yieldEvery: true, sleep })
     if (!g) return { id: room.id, skipped: 'the chunks around the room are not loaded' }
     let res = mobfarm.check(L, g, { done: true })
+    provenance(res, room, L.box, g)
+    res = mobfarm.summarise(res.findings, res.stats, g)
     // the exact check: cell by cell against the room's own blueprint (a schematic saved for it), or against the design when it has none (then only a note: the
     // specific checks above already say what is wrong, this says how much of the design is in place)
     try {

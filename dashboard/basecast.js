@@ -127,6 +127,43 @@ function readDug(sharedDir, id) {
   return out
 }
 
+
+// ---------------------------------------------------------------- the provenance ledger (brain/ledger)
+// bot-shared/ledger/<world hash>/<bot>.jsonl, lines [t, op, x, y, z, block, by, space, via]; the newest line of a cell wins (a tie goes to the one that names a space).
+// op: p placed, d dug, r a placed block taken out again (hollows nothing), f appeared with no bot of ours placing it, x one of ours changed from outside,
+// S space metadata (block = kind, space = id, via = label), B a writer's coverage marker. This reader is the file-shape contract with brain/ledger/lib.js.
+function readLedger(sharedDir, base) {
+  const root = path.join(sharedDir, 'ledger'), cellsOut = new Map(), spaces = new Map(), writers = {}
+  let dirs = []
+  try { dirs = fs.readdirSync(root, { withFileTypes: true }).filter(d => d.isDirectory()).map(d => path.join(root, d.name)) } catch { return null }
+  let lines = 0
+  for (const dir of dirs) {
+    let files = []; try { files = fs.readdirSync(dir).filter(f => f.endsWith('.jsonl')) } catch { continue }
+    for (const f of files) {
+      let text = ''; try { text = fs.readFileSync(path.join(dir, f), 'utf8') } catch { continue }
+      for (const line of text.split('\n')) {
+        if (!line) continue
+        let r; try { r = JSON.parse(line) } catch { continue }
+        if (!Array.isArray(r) || r.length < 7 || !Number.isFinite(r[0])) continue
+        lines++
+        const [t, op] = r
+        if (op === 'B') { if (writers[r[6]] == null || t < writers[r[6]]) writers[r[6]] = t; continue }
+        if (op === 'S') { const o = spaces.get(r[7]); if (!o || o.t <= t) spaces.set(r[7], { id: r[7], kind: r[5] || null, label: r[8] || null, t }); continue }
+        if (!['p', 'd', 'r', 'f', 'x'].includes(op) || !r.slice(2, 5).every(Number.isInteger) || !inCircle(base, r[2], r[4])) continue
+        const k = key(r[2], r[3], r[4]), o = cellsOut.get(k)
+        if (o && (o[0] > t || (o[0] === t && o[7] && !r[7]))) continue
+        cellsOut.set(k, [t, op, r[2], r[3], r[4], r[5], r[6], r[7] || (o && o[7]) || '', r[8] || ''])
+      }
+    }
+  }
+  if (!lines) return null
+  const from = Object.values(writers).length ? Math.min(...Object.values(writers)) : null
+  return { cells: cellsOut, spaces, from, writers: Object.keys(writers) }
+}
+// what the dug log ignored: not "space" (trunks, leaves, plants, light, workbenches)
+const DUG_IGNORE = /(_log|_wood|_stem|_hyphae|_leaves|_sapling|_roots|_planks)$|^(grass|short_grass|tall_grass|fern|large_fern|dead_bush|vine|snow|snow_block|sugar_cane|cactus|bamboo|kelp|kelp_plant|seagrass|tall_seagrass|wheat|carrots|potatoes|beetroots|melon|pumpkin|torch|wall_torch|ladder|chest|crafting_table|furnace|hopper|barrel|oak_fence|oak_fence_gate|lily_pad|moss_carpet|glow_lichen|sweet_berry_bush|brown_mushroom|red_mushroom|dandelion|poppy|azure_bluet|oxeye_daisy|cornflower|lily_of_the_valley|leaf_litter|water|lava)$|(_flower|_tulip|_orchid|_bush|_carpet)$/
+const PART_KIND = { shaft: 'shaft', room: 'room', storage: 'room', mobfarm: 'mobfarm', farm: 'farm' }
+
 // ---------------------------------------------------------------- the world save
 const SAVE_CACHE = new Map()
 function defaultSavesDir() {
@@ -268,8 +305,33 @@ function buildCast({ base, sharedDir, registryFile, botDirs = [], codeDir = null
     }
   }
 
-  // ---- recorded digs (tunnels and anything else a bot dug in the base)
+  // ---- recorded digs (tunnels and anything else a bot dug in the base): the provenance ledger first, the older per-base dug log under it
   const dug = readDug(sharedDir, base.id)
+  const ledger = readLedger(sharedDir, base)
+  const ledgerStats = ledger ? { cells: ledger.cells.size, dug: 0, placed: 0, removed: 0, foreign: 0, changed: 0, spaces: 0, coverageFrom: ledger.from, writers: ledger.writers } : null
+  if (ledger) {
+    const bySpace = new Map()                                    // space id -> [[x,y,z]...] of dug cells the ledger filed under it
+    for (const r of ledger.cells.values()) {
+      const [t, op, x, y, z, block, by, space] = r
+      if (op === 'd') ledgerStats.dug++; else if (op === 'p') ledgerStats.placed++; else if (op === 'r') ledgerStats.removed++; else if (op === 'f') ledgerStats.foreign++; else ledgerStats.changed++
+      if (op !== 'd' || DUG_IGNORE.test(block)) continue
+      const k = key(x, y, z), old = dug.get(k)
+      if (!old || old[5] < t) dug.set(k, [x, y, z, block, by, t])
+      if (space) { let a = bySpace.get(space); if (!a) bySpace.set(space, a = []); a.push([x, y, z]) }
+    }
+    // a space the registry and the state files do not know (a job declared it) becomes its own part; a known one just marks its cells as recorded
+    for (const [id, list] of bySpace) {
+      const known = parts.find(p => p.id === id)
+      if (known) { for (const [x, y, z] of list) { const c = cells.get(key(x, y, z)); if (c) c.src = 'recorded' } continue }
+      const meta = ledger.spaces.get(id) || {}
+      const kind = PART_KIND[meta.kind] || 'tunnel'
+      const lastT = Math.max(...list.map(([x, y, z]) => (ledger.cells.get(key(x, y, z)) || [0])[0]))
+      addPart({ id, kind, label: meta.label || id, by: null, at: lastT || null, src: 'recorded', detail: `${list.length} blocks dug, filed under "${id}" by the ledger` }, list)
+      ledgerStats.spaces++
+    }
+    if (ledger.from) notes.push(`The ledger has recorded every dig and placement since ${new Date(ledger.from).toISOString().slice(0, 16).replace('T', ' ')} UTC: ${ledgerStats.placed} blocks placed, ${ledgerStats.dug} dug, ${ledgerStats.removed} placed blocks taken out again in this base. A block with no record from then on is not ours.`)
+    if (ledgerStats.foreign) notes.push(`${ledgerStats.foreign} block(s) appeared in this base that no bot of ours placed (an enderman, a player, a flow); ${ledgerStats.changed} of our own were changed by someone else.`)
+  }
   if (dug.size) {
     const list = [], by = {}
     let first = Infinity, last = 0
@@ -342,7 +404,7 @@ function buildCast({ base, sharedDir, registryFile, botDirs = [], codeDir = null
     cells: flat, cellStride: 5,
     parts, markers, notes,
     stats: { cells: all.length, recorded: bySrc.recorded, derived: bySrc.derived, digsRecorded: dug.size, placedInBase: placedCount, minY: all.length ? minY : null, maxY: all.length ? maxY : null, truncated },
-    sources: { registry: !!registry, placed: !!placed, dugLog: dug.size > 0, world: worldInfo ? { save: worldInfo.save, savedAt: worldInfo.savedAt, chunks: worldInfo.chunks, openCells: worldInfo.list.length } : null },
+    sources: { registry: !!registry, placed: !!placed, dugLog: dug.size > 0, ledger: ledgerStats, world: worldInfo ? { save: worldInfo.save, savedAt: worldInfo.savedAt, chunks: worldInfo.chunks, openCells: worldInfo.list.length } : null },
   }
 }
 

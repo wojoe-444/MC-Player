@@ -24,3 +24,5 @@ cast. It needs two records that did not exist, so this module writes them:
 
 The dashboard side is `dashboard/basecast.js` (`/api/bases`, `/api/bases/<id>`) and `dashboard/web/src/pages/Bases.tsx`.
 After a merge the bot needs a restart to start logging; the page works before that.
+
+**Superseded in part by `brain/ledger` (2026-11-11):** the ledger records every dig and placement, not just digs inside a base, with the bot, the job and the named space; the Bases cast reads it first and this log second. This module still owns which waypoints are bases.

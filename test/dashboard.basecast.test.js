@@ -82,6 +82,36 @@ test('cast: recorded digs become tunnels, never override a shaft or room cell, a
   assert.strictEqual(c.stats.recorded, 2)
 })
 
+test('cast: the provenance ledger files digs under their space, ignores removed plugs, counts foreign blocks, and marks known parts as recorded', () => {
+  const w = world()
+  const dir = path.join(w.shared, 'ledger', 'ab12')
+  const L = (...a) => JSON.stringify(a)
+  J(path.join(dir, 'OzoGo444.jsonl'), [
+    L(1000, 'B', 0, 0, 0, '', 'OzoGo444', '', ''),
+    L(1500, 'S', 0, 0, 0, 'farm', 'OzoGo444', 'pen-new', 'New pen'),
+    L(2000, 'd', -6018, 30, -2355, 'stone', 'OzoGo444', 'sh', 'mining'),         // inside the registry's shaft: becomes a recorded cell of it
+    L(2100, 'd', -6000, 40, -2340, 'stone', 'OzoGo444', 'pen-new', 'build'),     // a space only the ledger knows
+    L(2200, 'd', -6001, 40, -2340, 'dirt', 'OzoGo444', '', 'mining'),            // nobody's space: the dug tunnels
+    L(2300, 'r', -6002, 40, -2340, 'cobblestone', 'OzoGo444', '', 'mining'),     // a plug taken out again: hollows nothing
+    L(2400, 'p', -6003, 40, -2340, 'cobblestone', 'OzoGo444', '', 'build'),
+    L(2500, 'f', -6004, 40, -2340, 'dirt', 'other', '', ''),                     // an enderman
+    L(2600, 'd', -6005, 40, -2340, 'oak_log', 'OzoGo444', '', 'treefarm'),       // a trunk is not space
+    L(2700, 'd', 9999, 40, 9999, 'stone', 'OzoGo444', '', 'mining'),             // far outside the base
+  ].join('\n') + '\n')
+  const c = bc.buildCast({ base: BASE, ...w.opts })
+  const cells = cellsOf(c)
+  assert.ok(has(cells, -6018, 30, -2355) && has(cells, -6018, 30, -2355).recorded, 'a shaft cell the ledger saw dug is marked recorded')
+  const pen = c.parts.find(p => p.id === 'pen-new')
+  assert.ok(pen && pen.kind === 'farm' && pen.label === 'New pen' && pen.cells === 1, 'the ledger-only space is its own part with its declared kind')
+  assert.ok(has(cells, -6001, 40, -2340) && has(cells, -6001, 40, -2340).part.id === 'dug')
+  for (const x of [-6002, -6003, -6004, -6005]) assert.ok(!has(cells, x, 40, -2340), 'only real digs hollow the cast: ' + x)
+  assert.ok(!has(cells, 9999, 40, 9999))
+  assert.deepStrictEqual([c.sources.ledger.dug, c.sources.ledger.placed, c.sources.ledger.removed, c.sources.ledger.foreign], [4, 1, 1, 1])
+  assert.ok(c.notes.some(n => /no bot of ours placed/.test(n)))
+  // no ledger folder: the page works as before
+  assert.strictEqual(bc.buildCast({ base: BASE, ...world().opts }).sources.ledger, null)
+})
+
 test('cast: no registry, no state, no code folder: an empty cast, not a crash', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'basecast-empty-'))
   const c = bc.buildCast({ base: BASE, sharedDir: root, registryFile: path.join(root, 'nope.json'), botDirs: [], codeDir: null })
