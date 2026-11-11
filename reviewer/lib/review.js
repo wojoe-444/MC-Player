@@ -5,6 +5,7 @@ const { collectBot, forModel } = require('./collect')
 const { SYSTEM_PROMPT, SCHEMA, BUILTIN_DETECTORS, buildUserPrompt } = require('./prompt')
 const findings = require('./findings')
 const proposals = require('./proposals')
+const orders = require('./orders')
 
 function lockPath(cfg) { return path.join(cfg.outDir, 'reviewer.lock') }
 function takeLock(cfg, now) {
@@ -39,6 +40,9 @@ async function runReview(cfg, { ask, now = Date.now(), force = false, dryRun = f
     const active = cfg.bots.filter(b => ev[b.id].active)
     const signature = cfg.bots.map(b => ev[b.id].signature).join('||')
 
+    // what a closing finding is checked against: the code each bot has run, and the work orders (lib/findings.js closeReason)
+    let allOrders = []; try { allOrders = cfg.loopDir ? orders.list(cfg.loopDir) : [] } catch { /* no loop folder yet */ }
+    const ctxOf = (b) => ({ commits: orders.botCommits(b), orders: allOrders })
     const runBase = (extra) => ({ at: new Date(t).toISOString(), model: cfg.model, effort: cfg.effort, ...extra })
     const saveOffline = () => {
       for (const b of cfg.bots.filter(b => !ev[b.id].active)) {
@@ -75,7 +79,7 @@ async function runReview(cfg, { ask, now = Date.now(), force = false, dryRun = f
       // detector-only findings still go out, so a Claude outage does not hide a bot that is jumping on the spot
       for (const b of active) {
         const answer = { summary: 'Claude review failed; showing in-bot detector findings only.', findings: [], resolved: [] }
-        const st = findings.merge(prevState[b.id], b, answer, { now: t, run: runBase({ error: res.error }), evidence: ev[b.id], age: false })
+        const st = findings.merge(prevState[b.id], b, answer, { now: t, run: runBase({ error: res.error }), evidence: ev[b.id], age: false, context: ctxOf(b) })
         findings.save(b, st, { model: cfg.model })
       }
       saveOffline()
@@ -84,7 +88,7 @@ async function runReview(cfg, { ask, now = Date.now(), force = false, dryRun = f
     const byName = new Map((res.data.bots || []).map(x => [String(x.bot).toLowerCase(), x]))
     for (const b of active) {
       const answer = byName.get(b.name.toLowerCase()) || { summary: 'The model did not answer for this bot.', findings: [], resolved: [] }
-      const st = findings.merge(prevState[b.id], b, answer, { now: t, run: runBase({ costUsd: res.costUsd, durationMs: res.durationMs }), evidence: ev[b.id] })
+      const st = findings.merge(prevState[b.id], b, answer, { now: t, run: runBase({ costUsd: res.costUsd, durationMs: res.durationMs }), evidence: ev[b.id], context: ctxOf(b) })
       // model-written detectors: validated against captured windows, enabled only if they pass; the outcome is shown in the findings
       const evs = proposals.process(b, answer.proposedDetectors, { now: t, model: cfg.model })
       st.detectorEvents = [...((prevState[b.id] && prevState[b.id].detectorEvents) || []), ...evs].slice(-10)

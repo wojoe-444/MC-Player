@@ -55,6 +55,28 @@
         ]
       },
       {
+        "from": "../brain/memory",
+        "to": "brain/memory",
+        "filter": [
+          "store.js"
+        ]
+      },
+      {
+        "from": "../brain/journal",
+        "to": "brain/journal",
+        "filter": [
+          "rollup.js"
+        ]
+      },
+      {
+        "from": "../brain/gate",
+        "to": "brain/gate",
+        "filter": [
+          "rules-text.js",
+          "rules.json"
+        ]
+      },
+      {
         "from": "../dashboard",
         "to": "dashboard",
         "filter": [

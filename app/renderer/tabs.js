@@ -1,4 +1,4 @@
-// The tab bar across the top of the app window: Dashboard | Claude reviews | Settings (a dot on Settings means an update is available).
+// The tab bar across the top of the app window: Dashboard | Claude reviews | Memory loop | Settings (a dot on Settings means an update is available).
 function render(s) {
   document.body.replaceChildren(...s.tabs.map(t => {
     const b = document.createElement('button')
