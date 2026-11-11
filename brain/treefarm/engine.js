@@ -490,7 +490,7 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
     if (!present().length) return 0
     // where its leaves can be (for the canopy pass after the felling)
     tree.box = tree.logs.reduce((b, p) => ({ x0: Math.min(b.x0, p.x - 4), x1: Math.max(b.x1, p.x + 4), y0: Math.min(b.y0, p.y - 1), y1: Math.max(b.y1, p.y + 3), z0: Math.min(b.z0, p.z - 4), z1: Math.max(b.z1, p.z + 4) }), { x0: 1e9, x1: -1e9, y0: 1e9, y1: -1e9, z0: 1e9, z1: -1e9 })
-    if (!(await near(ctx, tree.trunk, 2, 'a tree', 60000))) { sum.unreachable++; return 0 }
+    if (!(await near(ctx, tree.trunk, 2, 'a tree', 60000))) { sum.unreachable++; sum.leftLogs += present().length; return 0 }      // the logs stand: left, so finishRemnant does not report the tree finished
     const viewTried = new Set()
     let cut = 0, steps = 0, viewBudget = 6, leafBudget = C.leafBudget ?? 40, usedPillar = !!S.pillar
     const maxSteps = tree.logs.length * 3 + 60 + (C.leafBudget ?? 40)
