@@ -21,7 +21,7 @@ function check(schem, at, grid, opt = {}) {
       msg: `${g.cells.length} cell(s) should be ${B.requirementText(describeLabel(g.want))} but are ${g.got} (first at ${g.cells[0]})` })
   }
   if (r.unknown) findings.push({ id: 'exact-unknown', sev: 'note', zone: 'schematic', count: r.unknown, cells: [], msg: `${r.unknown} required cell(s) are not loaded and were not compared` })
-  return { findings, stats: { schematic: schem.id, checked: r.checked, matched: r.matched, wrong: r.wrong.length, unknown: r.unknown }, ok: r.ok }
+  return { findings, stats: { schematic: schem.id, checked: r.checked, matched: r.matched, wrong: r.wrong.length, unknown: r.unknown, pct: r.checked ? Math.round((r.matched / r.checked) * 1000) / 10 : null }, ok: r.ok }
 }
 // the label B.label() makes ("solid", "air", "water level 3", "hopper facing=down") back into an entry for the sentence
 function describeLabel(l) {

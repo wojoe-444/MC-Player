@@ -38,3 +38,40 @@ is allowed there). Walter 2026-11-11: blocks have generic roles, "but I still wa
   `node tools/schematic.js import <file.schem> --id ... --kind ...` (`brain/schematic/sponge.js`). Aesthetic mode, every block exact; wall and fence connection flags are not
   kept (they follow from the neighbours). In `lithic-spire-earthfill` the plain stone fill under the build is scenery. Drop any other `.schem` through the same command into
   `brain/schematic/library/` to add it to the catalog.
+
+## Following a schematic in the loop (2026-11-11)
+Walter: following a schematic should be part of the recursive loop "when appropriate. It's really only needed seldom, like when the decision has been made to build a mob farm ...
+this makes verifying construction success much easier and more reliable." The answer to "is it done?" is the world compared with the schematic, cell by cell, not a routine that
+reached its last line.
+
+**When** (`brain/schematic/loop.js`, the gate; the default answer is no):
+- everyday jobs (torch, chest, bridge, pillar, shaft, door, ladder, a small hut ...) never follow one, even when asked;
+- the **mob farm** follows its schematic as soon as the decision to build it is made (`FOLLOW_BY_DEFAULT`; the benchmark farm `mobfarm-forever2k27` is preferred);
+- anything else only when named on purpose (Walter, a work order, the bot's own plan: `explicit`) and only if it has at least `MIN_CELLS` (120) checked cells.
+
+**What happens** (`brain/schematic/follow.js` is pure and tested; `brain/autopilot/schematicbuild.js` is the hands):
+1. `bot._schematic.startJob({ kind, id?, near?|at?, reason })` picks the schematic and the spot: the anchor near the shaft that needs the least digging, never into lava, an unloaded
+   chunk, a no-dig area or a block somebody else made (the ledger says who made it). The job lives in `brain/state/schematic-job.json`.
+2. A pass turns the diff into work: `dig` (open space wanted, rock there), `place`, `replace`, `fluid` (a water source), `toggle` (an open trapdoor), and the ones it will not do:
+   `forbidden` (a lava cell: the bots never place lava) and `drain` (water where air is wanted). Flowing water is `settle`: it follows from its source, so it is not counted wrong.
+3. The work is ordered: digs outward from open space (a tunnel two cells high from the nearest open cell when nothing is reachable), placements bottom up each against a block that
+   stands, torches and ladders, water last. How each block goes down follows the game's rules (`recipe`): a hopper faces away from the face you click, a trapdoor clicked on a side face
+   faces that side and takes top/bottom from the click height, a wall torch hangs on the block behind it.
+4. After every pass the world is read again (`verify`): percent right, cells off by kind, the first wrong cells. A cell that fails three times is marked stuck and reported, never retried
+   forever. When every checked cell matches the job is `complete`, the build is registered as a room whose blueprint is the schematic (`viaSchematic`), and a farm schematic's anchors
+   (kill spot, kill box, chests) are written to `brain/state/mobfarm.json` for the kill routine.
+
+**Where the number goes**
+- `brain/inspect`: a room with `viaSchematic` is inspected cell by cell (`stats.percentRight`); a torch where open air is wanted is a fault.
+- `brain/outcome`: a farm whose schematic is not complete is `building`, not `overdue`, and its grace clock starts when it completes.
+- journal: events `schematic` (`start`, `state` with percent, cells off and the first wrong cells); the dream reads them as facts.
+- work orders (`reviewer/lib/orders.js`): a job `stuck` (25 minutes of work without one more cell right) becomes an order written in code from the event, no model asked.
+- dawn brief: `state.schematicJob` (percent, state, `step: schematic-build`), so the bot's own plan can focus or hold the step.
+- planner: `STATE.schematic_job` and the skill `follow_schematic` (choose | start | work | status | verify | abandon); fallback routine step `schematic-build`, which also *decides* the
+  mob farm (storage room first, no farm yet) ahead of the old geometry builder. When no schematic fits near the shaft the old builder carries on as before.
+
+**Lab**: `node tools/trial/schematic-build-lab.js` (trial server): builds a small farm-like room with commands, captures it, erases it, and has a survival bot rebuild it from the schematic alone.
+
+**Proven and not proven** (2026-11-11): on a vanilla 1.21.6 trial server the lab rebuilt a 9x9x9 room (245 cells to dig, a sideways hopper into a chest, a slab, an open trapdoor, wall and floor torch, ladder, a water source, the tunnel
+plugged from outside) from the schematic alone: 100% in 253 s, room registered, kill routine config written. Not proven: the full 2100-cell benchmark farm, a real cave site with loose gravel or water seams, a second bot, and
+blocks in a pit one block wide and two deep (the bot cannot see the pit floor from its edge, so those cells end up `stuck` and become a work order; the benchmark keeps its hoppers and chests in an open chamber).

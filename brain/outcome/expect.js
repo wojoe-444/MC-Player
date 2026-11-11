@@ -13,6 +13,8 @@
 //   producing  output at a believable rate
 //   overdue    past the grace period with no or far too little output (nothing in the world explains it: a code or design problem)
 //   blocked    a precondition the build needs is false (a human or a setting has to change; no code will make it work)
+//   building   a build that follows a schematic (brain/schematic) and the world does not match it yet (build.schematic = { state, pct, id }): it cannot be judged on output
+//              until the diff says complete, and the grace period only starts then
 'use strict'
 
 const HOUR = 3600000
@@ -41,6 +43,11 @@ function evaluate(build, env = {}, opt = {}) {
   const spec = SPECS[build.kind]
   if (!spec) return { id: build.id, kind: build.kind, state: 'unknown', why: [`no expectation is defined for builds of kind "${build.kind}"`] }
   const graceH = opt.graceH != null ? opt.graceH : spec.graceH
+  if (build.schematic && build.schematic.state && build.schematic.state !== 'complete') {
+    const sc = build.schematic
+    return { id: build.id, kind: build.kind, label: spec.label, unit: spec.unit, purpose: spec.purpose, liveH: 0, graceH, got: build.got || 0, expectedPerHour: spec.perHour, ratePerHour: null, gates: [], state: 'building',
+      why: [`${sc.pct != null ? sc.pct + '% of ' : ''}${sc.id || 'its schematic'} is built (${sc.state}): the farm is not judged on output until every checked cell matches`] }
+  }
   const liveH = Math.max(0, (build.liveMs || 0) / HOUR)
   const got = build.got || 0
   const failed = (GATES[build.kind] || []).map(g => g(env)).filter(Boolean)

@@ -71,3 +71,4 @@ module.exports = function register(api) {
     check,
   }
 }
+module.exports.meta = require('./meta.json')

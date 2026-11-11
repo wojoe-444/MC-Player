@@ -601,7 +601,7 @@ module.exports = function mobfarmbuild(G, S, M, api, log) {
     let insp = null; try { const r = bot._inspect && bot._inspect.last().find(x => /^mobfarm/.test(x.id)); if (r) insp = { ok: r.ok, faults: r.faults, warns: r.warns, wrong: r.headline.slice(0, 3) } } catch {}
     return { inspection: insp, phase: b.phase || 'not started', done: b.phase === 'done', fails: b.fails || 0, why: b.lastWhy || '', needs: needs(), shaft: sh ? sh.id : null, needBottom: b.needBottom, farm: cfg && cfg.builder === 'mobfarmbuild' ? { killSpot: cfg.killSpot, chests: cfg.chests, rest: cfg.rest } : null }
   }
-  G.mobFarmBuild = { run, status, needs, stock, repair, inspectNow }
+  G.mobFarmBuild = { run, status, needs, stock, repair, inspectNow, mine }
 
   // one builder at a time: both bots share the shaft and the registry, and two farms would be dug into the same rock. The claim is a small file in
   // bot-shared; it lapses after 6 hours.
@@ -635,6 +635,8 @@ module.exports = function mobfarmbuild(G, S, M, api, log) {
     need: () => {
       const b = B()
       if (b.phase === 'done' || Date.now() < (b.restUntil || 0)) return false
+      // a farm that follows a schematic (brain/schematic, schematicbuild.js) is being built by that job: one farm per world
+      try { const sj = bot._schematic && bot._schematic.job(); if (sj && sj.kind === 'mobfarm' && sj.state !== 'abandoned') return false } catch { /* no schematic module */ }
       // one mob farm per world: the registry is shared, the bots' own build state is not. OzoGo444 started a second farm (platform y53, kill level y31)
       // ten times over while Smeo444's farm, already built and registered, stood next to it, and two farms split the same mob cap
       try { if ((LD().rooms() || []).some(r => r.type === 'mobfarm')) return false } catch { /* ignore */ }

@@ -62,7 +62,15 @@ module.exports = function register(api) {
       pos: p ? [Math.floor(p.x), Math.floor(p.y), Math.floor(p.z)] : null, hp: Math.round(bot.health || 0), food: Math.round(bot.food || 0),
       home: s.home || null, mine: (s.mine && s.mine.entry) || null, doing: (g && g.lastStep) || null,
       bag: Object.fromEntries(Object.entries(bag).sort((a, b) => b[1] - a[1]).slice(0, 16)),
+      schematicJob: schematicJob(),
     }
+  }
+  // the blueprint being followed for a big build (brain/schematic), as the world reads it: the dawn brief can focus `schematic-build` while it is building, or hold it when stuck
+  function schematicJob() {
+    try {
+      const j = bot._schematic && bot._schematic.job(); if (!j || j.state === 'abandoned') return null
+      return { id: j.id, state: j.state, percentRight: j.pct, cellsOff: j.off, stuckOn: j.state === 'stuck' ? (j.lastWrong || []).slice(0, 2) : undefined, step: 'schematic-build' }
+    } catch { return null }
   }
   function findings() {
     const f = readJson(api.statePath('review/findings.json'))
