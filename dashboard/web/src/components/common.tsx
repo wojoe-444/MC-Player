@@ -28,7 +28,7 @@ export function Sparkline({ data, className }: { data: number[]; className?: str
   )
 }
 
-export function StatCard({ label, value, delta, good, spark }: { label: string; value: string; delta: string; good: boolean; spark: number[] }) {
+export function StatCard({ label, value, delta, good, spark, note }: { label: string; value: string; delta: string; good: boolean; spark: number[]; note?: string }) {
   const Arrow = delta.startsWith("-") ? ArrowDownRightIcon : ArrowUpRightIcon
   return (
     <Card size="sm">
@@ -39,6 +39,7 @@ export function StatCard({ label, value, delta, good, spark }: { label: string; 
           <span className={cn("inline-flex items-center gap-1 text-xs font-medium", good ? "text-success" : "text-warning-foreground dark:text-warning")}>
             <Arrow className="size-3.5" />{delta}
           </span>
+          {note && <span className="text-xs text-muted-foreground">{note}</span>}
         </div>
         <Sparkline data={spark} className={good ? "text-success" : "text-warning"} />
       </CardContent>

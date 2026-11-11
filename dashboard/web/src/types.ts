@@ -61,6 +61,8 @@ export type RealDay = {
   flagsHigh: number | null
   commits: number | null
   activeMin: number | null
+  /** minutes the bot was online that day, from the journal's event times; null when unknown */
+  onlineMin: number | null
   topSteps: { id: string; minutes: number; runs: number; fail: number }[]
   iron: number | null
   ingots: number | null

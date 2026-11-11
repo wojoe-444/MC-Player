@@ -6,7 +6,7 @@ const os = require('os')
 const path = require('path')
 const net = require('net')
 const { spawn } = require('child_process')
-const { buildProgress } = require('../dashboard/progress')
+const { buildProgress, onlineMinutes } = require('../dashboard/progress')
 
 const REPO = path.join(__dirname, '..')
 const J = (f, o) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, JSON.stringify(o)) }
@@ -28,6 +28,9 @@ function world() {
   J(path.join(st, 'autopilot-state.json'), { dayStats: [{ day: 3, iron: 12, ingots: 8, tunnels: 2, deaths: 1, armor: 'none', commits: ['abc'] }], dayStat: { day: 4, iron: 5, deaths: 0 } })
   J(path.join(st, 'treefarm-state.json'), { farms: [{ id: 'farm1', x: 10, y: 70, z: 20, cols: 5, rows: 5, species: 'birch' }], stats: { planted: 4, lit: 9 } })
   J(path.join(st, 'journal', '2026-11-10.day.json'), { alarms: { raised: 3, cleared: 3, stalledMin: 7.25 }, flagsHigh: 2, deaths: [{ at: 'x' }], commits: [{ commit: 'a' }], steps: { mine: { minutes: 30, runs: 4, fail: 1 }, eat: { minutes: 5, runs: 2 } }, items: { raw_iron: 9, iron_ingot: 4, diamond: 1, oak_log: 20 } })
+  // the day's event file: 10 min of play, a 50-min hole (capped at 30), a restart (the gap before `start` is not play), 5 more minutes
+  fs.writeFileSync(path.join(st, 'journal', '2026-11-10.jsonl'), [['00:00', 'start'], ['00:10', 'step'], ['01:00', 'step'], ['03:00', 'start'], ['03:05', 'result']]
+    .map(([t, k]) => JSON.stringify({ at: `2026-11-10T${t}:00.000Z`, k, step: 'x' })).join('\n') + '\n')
   fs.writeFileSync(path.join(st, 'acquired.jsonl'), [{ t: Date.parse('2026-11-09T12:00:00Z'), item: 'raw_iron', n: 6 }, { t: Date.parse('2026-11-09T13:00:00Z'), item: 'dirt', n: 3 }].map(o => JSON.stringify(o)).join('\n') + '\n{"torn')
   fs.mkdirSync(path.join(smeo, 'brain', 'state'), { recursive: true })
   return { root, ozo, smeo, reg }
@@ -83,6 +86,8 @@ test('buildProgress: per in-game day from dayStats (the day in progress marked),
   assert.strictEqual(d['2026-11-10'].journal, true)
   assert.deepStrictEqual([d['2026-11-10'].deaths, d['2026-11-10'].stalledMin, d['2026-11-10'].flagsHigh, d['2026-11-10'].iron, d['2026-11-10'].ingots, d['2026-11-10'].diamonds, d['2026-11-10'].items], [1, 7.3, 2, 9, 4, 1, 34])
   assert.strictEqual(d['2026-11-10'].topSteps[0].id, 'mine'); assert.strictEqual(d['2026-11-10'].activeMin, 35)
+  assert.strictEqual(d['2026-11-10'].onlineMin, 45)                       // 10 + min(50, 30) + 0 (gap before a start) + 5: the denominator of the per-player-hour figures
+  assert.strictEqual(d['2026-11-09'].onlineMin, null)                     // no journal: unknown, so no rate (never zero hours)
   assert.strictEqual(d['2026-11-09'].journal, false)                      // no journal that day: only what the pickup log proves, deaths are unknown (null), not zero
   assert.deepStrictEqual([d['2026-11-09'].iron, d['2026-11-09'].items, d['2026-11-09'].deaths], [6, 9, null])
   assert.strictEqual(p.bots.ozo.hasJournal, true); assert.strictEqual(p.bots.smeo.hasJournal, false)
@@ -101,4 +106,14 @@ test('/api/progress serves it, finding the registry beside the bot folders', asy
     assert.ok(d.builds.some(b => b.id === 'mobfarm-sh1'))
     assert.ok(d.bots.ozo.roadmap && d.bots.smeo.roadmap)
   } finally { child.kill() }
+})
+
+test('onlineMinutes: gaps summed and capped at 30 min, nothing counted across a restart, input order does not matter, junk is skipped', () => {
+  const e = (t, k = 'step') => ({ at: `2026-11-10T${t}:00Z`, k })
+  assert.strictEqual(onlineMinutes([]), 0)
+  assert.strictEqual(onlineMinutes([e('00:00')]), 0)
+  assert.strictEqual(onlineMinutes([e('00:20'), e('00:00'), e('00:05')]), 20)
+  assert.strictEqual(onlineMinutes([e('00:00'), e('02:00')]), 30)
+  assert.strictEqual(onlineMinutes([e('00:00'), e('00:10', 'start')]), 0)
+  assert.strictEqual(onlineMinutes([e('00:00'), { at: 'nonsense', k: 'step' }, null, e('00:10')]), 10)
 })
