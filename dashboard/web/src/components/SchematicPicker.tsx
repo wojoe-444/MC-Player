@@ -30,7 +30,7 @@ export function SchematicPicker({ list, currentId, onPick, state }: Props) {
   const toggle = (set: ReadonlySet<string>, k: string) => { const n = new Set(set); if (n.has(k)) n.delete(k); else n.add(k); return n }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="relative">
         <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${list.length} schematics`} aria-label="Search schematics" className="pr-8 pl-8"
@@ -52,7 +52,7 @@ export function SchematicPicker({ list, currentId, onPick, state }: Props) {
           ))}
         </div>
       )}
-      <div ref={(el) => { if (el && el.scrollTop !== scroll.current) el.scrollTop = scroll.current }} onScroll={(e) => { scroll.current = e.currentTarget.scrollTop }} className="max-h-64 overflow-y-auto rounded-lg border" role="listbox" aria-label="Schematics">
+      <div ref={(el) => { if (el && el.scrollTop !== scroll.current) el.scrollTop = scroll.current }} onScroll={(e) => { scroll.current = e.currentTarget.scrollTop }} className="min-h-24 flex-1 overflow-y-auto rounded-lg border" role="listbox" aria-label="Schematics">
         {groups.length === 0 && (
           <div className="flex flex-col items-start gap-1 p-3 text-sm text-muted-foreground">
             No schematic matches.
@@ -69,10 +69,9 @@ export function SchematicPicker({ list, currentId, onPick, state }: Props) {
               </button>
               {open && g.items.map((e) => (
                 <button key={e.id} role="option" title={e.name} aria-selected={e.id === currentId} onClick={() => onPick(e.id)}
-                  className={cn("flex w-full items-baseline gap-2 px-2.5 py-1.5 text-left text-sm hover:bg-accent", e.id === currentId && "bg-accent font-medium")}>
-                  <span className="min-w-0 flex-1 truncate">{e.name}</span>
-                  <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{e.size[0]}×{e.size[2]}×{e.size[1]}</span>
-                  {e.mode === "aesthetic" && <span className="shrink-0 rounded border px-1 text-[10px] text-muted-foreground">exact</span>}
+                  className={cn("flex w-full flex-col gap-0.5 px-2.5 py-1.5 text-left hover:bg-accent", e.id === currentId && "bg-accent")}>
+                  <span className={cn("line-clamp-2 text-sm leading-snug", e.id === currentId && "font-medium")}>{e.name}</span>
+                  <span className="text-[11px] text-muted-foreground tabular-nums">{e.size[0]}×{e.size[2]}×{e.size[1]}{e.mode === "aesthetic" ? " · exact" : ""}</span>
                 </button>
               ))}
             </div>
