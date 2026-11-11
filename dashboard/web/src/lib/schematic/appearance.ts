@@ -97,6 +97,7 @@ export function styleOf(name: string): Style {
     case "polished_tuff": return uniform(spec("flat", [98, 101, 93]))
     case "chiseled_tuff": return uniform(spec("bricks", [104, 106, 98], [76, 78, 70]))
     case "tuff_bricks": return uniform(spec("bricks", [101, 103, 95], [76, 78, 71]))
+    case "campfire": case "soul_campfire": return uniform(spec("logside", [96, 66, 38], n === "campfire" ? [226, 130, 40] : [70, 190, 200]))
     case "composter": return uniform(spec("planks", [122, 90, 48], [86, 62, 30]))
     case "grindstone": return uniform(spec("noise", [146, 146, 150]))
     case "diorite": return uniform(spec("noise", [188, 188, 188]))

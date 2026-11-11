@@ -34,7 +34,7 @@ is allowed there). Walter 2026-11-11: blocks have generic roles, "but I still wa
 - `mobfarm-forever2k27`: Smeo444's working surface mob farm from the earlier world (dark platform, cross of water channels, 2x2 drop of 22 blocks, slabs over hoppers into a
   double chest). Captured from the save with each wall cell naming its block (cobblestone 926, stone 189, ores).
 - `starter-hut`: a built-for-looks example (oak hut, fenced yard, torches), `aesthetic` mode, from `tools/schematic.js hut`.
-- `lithic-spire`, `lithic-spire-earthfill`, `walled-palace`: three big builds-for-looks imported from Sponge `.schem` files (WorldEdit / Litematica exports) with
+- `lithic-spire`, `lithic-spire-earthfill`, `walled-palace`, `starter-base`, `starter-tower`, `walled-market-town`: builds-for-looks, some big, builds-for-looks imported from Sponge `.schem` files (WorldEdit / Litematica exports) with
   `node tools/schematic.js import <file.schem> --id ... --kind ...` (`brain/schematic/sponge.js`). Aesthetic mode, every block exact; wall and fence connection flags are not
   kept (they follow from the neighbours). In `lithic-spire-earthfill` the plain stone fill under the build is scenery. Drop any other `.schem` through the same command into
   `brain/schematic/library/` to add it to the catalog.
