@@ -1289,12 +1289,11 @@ module.exports = function plan(G, S, M, api, log) {
     for (const q of st.placed || []) if (now - q[4] > 10 * 60000 && SCAFFOLD.test(q[3])) pool.set(q[0] + ',' + q[1] + ',' + q[2], v(q[0], q[1], q[2]))
     for (const k of ledgerKeys) if (!pool.has(k)) { const [x, y, z] = k.split(',').map(Number); pool.set(k, v(x, y, z)) }
     const eligible = [...pool.values()].filter(p => {
-      const b = S.block(p); if (!b || !SCAFFOLD.test(b.name)) return false
-      const pillar = pillarKeys.has(kk(p))
-      if ((inBox(p, hb) && !pillar) || nearList(p, st.farm, 1) || nearList(p, st.grove, 1)) return false
+      const b = S.block(p); if (!b || !(SCAFFOLD.test(b.name) || (ledgerKeys.has(kk(p)) && /^(grass_block|podzol|mycelium)$/.test(b.name)))) return false      // placed dirt grows grass under the sky
+      if ((inBox(p, hb) && !ledgerKeys.has(kk(p))) || nearList(p, st.farm, 1) || nearList(p, st.grove, 1)) return false
       // near home only: scaffold left out on the routes to the far mine sent it 90 blocks out among the skeletons, and it died there
       // (186-204,66-69,-379..-390, 15:59 and 16:05)
-      { const h1 = home(); if (h1 && Math.hypot(p.x - h1.x, p.z - h1.z) > 40) return false }
+      { const h1 = home(); if (h1 && Math.hypot(p.x - h1.x, p.z - h1.z) > (ledgerKeys.has(kk(p)) ? 64 : 40)) return false }
       // nothing in or around the shelter (walls, roof, floor, the ground at the door): it took the floor out by the door (22:31)
       // ...but only the shelter's own cells: pillars the escalating go-to left against its walls and on its roof are scaffold like any other
       // (a 4-high column at 192,-293 and blocks on the roof let the walk home end up on the roof, 03:26)
@@ -1315,7 +1314,7 @@ module.exports = function plan(G, S, M, api, log) {
     // top) took one block off each pillar per pass and the rest stayed for good (Walter's screenshot, 2026-11-11).
     return require('../leftovers/lib').topFirst(eligible, (x, y, z) => { const a = S.block(v(x, y, z)); return !a || a.boundingBox !== 'block' })
   }
-  tidyList.force = (p) => { for (const c of leftScaffold()) if (c.kind !== 'stray' && (c.cells || []).some(q => q[0] === p.x && q[1] === p.y && q[2] === p.z)) return true; return false }
+  tidyList.force = (p) => { for (const c of leftScaffold()) if ((c.cells || []).some(q => q[0] === p.x && q[1] === p.y && q[2] === p.z)) return true; return false }      // ledger-proven: ours, filler, placed by a bot (never anything a player placed)
   // over-lighting: the top-down map showed 240 torches in a tight grid around home. A torch the bot placed with another one within 3 blocks goes.
   // replaced by the light-home grid pruning (it keeps grid torches and checks the light before taking one down)
   const extraTorches = () => []
@@ -1447,7 +1446,7 @@ module.exports = function plan(G, S, M, api, log) {
     const tf = api.treefarm && api.treefarm.engine
     if (tf && typeof tf.finishRemnant === 'function') for (const t of treeJobs().slice(0, 2)) {
       if (S.isNight()) break
-      const r = await tf.finishRemnant(S.ctx, v(t.pos[0], t.pos[1], t.pos[2])).catch(e => { if (S.isAbort(e)) throw e; return { status: 'error', why: e.message } })
+      const r = await tf.finishRemnant(S.ctx, v(t.pos[0], t.pos[1], t.pos[2]), { logs: t.logs }).catch(e => { if (S.isAbort(e)) throw e; return { status: 'error', why: e.message } })
       note(`tidy: half-felled ${t.species || ''} tree at ${t.pos.join(',')}: ${r.status}, cut ${r.logs || 0}, left ${r.left || 0}${r.noScaffold ? ', no dirt to climb with' : ''}`)
       if (r.status === 'done' && !r.left) finished++
       else { st.remnantFail = st.remnantFail || {}; st.remnantFail[t.id] = Date.now() + (r.status === 'danger' || r.status === 'busy' ? 10 : 90) * 60000 }       // not finished: leave it a while, the detector keeps it on the record

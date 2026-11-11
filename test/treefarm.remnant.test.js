@@ -89,3 +89,16 @@ test('S.chopTree: without the engine it behaves as before (no crash)', async () 
   S.mine = async (b) => { world.set(`${b.position.x},${b.position.y},${b.position.z}`, 'air'); return true }
   assert.strictEqual(await S.chopTree(2, { ms: 3000 }), 5)
 })
+
+test('finishRemnant with the detector\'s own log list: a thick trunk with one column cut out (the stump columns stand on soil) is felled whole, pillar gone', async () => {
+  const r = rig({ inv: { iron_axe: 1, dirt: 30, oak_sapling: 2 } }); const { bot } = r
+  const logs = growTree(bot, { x: 4, z: 3, h: 9, thick: true })
+  for (let y = 64; y <= 66; y++) bot.setBlock(4, y, 3, 'air')                      // one of the four columns cut out low down
+  const list = logs.filter(p => blockName(bot, p.x, p.y, p.z) === 'oak_log' && p.y > 66 || (blockName(bot, p.x, p.y, p.z) === 'oak_log' && (p.x !== 4 || p.z !== 3))).map(p => [p.x, p.y, p.z])
+  const res = await r.engine.finishRemnant(fakeCtx(), new Vec3(5, 70, 3), { logs: list })
+  assert.strictEqual(res.status, 'done', JSON.stringify(res))
+  assert.strictEqual(logsOf(bot, 4, 3), 0, 'every log is gone')
+  assert.strictEqual(Object.values(bot.entities).filter(e => e.name === 'item' && e.itemName === 'dirt').length, 0)
+  assert.ok(Math.abs(bot.entity.position.y - 64) < 0.01, 'back on the ground')
+  r.stop()
+})
