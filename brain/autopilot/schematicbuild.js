@@ -209,6 +209,26 @@ module.exports = function schematicbuild(G, S, M, api, log) {
   // a sentence for the planner and the log
   const say = (o) => `dug ${o.dug}, placed ${o.placed}${o.access ? ', ' + o.access + ' access tunnel' : ''}${o.skipped ? ', ' + o.skipped + ' marked stuck' : ''}${o.deferred ? ', ' + o.deferred + ' waiting for support' : ''}${Object.keys(o.missing).length ? '; the bag lacks ' + Object.entries(o.missing).map(([k, n]) => n + ' ' + k).join(', ') : ''}${o.stop ? '; stopped: ' + o.stop : ''}`
 
+  // What the design needs and the bag lacks gets crafted from what the bag holds (chests, hoppers, ladders, slabs, a bucket); cobblestone and stone come from the
+  // digging itself. The first live pass (2026-11-11) ended with "the bag lacks 2 chest, 4 hopper, 3 ladder, 2 cobblestone_slab, 1 water_bucket, ..." and nothing
+  // made any of it, so nothing could be placed. Returns how many kinds were crafted.
+  async function craftMissing(missing) {
+    let made = 0
+    const order = ['chest', 'hopper', 'ladder', 'cobblestone_slab', 'stone_slab', 'bucket']
+    for (const name of Object.keys(missing || {}).sort((a, b) => (order.indexOf(a) < 0 ? 99 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 99 : order.indexOf(b)))) {
+      if (name === 'water_bucket' || /^(stone|cobblestone|cobbled_deepslate|dirt)$/.test(name)) continue
+      const target = S.count(name) + missing[name]
+      let ok = false
+      try { ok = await S.craft(name, target) } catch (e) { if (S.isAbort(e) || e.name === 'StepTimeout') throw e }
+      if (ok) made++
+      else note(`schematic: could not craft ${missing[name]} ${name} (wood or iron short)`)
+    }
+    if (missing && missing.water_bucket && !S.items().some(i => i.name === 'bucket' || i.name === 'water_bucket')) {
+      try { if (await S.craft('bucket', 1)) made++ } catch (e) { if (S.isAbort(e) || e.name === 'StepTimeout') throw e }
+    }
+    return made
+  }
+
   async function run(budgetMs = 20 * 60000) {
     if (!SC()) return why('schematic module not loaded')
     let job = SC().job(); if (!job || job.state === 'complete' || job.state === 'abandoned') return why('no schematic job to work on')
@@ -221,6 +241,10 @@ module.exports = function schematicbuild(G, S, M, api, log) {
         const v1 = SC().verify(); const worked = o.dug + o.placed + o.access > 0
         any = any || worked
         note(`schematic ${job.id}: ${v1 && v1.pct != null ? v1.pct + '%' : '?'} (${say(o)})`)
+        if (!worked && !o.stop && o.missing && Object.keys(o.missing).length && !o._crafted) {
+          const m = await craftMissing(o.missing)
+          if (m) { idle = 0; continue }                                // something was made: pass again
+        }
         if (o.stop || !worked) { if (!worked) idle++; if (o.stop || idle >= 2) { lastWhy = o.stop || 'a pass changed nothing'; break } }
         else idle = 0
         job = SC().job() || job
