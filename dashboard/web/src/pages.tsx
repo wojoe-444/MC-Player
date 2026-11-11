@@ -12,6 +12,7 @@ import { AcquiredPanel } from "@/components/AcquiredPanel"
 import { InventoryPanel } from "@/components/InventoryPanel"
 import { badgeVariant, clean, clock, KEY, LogPanel } from "@/components/LogPanel"
 import { ReplayPanel } from "@/components/ReplayPanel"
+import { ProgressBody } from "@/components/ProgressPanel"
 import { MemoryView, StructureView } from "@/components/StructurePanel"
 import { Frame, ViewPanel } from "@/components/ViewPanel"
 import { useData } from "@/DashboardContext"
@@ -216,6 +217,18 @@ export function Memory() {
         <BotPicker value={which} onChange={(v) => setWhich(v as BotId)} />
       </PageTitle>
       <Card><CardContent><MemoryView key={which} id={which} /></CardContent></Card>
+    </div>
+  )
+}
+
+export function Progress() {
+  const [which, setWhich] = useState<BotId>("ozo")
+  return (
+    <div className="flex flex-col gap-6">
+      <PageTitle title="Progress" description="How far each bot is along the roadmap, what it has built and how its days go, from the bot's own records.">
+        <BotPicker value={which} onChange={(v) => setWhich(v as BotId)} />
+      </PageTitle>
+      <ProgressBody key={which} id={which} />
     </div>
   )
 }
