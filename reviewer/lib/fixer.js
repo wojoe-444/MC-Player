@@ -22,12 +22,12 @@
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
-const { spawnSync } = require('child_process')
+const { spawnSync, spawn } = require('child_process')
 const orders = require('./orders')
 const runs = require('./runs')
 
 const MAX_ATTEMPTS = 2
-const LIMITS = { lines: 400, files: 12, turns: 150, sessionMs: 40 * 60000, testMs: 5 * 60000, suiteMs: 30 * 60000, lockMs: 100 * 60000, keepSessions: 30, journalLines: 300 }
+const LIMITS = { lines: 400, files: 12, turns: 150, sessionMs: 40 * 60000, testMs: 8 * 60000, suiteMs: 30 * 60000, lockMs: 100 * 60000, keepSessions: 30, journalLines: 300 }
 const REPO = 'https://github.com/wojoe-444/MC-Player.git'
 const ALLOWED = [/^brain\//, /^test\/[^/]+$/, /^join\.js$/, /^tools\/scenarios\//]
 const PROTECTED = [/^brain\/gate\//, /^brain\/memory\//, /^brain\/state\//, /^brain\/autopilot\/whimsy\.js$/]
@@ -65,6 +65,19 @@ function nodeExe() {
 function sh(cmd, args, { cwd, timeout = 120000, env = process.env } = {}) {
   const r = spawnSync(cmd, args, { cwd, timeout, env: { ...env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' }, encoding: 'utf8', windowsHide: true, maxBuffer: 32 * 1024 * 1024 })
   return { code: r.error ? (r.error.code === 'ETIMEDOUT' ? 124 : 127) : r.status, out: `${r.stdout || ''}${r.stderr || ''}${r.error ? `\n${r.error.message}` : ''}` }
+}
+
+// the same without blocking: the agent's tools run while the session's own pipe to the SDK has to stay served
+function shAsync(cmd, args, { cwd, timeout = 120000, env = process.env } = {}) {
+  return new Promise((resolve) => {
+    let out = '', done = false
+    const fin = (code, extra = '') => { if (done) return; done = true; clearTimeout(timer); resolve({ code, out: out + extra }) }
+    let p; try { p = spawn(cmd, args, { cwd, env, windowsHide: true }) } catch (e) { return resolve({ code: 127, out: e.message }) }
+    const timer = setTimeout(() => { try { p.kill() } catch { /* gone */ } fin(124, `\ntimed out after ${Math.round(timeout / 1000)} s`) }, timeout)
+    const add = (d) => { out += d; if (out.length > 4e6) out = out.slice(-2e6) }
+    p.stdout.on('data', add); p.stderr.on('data', add)
+    p.on('error', (e) => fin(127, `\n${e.message}`)); p.on('close', (code) => fin(code == null ? 1 : code))
+  })
 }
 
 // ---------- which order ----------
@@ -183,26 +196,26 @@ function gateFor({ dir, evidence, run = sh }) {
   }
 }
 const GIT_READ = new Set(['log', 'show', 'diff', 'status', 'blame', 'grep', 'ls-files'])
-function toolsFor({ dir, run = sh }) {
+function toolsFor({ dir, run = shAsync }) {
   const env = cleanEnv()
   const report = (r) => `exit code ${r.code}\n${tail(r.out, 12000)}`
   return [
-    { name: 'run_node', description: 'Run one JavaScript file of the working copy with node and get its exit code and output. Set test to true for a test file (runs `node --test <file>`). Times out after 5 minutes.',
+    { name: 'run_node', description: 'Run one JavaScript file of the working copy with node and get its exit code and output. Set test to true for a test file (runs `node --test <file>`). Times out after 8 minutes.',
       shape: (z) => ({ file: z.string().describe('path inside the working copy, for example test/fix-step-iron.test.js'), test: z.boolean().optional(), args: z.array(z.string()).optional() }),
       handler: async (a) => {
         if (!reallyInside(dir, a.file) || /(^|[\\/])node_modules([\\/]|$)/.test(a.file) || !/\.(c|m)?js$/.test(a.file)) return 'refused: a .js file inside the working copy, please'
         if (!fs.existsSync(path.resolve(dir, a.file))) return `no such file: ${a.file}`
-        return report(run(nodeExe(), [...(a.test ? ['--test'] : []), path.resolve(dir, a.file), ...((a.args || []).slice(0, 12).map(String))], { cwd: dir, timeout: LIMITS.testMs, env }))
+        return report(await run(nodeExe(), [...(a.test ? ['--test'] : []), path.resolve(dir, a.file), ...((a.args || []).slice(0, 12).map(String))], { cwd: dir, timeout: LIMITS.testMs, env }))
       } },
-    { name: 'run_tests', description: 'Run the repository\'s test suite (`node scripts/run-tests.js`) and get the summary. With filters, only test files whose path contains one of them. The whole suite takes a few minutes.',
+    { name: 'run_tests', description: 'Run the repository\'s test suite (`node scripts/run-tests.js`) and get the summary. With filters, only test files whose path contains one of them. The whole suite takes about five minutes, so run your own test with run_node while you work and the whole suite once at the end.',
       shape: (z) => ({ filters: z.array(z.string()).optional() }),
-      handler: async (a) => report(run(nodeExe(), [path.join(dir, 'scripts', 'run-tests.js'), ...((a.filters || []).slice(0, 12).map(String).filter(s => !s.startsWith('-')))], { cwd: dir, timeout: LIMITS.suiteMs, env })) },
+      handler: async (a) => report(await run(nodeExe(), [path.join(dir, 'scripts', 'run-tests.js'), ...((a.filters || []).slice(0, 12).map(String).filter(s => !s.startsWith('-')))], { cwd: dir, timeout: LIMITS.suiteMs, env })) },
     { name: 'git', description: 'Read the repository\'s history: log, show, diff, status, blame, grep or ls-files with the usual arguments. Read only: you never commit or push, the job does that after its checks.',
       shape: (z) => ({ args: z.array(z.string()).describe('for example ["log", "--oneline", "-8", "--", "brain/mining"]') }),
       handler: async (a) => {
         const args = (a.args || []).map(String)
         if (!GIT_READ.has(args[0]) || args.some(x => /^(-c|-C|--output|--ext-diff|--textconv|--exec|--upload-pack|--receive-pack|--git-dir|--work-tree|--no-index)\b/.test(x))) return `refused: only ${[...GIT_READ].join(', ')}, without options that write or run things`
-        return report(run('git', ['--no-pager', ...args], { cwd: dir, timeout: 60000, env }))
+        return report(await run('git', ['--no-pager', ...args], { cwd: dir, timeout: 60000, env }))
       } },
   ]
 }
@@ -466,7 +479,7 @@ async function runFix(cfg, { agent = null, run = sh, now = Date.now(), log = () 
     let answer = null, checked = null, cost = 0, error = null, repair = null
     for (let round = 0; round < 2; round++) {
       const a = await agent({ systemPrompt: SYSTEM, prompt: taskPrompt({ o, evidence, attempts: p.attempts, repair }), schema: SCHEMA, model: cfg.model, effort: cfg.effort, cwd: wc.dir, claudePath: cfg.claudePath,
-        builtins: ['Read', 'Glob', 'Grep', 'Edit', 'Write'], tools: toolsFor({ dir: wc.dir, run }), gate: gateFor({ dir: wc.dir, evidence: evidence.dir, run }), maxTurns: LIMITS.turns, timeoutMs: LIMITS.sessionMs })
+        builtins: ['Read', 'Glob', 'Grep', 'Edit', 'Write'], tools: toolsFor({ dir: wc.dir }), gate: gateFor({ dir: wc.dir, evidence: evidence.dir, run }), maxTurns: LIMITS.turns, timeoutMs: LIMITS.sessionMs })
       cost += a.costUsd || 0
       session.rounds.push({ ok: a.ok, error: a.error, answer: a.data, turns: a.turns, costUsd: a.costUsd, durationMs: a.durationMs, calls: (a.calls || []).slice(-400) })
       if (!a.ok) { error = a.error; break }
@@ -516,4 +529,4 @@ function fixState(cfg) {
     orders: Object.fromEntries(list.map(o => { const p = progress(o); return [o.key, { attempts: p.attempts.length, waiting: p.waiting, ready: p.ready ? { branch: p.ready.branch, why: p.ready.why } : null }] })) }
 }
 
-module.exports = { runFix, sh, pick, progress, prepare, writeEvidence, gateFor, toolsFor, check, diffOf, leaks, privateWords, publish, prBody, taskPrompt, fixState, cleanEnv, mayChange, repoSlug, ghReady, workDir, fixDir, SYSTEM, SCHEMA, LIMITS, MAX_ATTEMPTS, ALLOWED, PROTECTED, REPO }
+module.exports = { runFix, sh, shAsync, pick, progress, prepare, writeEvidence, gateFor, toolsFor, check, diffOf, leaks, privateWords, publish, prBody, taskPrompt, fixState, cleanEnv, mayChange, repoSlug, ghReady, workDir, fixDir, SYSTEM, SCHEMA, LIMITS, MAX_ATTEMPTS, ALLOWED, PROTECTED, REPO }

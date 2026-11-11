@@ -56,6 +56,9 @@ async function runAgent(opts) {
   const ac = new AbortController()
   const timer = setTimeout(() => ac.abort(), opts.timeoutMs || 30 * 60000)
   const server = opts.server || 'fixer'
+  // how long one of our own tools may take. Said twice (the server's own limit and the environment), because a MCP_TOOL_TIMEOUT of 60 s inherited
+  // from the surrounding environment cut every test-suite run off in a trial on 2026-11-11, and the session spent its whole time retrying.
+  const toolMs = opts.toolTimeoutMs || 35 * 60000
   const short = (v) => { try { const t = JSON.stringify(v); return t.length > 300 ? t.slice(0, 299) + '…' : t } catch { return '' } }
   const decide = (name, input) => {
     let d; try { d = opts.gate ? opts.gate(name, input || {}) : { allow: false, why: 'no gate' } } catch (e) { d = { allow: false, why: `gate error: ${e.message}` } }
@@ -76,7 +79,7 @@ async function runAgent(opts) {
       options: {
         model: opts.model, effort: opts.effort, systemPrompt: opts.systemPrompt,
         tools: opts.builtins || [], allowedTools: [], settingSources: [], settings: { autoMemoryEnabled: false }, persistSession: false, maxTurns: opts.maxTurns || 120,
-        mcpServers: mine.length ? { [server]: sdk.createSdkMcpServer({ name: server, version: '0.1.0', tools: mine }) } : {}, strictMcpConfig: true,
+        mcpServers: mine.length ? { [server]: sdk.createSdkMcpServer({ name: server, version: '0.1.0', tools: mine, timeout: toolMs }) } : {}, strictMcpConfig: true,
         hooks: { PreToolUse: [{ hooks: [async (input) => {
           if (input.tool_name === 'StructuredOutput') return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow' } }      // the final answer, not a tool with effects
           const d = decide(input.tool_name, input.tool_input)
@@ -84,7 +87,7 @@ async function runAgent(opts) {
         }] }] },
         canUseTool: async (name) => ({ behavior: 'deny', message: `${name} is not available in this session` }),      // only reached when the hook did not decide
         outputFormat: { type: 'json_schema', schema: opts.schema },
-        cwd: opts.cwd, env: childEnv(opts.env), abortController: ac,
+        cwd: opts.cwd, env: { ...childEnv(opts.env), MCP_TOOL_TIMEOUT: String(toolMs) }, abortController: ac,
         ...(opts.claudePath ? { pathToClaudeCodeExecutable: opts.claudePath } : {}),
       },
     })
