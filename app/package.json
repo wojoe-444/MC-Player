@@ -76,13 +76,18 @@
         ]
       },
       {
+        "from": "../brain/schematic",
+        "to": "brain/schematic",
+        "filter": [
+          "*.js",
+          "library/**"
+        ]
+      },
+      {
         "from": "../dashboard",
         "to": "dashboard",
         "filter": [
-          "server.js",
-          "progress.js",
-          "basecast.js",
-          "worldcast.js",
+          "*.js",
           "public/**",
           "web/dist/**"
         ]

@@ -36,6 +36,8 @@ jobs:
         run: npm ci --omit=dev
       - name: Built dashboard is complete
         run: node tools/check-dist.js
+      - name: Dashboard server files are all shipped
+        run: node tools/check-package.js
       - name: App tests
         working-directory: app
         run: npm test
