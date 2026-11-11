@@ -28,6 +28,23 @@ function alive(pid) {
   try { process.kill(pid, 0); return true } catch (e) { return !!(e && e.code === 'EPERM') }
 }
 
+// A red test suite on main stops every deploy, and until now nothing owned it: the refusal was a line in the run log. It is an order like any other, the most costly
+// one (nothing ships while it stands), written by code from the deployer's own words, and closed by the next deploy that gets through.
+const RED = 'main-tests-red'
+function openRedOrder(cfg, d, now) {
+  const tail = cut((d.steps || []).filter(s => /FAILED/.test(s)).pop() || 'the test suite failed', 500)
+  const files = [...new Set(tail.match(/test[\\/][\w.-]+\.test\.js/g) || [])].map(f => f.split('\\').join('/'))
+  const line = `the test suite is red on main${files.length ? `: ${files.join(', ')}` : ''}`
+  orders.sync(cfg.loopDir, { bot: 'main', now, cands: [{ key: RED, type: 'ci', step: null, costMin: 3000, counts: { tests: files.length || 1 }, line, evidence: [tail] }], decided: { [RED]: {
+    isBug: true, kind: 'bug', title: 'The test suite is red on main, so nothing can be deployed', why: 'measured by the deployer, not judged',
+    problem: cut(`The deployer ran the full test suite on main before putting it on the live bots and it failed (${files.join(', ') || 'see the output below'}). While it fails nothing ships, including every other fix. Output: ${tail}`, 600),
+    suggestion: 'Run the named test file on main. Either the code it tests is broken (fix the code), or the test depends on something that is not in the repository or on this computer (make the test not depend on it, as a new test or a fix to what it calls). Do not weaken a test to make it pass.' } } })
+}
+function closeRedOrder(cfg, now) {
+  const o = orders.load(cfg.loopDir, RED)
+  if (o && (o.status === 'open' || o.status === 'parked')) orders.record(cfg.loopDir, RED, 'closed', { reason: 'the test suite is green on main again' }, now)
+}
+
 // deps: { tool: the deployer module (injected in tests), now, log, prs(code, from, to) }
 async function runDeploy(cfg, { tool = null, now = Date.now(), log = () => {}, prs = prsBetween, tests = true } = {}) {
   const code = cfg.codeDir, toolFile = path.join(code || '', 'tools', 'deployer.js')
@@ -66,13 +83,14 @@ async function runDeploy(cfg, { tool = null, now = Date.now(), log = () => {}, p
     } else {
       let d; try { d = tool.deploy(o) } catch (e) { return fail(`deploy failed: ${cut(e.message, 200)}`) }
       if (d.result === 'deployed') {
+        closeRedOrder(cfg, now)
         const numbers = prs(code, d.from, d.to)
         parts.push(`deployed ${short(d.from)} to ${short(d.to)} (${d.action}${numbers.length ? `; PRs ${numbers.map(n => '#' + n).join(', ')}` : ''})`)
         orders.ledger(cfg.loopDir, { ev: 'deploy', from: short(d.from), to: short(d.to), action: d.action, prs: numbers }, now)
         for (const ord of orders.list(cfg.loopDir)) if (ord.pr && numbers.includes(Number(ord.pr)) && ord.status === 'open') orders.record(cfg.loopDir, ord.key, 'deploy', { commit: short(d.to), pr: ord.pr }, now)
-      } else if (d.result === 'current') parts.push('the bots are on main')
-      else if (d.result === 'bad') parts.push('main is still the commit that was taken back; waiting for it to move on')
-      else { ok = false; parts.push({ red: 'the tests failed on main, nothing deployed', drift: 'the code folder has local changes, nothing deployed', diverged: 'the code folder has commits main does not, nothing deployed' }[d.result] || `deploy: ${d.result}`); const last = (d.steps || []).slice(-1)[0]; if (last) parts.push(cut(last, 240)) }
+      } else if (d.result === 'current') { closeRedOrder(cfg, now); parts.push('the bots are on main')
+      } else if (d.result === 'bad') parts.push('main is still the commit that was taken back; waiting for it to move on')
+      else { ok = false; if (d.result === 'red') { try { openRedOrder(cfg, d, now) } catch { /* the run log still says it */ } } parts.push({ red: 'the tests failed on main, nothing deployed', drift: 'the code folder has local changes, nothing deployed', diverged: 'the code folder has commits main does not, nothing deployed' }[d.result] || `deploy: ${d.result}`); const last = (d.steps || []).slice(-1)[0]; if (last) parts.push(cut(last, 240)) }
     }
     const summary = parts.join('; ')
     runs.append(cfg, 'deploy', { ok, summary }, now)

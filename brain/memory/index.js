@@ -121,7 +121,8 @@ module.exports = function register(api) {
       return false
     }
     const req = readJson(reqFile) || {}
-    const v = B.validate(ans.data, { steps: (req.id === ans.id && req.steps) || stepIds(), day: day() ?? req.day ?? 0, now: now(), id: ans.id, model: ans.model || null })
+    const v = B.validate(ans.data, { steps: (req.id === ans.id && req.steps) || stepIds(), day: day() ?? req.day ?? 0, now: now(), id: ans.id, model: ans.model || null, lastAsk: st.lastAsk || null })
+    if (v.brief.ask) st.lastAsk = { text: v.brief.ask, at: now() }
     let mem = { refused: [], changed: false, lines: null }
     try { mem = store.applyBrief(v.edits, `dawn brief ${ans.id}: ${v.brief.intent}`.slice(0, 200)) } catch (e) { mem.refused = ['memory not written: ' + e.message] }
     v.brief.memory = { changed: mem.changed, lines: mem.lines, refused: mem.refused }

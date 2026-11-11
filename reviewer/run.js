@@ -43,6 +43,7 @@ async function main() {
   if (f.has('orders')) { const { list, toMarkdown } = require('./lib/orders'); console.log(toMarkdown(list(cfg.loopDir), new Date().toISOString())); return 0 }
   if (f.has('deploy')) {
     const r = await require('./lib/deploy').runDeploy(cfg, { log: (m) => logLine(cfg, m, Date.now()), tests: !f.has('no-tests') })
+    if (r.skipped) runs.skip(cfg, 'deploy', r.skipped)
     console.log(JSON.stringify(r)); return r.ok ? 0 : 1
   }
   if (f.has('audit') || f.has('audit-dry-run')) {
@@ -60,7 +61,10 @@ ${r.prompt}`); return 0 }
     console.log(r.text || JSON.stringify(r)); return r.ok ? 0 : 1
   }
   if (f.has('fix') || f.has('fix-dry-run')) {
-    const r = await require('./lib/fixer').runFix(cfg, { agent: runAgent, ask: askClaude, only: cfg.args.opts.only || null, dryRun: f.has('fix-dry-run'), log: (m) => logLine(cfg, m, Date.now()) })
+    const fixer = require('./lib/fixer'), deps = { agent: runAgent, ask: askClaude, only: cfg.args.opts.only || null, dryRun: f.has('fix-dry-run'), log: (m) => logLine(cfg, m, Date.now()) }
+    // a scheduled run works through the open orders until none is left to take; --only and the dry run take one
+    const r = deps.only || deps.dryRun ? await fixer.runFix(cfg, deps) : await fixer.runFixUntilCaughtUp(cfg, deps)
+    if (r.skipped && typeof r.skipped === 'string') runs.skip(cfg, 'fix', r.skipped)
     if (r.dryRun) { console.log(r.order ? `order ${r.order} on ${r.branch} (${r.mode} mode)\n\n--- system ---\n${r.system}\n\n--- prompt ---\n${r.prompt}` : 'no open work order to take'); return 0 }
     console.log(JSON.stringify(r)); return r.ok ? 0 : 1
   }
@@ -68,6 +72,8 @@ ${r.prompt}`); return 0 }
     const { runDream } = require('./lib/dream')
     const d = await runDream(cfg, { ask: askClaude, force: f.has('force'), dryRun: f.has('dream-dry-run'), log: (m) => logLine(cfg, m, Date.now()) })
     if (d.dryRun) { for (const b of d.bots) { console.log(`=== ${b.bot}: ${b.skipped || `${(b.candidates || []).length} candidates`} ===`); for (const c of b.candidates || []) console.log(`  ${c.costMin} min  ${c.key}: ${c.line}`); for (const p of b.prompts || []) console.log(`\n--- ${p.bot} ${p.step}: system ---\n${p.system}\n\n--- ${p.bot} ${p.step}: prompt ---\n${p.prompt}`) } return 0 }
+    if (d.skipped) runs.skip(cfg, 'dream', d.skipped)
+    else if (d.bots.length && d.bots.every(b => b.skipped)) runs.skip(cfg, 'dream', [...new Set(d.bots.map(b => b.skipped))].join('; '))
     console.log(JSON.stringify({ ok: d.ok, skipped: d.skipped, bots: d.bots.map(b => ({ bot: b.bot, ok: b.ok, skipped: b.skipped, summary: b.summary, error: b.error })) }))
     return d.ok ? 0 : 1
   }
@@ -79,6 +85,7 @@ ${r.prompt}`); return 0 }
   if (f.has('brief-only')) { console.log(JSON.stringify(briefs)); return briefs && briefs.ok ? 0 : 1 }
   const r = await runReview(cfg, { ask: askClaude, force: f.has('force'), dryRun: f.has('dry-run') })
   if (r.dryRun) { console.log('--- system prompt ---\n' + r.system + '\n\n--- user prompt ---\n' + r.prompt); return 0 }
+  if (r.skipped) runs.skip(cfg, 'review', r.skipped)
   if (!r.skipped) runs.append(cfg, 'review', { ok: r.ok, summary: r.ok ? `reviewed ${(r.reviewed || []).join(' and ')}` : `failed: ${r.error}`, costUsd: r.costUsd, durationMs: r.durationMs })
   console.log(JSON.stringify(r))
   return r.ok ? 0 : 1
