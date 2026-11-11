@@ -37,6 +37,8 @@ bot._recipeBook = new Map()
 bot._client.on('registry_data', (p) => { try { if (/damage_type$/.test(p.id)) { bot._damageTypes = p.entries.map(e => e.key.replace(/^minecraft:/, '')); require('fs').mkdirSync('brain/state', { recursive: true }); require('fs').writeFileSync('brain/state/damage-types.json', JSON.stringify(bot._damageTypes)) } } catch {} })
 bot._client.on('recipe_book_add', (p) => { if (p.replace) bot._recipeBook.clear(); for (const e of p.entries || []) bot._recipeBook.set(e.recipe.displayId, e.recipe.display) })
 bot._client.on('recipe_book_remove', (p) => { for (const id of p.recipeIds || []) bot._recipeBook.delete(id) })
+// the server's difficulty arrives once at login and again on every change, before the brain modules load: keep the raw packet (brain/difficulty reads it)
+bot._client.on('difficulty', (p) => { bot._rawDifficulty = { value: p.difficulty, locked: !!p.difficultyLocked, at: Date.now() } })
 const FABRIC = ['fabric:registry/sync/direct','fabric:registry/sync/nbt','fabric:registry/sync/complete','fabric:accepted_attachments_v1','c:version','c:register','fabric:custom_ingredient_sync']
 const c = bot._client
 c.on('custom_payload', (p) => {

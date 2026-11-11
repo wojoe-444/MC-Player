@@ -48,7 +48,8 @@ module.exports = function register(api) {
   }
 
   function env() {
-    const d = bot.game && typeof bot.game.difficulty === 'string' ? bot.game.difficulty : null
+    // bot.game.difficulty is undefined on the live 1.21.6 bots; brain/difficulty keeps the value from the raw 'difficulty' packet in bot._difficulty
+const d = bot.game && typeof bot.game.difficulty === 'string' ? bot.game.difficulty : (bot._difficulty && bot._difficulty.value) || null
     return { difficulty: d, mobSpawning: null }
   }
 
