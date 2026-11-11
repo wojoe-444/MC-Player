@@ -16,8 +16,8 @@ export type Palette = {
   sidebar: SidebarStyle
   /** hue for the sidebar when it is dark or bold (defaults to the neutral hue) */
   sh?: number
-  /** page background shape: "soft" tinted page with white cards, "flat" near-white page */
-  radius?: number
+  /** neutral palettes: cuts the fixed tint on text, muted text and drawer so the grays stay truly neutral */
+  neutral?: boolean
 }
 
 export const PALETTES: Palette[] = [
@@ -33,6 +33,30 @@ export const PALETTES: Palette[] = [
   { id: "violet-dusk", name: "Violet Dusk", blurb: "Deep purple chrome, violet primary", ph: 305, pc: 0.22, nh: 300, nc: 0.012, sidebar: "dark", sh: 295 },
   { id: "slate-mono", name: "Slate Mono", blurb: "Quiet graphite, almost no color", ph: 255, pc: 0.035, nh: 255, nc: 0.008, sidebar: "dark", sh: 255 },
   { id: "graphite-light", name: "Graphite Light", blurb: "Neutral gray with a cool blue accent, light drawer", ph: 245, pc: 0.17, nh: 250, nc: 0.005, sidebar: "light" },
+  // ---- second set: 12 more, mixed neutrals (warm, olive, teal-gray) so not everything leans blue or purple
+  { id: "cobalt-sand", name: "Cobalt Sand", blurb: "Cobalt blue on warm sand neutrals", ph: 258, pc: 0.2, nh: 80, nc: 0.012, sidebar: "dark", sh: 70 },
+  { id: "lime-circuit", name: "Lime Circuit", blurb: "Electric lime on olive-gray", ph: 125, pc: 0.19, nh: 125, nc: 0.008, sidebar: "dark", sh: 130 },
+  { id: "copper", name: "Copper", blurb: "Burnished copper on brown-gray", ph: 45, pc: 0.15, nh: 55, nc: 0.012, sidebar: "dark", sh: 45 },
+  { id: "magenta-pop", name: "Magenta Pop", blurb: "Hot magenta on neutral warm gray", ph: 335, pc: 0.24, nh: 25, nc: 0.005, sidebar: "dark", sh: 25 },
+  { id: "sky-day", name: "Sky Day", blurb: "Light drawer, clear sky blue", ph: 235, pc: 0.14, nh: 232, nc: 0.006, sidebar: "light" },
+  { id: "mint-light", name: "Mint Light", blurb: "Light drawer, fresh mint", ph: 172, pc: 0.12, nh: 175, nc: 0.007, sidebar: "light" },
+  { id: "gold-rush", name: "Gold Rush", blurb: "Golden yellow on bronze-black", ph: 85, pc: 0.15, nh: 90, nc: 0.012, sidebar: "dark", sh: 85 },
+  { id: "coral-reef", name: "Coral Reef", blurb: "Coral primary on teal-gray chrome", ph: 15, pc: 0.18, nh: 200, nc: 0.006, sidebar: "dark", sh: 205 },
+  { id: "lavender-mist", name: "Lavender Mist", blurb: "Soft lavender, light drawer", ph: 295, pc: 0.15, nh: 290, nc: 0.006, sidebar: "light" },
+  { id: "teal-bold", name: "Teal Bold", blurb: "Drawer in saturated teal", ph: 185, pc: 0.13, nh: 195, nc: 0.007, sidebar: "bold", sh: 190 },
+  { id: "crimson-bold", name: "Crimson Bold", blurb: "Drawer in deep crimson", ph: 20, pc: 0.2, nh: 20, nc: 0.006, sidebar: "bold", sh: 20 },
+  { id: "forest-bold", name: "Forest Bold", blurb: "Drawer in forest green", ph: 150, pc: 0.14, nh: 150, nc: 0.007, sidebar: "bold", sh: 150 },
+  // ---- neutral set: true grays and earth tones, no blue or purple cast, contrast kept
+  { id: "warm-stone", name: "Warm Stone", blurb: "Stone gray with a warm lean, muted clay accent", ph: 55, pc: 0.06, nh: 70, nc: 0.008, sidebar: "dark", sh: 65, neutral: true },
+  { id: "sage", name: "Sage", blurb: "Gray-green neutrals, quiet sage accent", ph: 150, pc: 0.05, nh: 145, nc: 0.007, sidebar: "dark", sh: 150, neutral: true },
+  { id: "true-gray", name: "True Gray", blurb: "Pure neutral gray, no tint at all", ph: 0, pc: 0, nh: 0, nc: 0, sidebar: "dark", sh: 0, neutral: true },
+  { id: "sand-ink", name: "Sand & Ink", blurb: "Cream paper, khaki accent, light drawer", ph: 80, pc: 0.07, nh: 85, nc: 0.01, sidebar: "light", neutral: true },
+]
+/** Display groups, in PALETTES order: first 12, next 12, then the 4 neutral schemes. */
+export const GROUPS: { label: string; from: number; to: number }[] = [
+  { label: "Set 1", from: 0, to: 12 },
+  { label: "Set 2", from: 12, to: 24 },
+  { label: "Neutrals (no blue or purple cast)", from: 24, to: 28 },
 ]
 
 const o = (l: number, c: number, h: number, a?: number) => `oklch(${l} ${c} ${h}${a !== undefined ? ` / ${a}` : ""})`
@@ -40,6 +64,8 @@ const o = (l: number, c: number, h: number, a?: number) => `oklch(${l} ${c} ${h}
 export function tokens(p: Palette, dark: boolean): Record<string, string> {
   const { ph, pc, nh, nc } = p
   const sh = p.sh ?? nh
+  const k = p.neutral ? 0.15 : 1
+  const low = pc < 0.08 // near-gray primaries need a darker / lighter step to keep contrast
   const base: Record<string, string> = dark
     ? {
         background: o(0.165, nc * 3, nh),
@@ -48,12 +74,12 @@ export function tokens(p: Palette, dark: boolean): Record<string, string> {
         "card-foreground": o(0.95, 0.01, nh),
         popover: o(0.22, nc * 3.5, nh),
         "popover-foreground": o(0.95, 0.01, nh),
-        primary: o(0.7, pc * 0.85, ph),
+        primary: o(low ? 0.8 : 0.7, pc * 0.85, ph),
         "primary-foreground": o(0.16, 0.04, ph),
         secondary: o(0.27, nc * 4, nh),
         "secondary-foreground": o(0.95, 0.01, nh),
         muted: o(0.25, nc * 3.5, nh),
-        "muted-foreground": o(0.7, 0.025, nh),
+        "muted-foreground": o(0.7, 0.025 * k, nh),
         accent: o(0.3, pc * 0.3, ph),
         "accent-foreground": o(0.95, 0.03, ph),
         border: o(1, 0, 0, 0.09),
@@ -67,17 +93,17 @@ export function tokens(p: Palette, dark: boolean): Record<string, string> {
       }
     : {
         background: o(0.975, nc * 0.7, nh),
-        foreground: o(0.23, 0.03 + nc, nh),
+        foreground: o(0.23, 0.03 * k + nc, nh),
         card: o(1, 0, 0),
-        "card-foreground": o(0.23, 0.03 + nc, nh),
+        "card-foreground": o(0.23, 0.03 * k + nc, nh),
         popover: o(1, 0, 0),
-        "popover-foreground": o(0.23, 0.03 + nc, nh),
-        primary: o(0.52, pc, ph),
+        "popover-foreground": o(0.23, 0.03 * k + nc, nh),
+        primary: o(low ? 0.42 : 0.52, pc, ph),
         "primary-foreground": o(0.985, 0.01, ph),
         secondary: o(0.955, nc * 1.5, nh),
-        "secondary-foreground": o(0.3, 0.06, nh),
+        "secondary-foreground": o(0.3, 0.06 * k, nh),
         muted: o(0.945, nc * 1.2, nh),
-        "muted-foreground": o(0.5, 0.03, nh),
+        "muted-foreground": o(0.5, 0.03 * k, nh),
         accent: o(0.945, pc * 0.15, ph),
         "accent-foreground": o(0.36, pc * 0.65, ph),
         border: o(0.915, nc * 1.2, nh),
@@ -103,12 +129,12 @@ export function tokens(p: Palette, dark: boolean): Record<string, string> {
   if (p.sidebar === "light") {
     Object.assign(base, dark
       ? {
-          sidebar: o(0.19, nc * 3, nh), "sidebar-foreground": o(0.82, 0.02, nh), "sidebar-primary": base.primary, "sidebar-primary-foreground": base["primary-foreground"],
+          sidebar: o(0.19, nc * 3, nh), "sidebar-foreground": o(0.82, 0.02 * k, nh), "sidebar-primary": base.primary, "sidebar-primary-foreground": base["primary-foreground"],
           "sidebar-accent": o(0.27, pc * 0.25, ph), "sidebar-accent-foreground": o(0.97, 0.01, nh), "sidebar-border": o(1, 0, 0, 0.08), "sidebar-ring": base.ring,
         }
       : {
-          sidebar: o(1, 0, 0), "sidebar-foreground": o(0.38, 0.03, nh), "sidebar-primary": base.primary, "sidebar-primary-foreground": base["primary-foreground"],
-          "sidebar-accent": o(0.955, pc * 0.12, ph), "sidebar-accent-foreground": o(0.25, 0.04, nh), "sidebar-border": base.border, "sidebar-ring": base.ring,
+          sidebar: o(1, 0, 0), "sidebar-foreground": o(0.38, 0.03 * k, nh), "sidebar-primary": base.primary, "sidebar-primary-foreground": base["primary-foreground"],
+          "sidebar-accent": o(0.955, pc * 0.12, ph), "sidebar-accent-foreground": o(0.25, 0.04 * k, nh), "sidebar-border": base.border, "sidebar-ring": base.ring,
         })
   } else if (p.sidebar === "bold") {
     Object.assign(base, {
@@ -119,10 +145,10 @@ export function tokens(p: Palette, dark: boolean): Record<string, string> {
     })
   } else {
     Object.assign(base, {
-      sidebar: dark ? o(0.14, 0.03, sh) : o(0.2, 0.05, sh), "sidebar-foreground": o(0.86, 0.02, sh),
-      "sidebar-primary": o(0.64, Math.max(pc * 0.9, 0.05), ph), "sidebar-primary-foreground": o(0.99, 0, 0),
-      "sidebar-accent": o(0.28, 0.06, sh), "sidebar-accent-foreground": o(0.98, 0.01, sh),
-      "sidebar-border": dark ? o(1, 0, 0, 0.08) : o(0.3, 0.04, sh), "sidebar-ring": o(0.64, pc * 0.9, ph),
+      sidebar: dark ? o(0.14, 0.03 * k, sh) : o(0.2, 0.05 * k, sh), "sidebar-foreground": o(0.86, 0.02 * k, sh),
+      "sidebar-primary": o(low ? 0.46 : 0.53, Math.max(pc * 0.95, 0.04), ph), "sidebar-primary-foreground": o(0.99, 0, 0),
+      "sidebar-accent": o(0.28, 0.06 * k, sh), "sidebar-accent-foreground": o(0.98, 0.01, sh),
+      "sidebar-border": dark ? o(1, 0, 0, 0.08) : o(0.3, 0.04 * k, sh), "sidebar-ring": o(0.64, pc * 0.9, ph),
     })
   }
   return base

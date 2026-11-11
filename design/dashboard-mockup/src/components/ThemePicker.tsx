@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import { CheckIcon, PaletteIcon } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { applyTheme, loadTheme, PALETTES, tokens, type Palette, type ThemeState } from "@/theme"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { applyTheme, GROUPS, loadTheme, PALETTES, tokens, type Palette, type ThemeState } from "@/theme"
 import { cn } from "@/lib/utils"
 
 type Ctx = ThemeState & { setPalette: (id: string) => void; setDark: (d: boolean) => void; cycle: (dir: 1 | -1) => void }
@@ -44,10 +44,16 @@ export function ThemeSelect() {
         <SelectValue>{cur.name}</SelectValue>
       </SelectTrigger>
       <SelectContent align="end" className="min-w-64">
-        {PALETTES.map((p) => (
-          <SelectItem key={p.id} value={p.id}>
-            <span className="flex items-center gap-3"><Swatches p={p} dark={dark} className="w-16 shrink-0" />{p.name}</span>
-          </SelectItem>
+        {GROUPS.map((g, gi) => (
+          <SelectGroup key={g.label}>
+            {gi > 0 && <SelectSeparator />}
+            <SelectLabel>{g.label}</SelectLabel>
+            {PALETTES.slice(g.from, g.to).map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                <span className="flex items-center gap-3"><Swatches p={p} dark={dark} className="w-16 shrink-0" />{p.name}</span>
+              </SelectItem>
+            ))}
+          </SelectGroup>
         ))}
       </SelectContent>
     </Select>
@@ -69,18 +75,23 @@ export function AppearanceCard() {
             <button key={String(d)} onClick={() => setDark(d)} className={cn("rounded-lg border px-4 py-1.5 text-sm font-medium transition-colors", dark === d ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted")}>{d ? "Dark" : "Light"}</button>
           ))}
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {PALETTES.map((p) => (
-            <button key={p.id} onClick={() => setPalette(p.id)} aria-pressed={p.id === palette}
-              className={cn("flex flex-col gap-3 rounded-xl border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md", p.id === palette ? "border-primary ring-2 ring-primary/30" : "")}>
-              <Swatches p={p} dark={dark} className="h-9" />
-              <span className="flex items-center justify-between gap-2">
-                <span className="flex flex-col"><span className="text-sm font-semibold">{p.name}</span><span className="text-xs text-muted-foreground">{p.blurb}</span></span>
-                {p.id === palette && <CheckIcon className="size-4 shrink-0 text-primary" />}
-              </span>
-            </button>
-          ))}
-        </div>
+        {GROUPS.map((g) => (
+          <div key={g.label} className="flex flex-col gap-3">
+            <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{g.label}</h3>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {PALETTES.slice(g.from, g.to).map((p) => (
+              <button key={p.id} onClick={() => setPalette(p.id)} aria-pressed={p.id === palette}
+                className={cn("flex flex-col gap-3 rounded-xl border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md", p.id === palette ? "border-primary ring-2 ring-primary/30" : "")}>
+                <Swatches p={p} dark={dark} className="h-9" />
+                <span className="flex items-center justify-between gap-2">
+                  <span className="flex flex-col"><span className="text-sm font-semibold">{p.name}</span><span className="text-xs text-muted-foreground">{p.blurb}</span></span>
+                  {p.id === palette && <CheckIcon className="size-4 shrink-0 text-primary" />}
+                </span>
+              </button>
+            ))}
+            </div>
+          </div>
+        ))}
       </CardContent>
     </Card>
   )
