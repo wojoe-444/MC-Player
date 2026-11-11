@@ -275,20 +275,24 @@ How it differs from the first design, and why:
 - An order nobody has seen for six dreams of a running bot closes with a reason that names the commit the bot moved to. If it comes back it is reopened and the reopen is counted.
 - An order lists the incident snapshots captured during that step or for that flag kind, with the bot whose folder holds them, so the fixer can rebuild the scene with `tools/snapshot-rebuild.js`.
 
-**5. Fixer.** Built: `reviewer/lib/fixer.js` (`node run.js --fix`), its own Task Scheduler entry "MC-Player Bot Fixer" every 3 hours, installed from the Memory loop tab. A fresh session each time, on the laptop, in its own copy of the code (`<loop folder>/fixer/MC-Player`, cloned from the public repo on the first run). One work order per run:
-1. It takes the most costly open order that is not waiting on a pull request, a deploy or a verdict, and puts its copy of the code on a new branch from `main`.
+**5. Fixer.** Built: `reviewer/lib/fixer.js` (`node run.js --fix`), its own Task Scheduler entry "MC-Player Bot Fixer" every 3 hours, installed from the Memory loop page. A fresh session each time, on the laptop, in its own copy of the code (`<loop folder>/fixer/MC-Player`, cloned from the public repo on the first run). One work order per run:
+1. It takes the most costly open order that is not waiting on a pull request, a deploy or a verdict, and puts its copy of the code on a new branch from `main`. It leaves outcome orders alone (a build that makes nothing, a setting a person has to change): those are not faults in the code.
 2. It writes the evidence beside the copy, on the laptop and never committed: the order, the journal lines about it, its snapshots.
 3. One session on Haiku 5.5 at xhigh, up to 40 minutes. It has file tools limited to its copy of the code and the evidence, and three tools of its own: run one file with node, run the test suite, read git history. No shell, no web, no push. Every tool call passes a gate in code first.
 4. It follows the debug loop Walter approved: find the cause, write a new test that fails because of it, fix it, run the suite. If it cannot make the fault happen it ships telemetry that will catch it next time instead of a guess. If it can do neither it gives up and says what it tried.
 5. Code then checks what the session left, and does not take its word:
    - only bot code changed (`brain/`, `join.js`, `tools/scenarios/`, new files in `test/`), and never `brain/gate` (the rules), `brain/memory`, `brain/autopilot/whimsy.js` (free time), `CLAUDE.md`, `package.json`, the test runner or the loop's own jobs
-   - there is a new test, it fails on `main` and passes with the change (for a fix), and the whole suite passes
+   - there is a new test, it fails on `main` and passes with the change (for a fix), and the whole suite passes. A test that fails on `main` too is not held against the change; the pull request names it and the digest says that `main` is red
    - no path, name or address from the laptop is in the change
    - a failed check gets one repair session, then the change is thrown away
 6. It commits, pushes the branch and opens the pull request with the GitHub CLI. In merge mode (the default, set on the tab) it merges when every check passed. It leaves the pull request open for a person, with one question in the digest, when the change edits an existing test, removes lines about free time, is over 400 lines, or its test fails on `main` only for a missing file. The other modes are "open the pull request, I merge it" and "keep the fix on this computer".
 7. The deployer ships the merge and judges it. Ok closes the order as fixed; a revert counts as a failed attempt.
 
 After two failed attempts the order is parked with what was tried, which the next reader starts from. A question of taste goes to the digest. The session log of each run (every tool call, the answer, the checks) is kept in `<loop folder>/fixer/sessions`.
+
+Tried on a real order (2026-11-11, on a copy of Ozo's data, nothing pushed): "light-home step idles and goal-thrashes", 9.5 minutes lost a day. One session of 17 minutes, 61 tool calls, none refused, about 54 cents of usage. It found that the idle branch in `brain/autopilot/goals.js` ran the light-home routine with 8 torches, where the step itself wants 16 and places nothing below 14, and that the branch cleared the step's rest timer, so the empty pass repeated every idle minute. It wrote three tests, two of which fail on `main`, changed four lines, and the checks passed. That fix went in as its own pull request right after the fixer's. The earlier tries of the same trial found three faults in the fixer itself, all fixed: a 60 second limit on its own tools inherited from the environment, a session that ended in prose instead of the answer form, and a sound fix refused because another merge had left a test on `main` red.
+
+Cost: a fixer session is about 50 cents to a dollar of usage, against about 4 cents for a dream. It runs at most eight times a day, only when an order is open, and at most twice per order.
 
 What it cannot do yet: rebuild a snapshot on a trial server and measure a pass rate over 30 runs. It reproduces with an offline test on a made-up world, as the repo's own tests do. The snapshot files are in its evidence so it can read the scene.
 
