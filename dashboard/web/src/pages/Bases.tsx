@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react"
-import { CameraIcon, GemIcon, RotateCwIcon, ScanIcon } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { CameraIcon, GemIcon, MountainSnowIcon, RotateCwIcon, ScanIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,7 +13,7 @@ import { CastView, type CastColor, type CastViewHandle } from "@/components/Cast
 import type { BaseSummary, CastData, CastPart } from "@/lib/cast/types"
 import { cn } from "@/lib/utils"
 
-function useJson<T>(url: string | null, everyMs: number) {
+function useJson<T>(url: string | null, everyMs: number, sig?: (d: T) => string) {
   const [data, setData] = useState<T | null>(null)
   const [state, setState] = useState<"loading" | "ok" | "failed" | "missing">("loading")
   useEffect(() => {
@@ -23,16 +23,16 @@ function useJson<T>(url: string | null, everyMs: number) {
     const load = () => fetch(url).then(async (r) => {
       if (r.status === 404) { if (live) setState("missing"); return }
       const d = (await r.json()) as T
-      if (live) { setData(d); setState("ok") }
+      if (live) { setData((old) => (old && sig && sig(old) === sig(d) ? old : d)); setState("ok") }
     }).catch(() => live && setState("failed"))
     load()
     const t = setInterval(load, everyMs)
     return () => { live = false; clearInterval(t) }
-  }, [url, everyMs])
+  }, [url, everyMs]) // eslint-disable-line react-hooks/exhaustive-deps
   return { data, state }
 }
 
-const KIND_DOT: Record<CastPart["kind"], string> = { shaft: "#d9d9d9", room: "#e8b04a", mobfarm: "#d9625b", farm: "#79b86a", tunnel: "#6fa8dc" }
+const KIND_DOT: Record<CastPart["kind"], string> = { shaft: "#d9d9d9", room: "#e8b04a", mobfarm: "#d9625b", farm: "#79b86a", tunnel: "#6fa8dc", cave: "#8d96a0" }
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -63,11 +63,15 @@ function PartRow({ p, active, onPick, tinted }: { p: CastPart; active: boolean; 
   )
 }
 
+// the same cast again (the page polls) must not rebuild the mesh
+const castSig = (d: CastData) => `${d.stats.cells}:${d.stats.recorded}:${d.stats.digsRecorded}:${d.markers.length}:${d.parts.map((p) => p.id + p.cells).join(",")}`
+
 function CastBody({ base }: { base: BaseSummary }) {
-  const { data, state } = useJson<CastData>(`/api/bases/${encodeURIComponent(base.id)}`, 30_000)
+  const { data, state } = useJson<CastData>(`/api/bases/${encodeURIComponent(base.id)}`, 60_000, castSig)
   const [color, setColor] = useState<CastColor>("metal")
   const [selected, setSelected] = useState<string | null>(null)
   const [markers, setMarkers] = useState(true)
+  const [caves, setCaves] = useState(true)
   const [spin, setSpin] = useState(true)
   const view = useRef<CastViewHandle>(null)
   const shot = useCallback(() => {
@@ -76,9 +80,16 @@ function CastBody({ base }: { base: BaseSummary }) {
     const a = document.createElement("a"); a.href = url; a.download = `${base.name.toLowerCase().replace(/\W+/g, "-")}-cast.png`; a.click()
   }, [base.name])
 
+  // "Natural caves" off: the cast without the untouched caves joined to the base (part indices stay the same)
+  const shown = useMemo(() => {
+    if (!data || caves) return data
+    const st = data.cellStride, drop = new Set(data.parts.map((p, i) => (p.kind === "cave" ? i : -1)).filter((i) => i >= 0)), cells: number[] = []
+    for (let i = 0; i < data.cells.length; i += st) if (!drop.has(data.cells[i + 3])) for (let k = 0; k < st; k++) cells.push(data.cells[i + k])
+    return { ...data, cells }
+  }, [data, caves])
   if (state === "failed") return <Empty><EmptyHeader><EmptyTitle>Could not load the base</EmptyTitle><EmptyDescription>The dashboard server did not answer. It will keep trying.</EmptyDescription></EmptyHeader></Empty>
   if (state === "missing") return <Empty><EmptyHeader><EmptyTitle>No such base</EmptyTitle><EmptyDescription>The base list changed; pick another one.</EmptyDescription></EmptyHeader></Empty>
-  if (!data) return <Skeleton className="h-[34rem] w-full" />
+  if (!data || !shown) return <Skeleton className="h-[34rem] w-full" />
   const s = data.stats
   const empty = s.cells === 0
   return (
@@ -87,7 +98,7 @@ function CastBody({ base }: { base: BaseSummary }) {
         <div className="dark relative h-[34rem] bg-zinc-950 text-foreground xl:h-[40rem]">
           {empty
             ? <div className="flex h-full items-center justify-center p-8 text-center text-sm text-zinc-400">Nothing recorded under this base yet.</div>
-            : <CastView ref={view} data={data} color={color} selected={selected} showMarkers={markers} spin={spin} className="absolute inset-0" />}
+            : <CastView ref={view} data={shown} color={color} selected={selected} showMarkers={markers} spin={spin} className="absolute inset-0" />}
           <div className="absolute top-3 left-3 flex flex-wrap items-center gap-2">
             <ToggleGroup type="single" value={color} onValueChange={(v) => v && setColor(v as CastColor)} variant="outline" size="sm" className="bg-zinc-950/70 backdrop-blur">
               <ToggleGroupItem value="metal">Metal</ToggleGroupItem>
@@ -96,6 +107,7 @@ function CastBody({ base }: { base: BaseSummary }) {
             </ToggleGroup>
           </div>
           <div className="absolute top-3 right-3 flex items-center gap-1.5">
+            {data.parts.some((p) => p.kind === "cave") && <Toggle variant="outline" size="sm" pressed={caves} onPressedChange={setCaves} aria-label="Show natural caves joined to the base" className="bg-zinc-950/70 backdrop-blur"><MountainSnowIcon />Caves</Toggle>}
             <Toggle variant="outline" size="sm" pressed={markers} onPressedChange={setMarkers} aria-label="Show chests and workstations" className="bg-zinc-950/70 backdrop-blur"><GemIcon />Things</Toggle>
             <Toggle variant="outline" size="sm" pressed={spin} onPressedChange={setSpin} aria-label="Turn slowly" className="bg-zinc-950/70 backdrop-blur"><RotateCwIcon />Turn</Toggle>
             <Button variant="outline" size="icon-sm" onClick={() => view.current?.resetView()} aria-label="Reset the view" className="bg-zinc-950/70 backdrop-blur"><ScanIcon /></Button>

@@ -1,6 +1,6 @@
 export type CastPart = {
   id: string
-  kind: "shaft" | "room" | "mobfarm" | "farm" | "tunnel"
+  kind: "shaft" | "room" | "mobfarm" | "farm" | "tunnel" | "cave"
   label: string
   by: string | null
   at: number | null
@@ -20,6 +20,6 @@ export type CastData = {
   markers: CastMarker[]
   notes: string[]
   stats: { cells: number; recorded: number; derived: number; digsRecorded: number; placedInBase: number; minY: number | null; maxY: number | null; truncated: boolean }
-  sources: { registry: boolean; placed: boolean; dugLog: boolean }
+  sources: { registry: boolean; placed: boolean; dugLog: boolean; world: { save: string; savedAt: number; chunks: number; openCells: number } | null }
 }
 export type BaseSummary = { id: string; name: string; x: number; y: number; z: number; radius: number; source: string }

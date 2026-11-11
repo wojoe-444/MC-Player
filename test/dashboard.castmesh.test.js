@@ -18,10 +18,11 @@ test('a room and a one-block shaft make one closed, outward-facing surface; thin
   // the rod reaches the top: vertices up near y 29
   let top = -Infinity; for (let i = 1; i < m.positions.length; i += 3) top = Math.max(top, m.positions[i])
   assert.ok(top > 28, 'the shaft is drawn all the way up, got ' + top)
-  // closed: every edge shared by exactly two triangles
+  // closed: every edge shared by exactly two triangles (vertices at a tile seam are duplicated, so weld by position first)
+  const weld = new Map(), W = (i) => { const k = [0, 1, 2].map(a => Math.round(m.positions[i * 3 + a] * 1e3)).join(','); if (!weld.has(k)) weld.set(k, weld.size); return weld.get(k) }
   const edges = new Map()
   for (let i = 0; i < m.indices.length; i += 3) for (const [u, v] of [[0, 1], [1, 2], [2, 0]]) {
-    const a = m.indices[i + u], b = m.indices[i + v], k = a < b ? a + '_' + b : b + '_' + a
+    const a = W(m.indices[i + u]), b = W(m.indices[i + v]), k = a < b ? a + '_' + b : b + '_' + a
     edges.set(k, (edges.get(k) || 0) + 1)
   }
   assert.strictEqual([...edges.values()].filter(n => n !== 2).length, 0)
@@ -32,16 +33,22 @@ test('a room and a one-block shaft make one closed, outward-facing surface; thin
     vol += (P[a] * (P[b + 1] * P[c + 2] - P[b + 2] * P[c + 1]) - P[a + 1] * (P[b] * P[c + 2] - P[b + 2] * P[c]) + P[a + 2] * (P[b] * P[c + 1] - P[b + 1] * P[c])) / 6
   }
   assert.ok(vol > 60 && vol < 400, 'volume ' + vol)
+  // normals point out of the metal: on the roof of the room (away from the shaft) they point up
+  let sum = 0, cnt = 0
+  for (let i = 0; i < m.positions.length / 3; i++) { const x = m.positions[i * 3], y = m.positions[i * 3 + 1]; if (y > 3.2 && y < 3.8 && Math.abs(x - 2) > 1.4) { sum += m.normals[i * 3 + 1]; cnt++ } }
+  assert.ok(cnt > 0 && sum / cnt > 0.5, `roof normals: mean y ${sum / cnt} over ${cnt}`)
   // parts and recorded flags travel to the vertices: both parts are present
   assert.ok(m.part.includes(1) && m.part.includes(2))
   assert.ok(m.recorded.includes(1) && m.recorded.includes(0))
 })
 
-test('nothing in, nothing out; one cell is still a small blob; a huge bounding box drops the resolution instead of the page', async () => {
+test('nothing in, nothing out; one cell is still a small blob; far-apart cells cost tiles, not one grid over the whole box', async () => {
   const { buildMesh } = await import(MESH)
   assert.strictEqual(buildMesh({ cells: [], cellStride: 5 }), null)
   const one = buildMesh({ cells: [10, 10, 10, 0, 0], cellStride: 5 })
   assert.ok(one.positions.length > 0 && one.scale === 3)
-  const far = buildMesh({ cells: [0, 0, 0, 0, 0, 400, 150, 400, 0, 0], cellStride: 5 })
-  assert.ok(far.scale < 3, 'scale ' + far.scale)
+  const t0 = Date.now()
+  const far = buildMesh({ cells: [0, 0, 0, 0, 0, 400, 150, 400, 0, 0], cellStride: 5 })      // a 400 x 150 x 400 box with two blocks in it
+  assert.ok(far.scale === 3 && far.positions.length > 0 && far.positions.length < one.positions.length * 3 * 2.2)
+  assert.ok(Date.now() - t0 < 3000, 'took ' + (Date.now() - t0) + ' ms')
 })

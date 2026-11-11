@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useMemo, useRef, forwardRef } from "react"
+import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from "react"
 import * as THREE from "three"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js"
@@ -9,7 +9,7 @@ export type CastColor = "metal" | "parts" | "digs"
 export type CastViewHandle = { resetView: () => void; screenshot: () => string | null }
 
 // Part tints used by "By part". The cast itself is a silver metal: these only show with that mode on.
-const KIND_TINT: Record<string, string> = { shaft: "#d9d9d9", room: "#e8b04a", mobfarm: "#d9625b", farm: "#79b86a", tunnel: "#6fa8dc" }
+const KIND_TINT: Record<string, string> = { shaft: "#d9d9d9", room: "#e8b04a", mobfarm: "#d9625b", farm: "#79b86a", tunnel: "#6fa8dc", cave: "#8d96a0" }
 const MARKER_TINT: Record<string, string> = { chest: "#f2c14e", table: "#c98f5a", furnace: "#e8794a", hopper: "#9aa0a6", bed: "#d97ba1" }
 
 function disposeObject(o: THREE.Object3D) {
@@ -34,7 +34,14 @@ type Props = {
 export const CastView = forwardRef<CastViewHandle, Props>(function CastView({ data, color, selected, showMarkers, spin, className }, ref) {
   const host = useRef<HTMLDivElement>(null)
   const three = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; controls: OrbitControls; fit: () => void; mesh: THREE.Mesh | null; markers: THREE.Group; frame: number } | null>(null)
-  const mesh = useMemo(() => buildMesh(data), [data])
+  // meshing a cave-sized cast takes about a second: let the page paint "casting" first
+  const [mesh, setMesh] = useState<ReturnType<typeof buildMesh>>(null)
+  const [busy, setBusy] = useState(true)
+  useEffect(() => {
+    setBusy(true)
+    const t = setTimeout(() => { setMesh(buildMesh(data)); setBusy(false) }, 30)
+    return () => clearTimeout(t)
+  }, [data])
 
   useImperativeHandle(ref, () => ({
     resetView: () => three.current?.fit(),
@@ -151,5 +158,10 @@ export const CastView = forwardRef<CastViewHandle, Props>(function CastView({ da
 
   useEffect(() => { const t = three.current; if (t) t.controls.autoRotate = spin }, [spin])
 
-  return <div ref={host} className={className} />
+  return (
+    <div className={className}>
+      <div ref={host} className="absolute inset-0" />
+      {busy && <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-zinc-400">Casting the metal…</div>}
+    </div>
+  )
 })
