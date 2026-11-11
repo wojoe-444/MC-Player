@@ -1,0 +1,84 @@
+{
+  "defaults": {
+    "size": 128,
+    "difficulty": "normal",
+    "minutes": 60
+  },
+  "arenas": {
+    "plains-1": {
+      "name": "Plains",
+      "biome": "minecraft:plains",
+      "seed": 4106,
+      "want": {
+        "minLand": 0.92,
+        "minTrees": 0,
+        "maxTrees": 0.04,
+        "maxRelief": 22
+      },
+      "note": "open grass, a few lone trees: wood is the bottleneck",
+      "center": [
+        -32,
+        32
+      ],
+      "spawn": [
+        -34,
+        70,
+        30
+      ],
+      "window": {
+        "land": 0.949,
+        "trees": 0.005,
+        "relief": 10,
+        "medianY": 68
+      }
+    },
+    "forest-1": {
+      "name": "Forest",
+      "biome": "minecraft:forest",
+      "seed": 4102,
+      "want": {
+        "minLand": 0.92,
+        "minTrees": 0.12,
+        "maxTrees": 0.6,
+        "maxRelief": 30
+      },
+      "note": "dense oak and birch: wood is easy, sight lines are short"
+    },
+    "taiga-1": {
+      "name": "Taiga",
+      "biome": "minecraft:taiga",
+      "seed": 4103,
+      "want": {
+        "minLand": 0.92,
+        "minTrees": 0.1,
+        "maxTrees": 0.6,
+        "maxRelief": 32
+      },
+      "note": "spruce, wolves, sweet berries, foxes"
+    },
+    "desert-1": {
+      "name": "Desert",
+      "biome": "minecraft:desert",
+      "seed": 4104,
+      "want": {
+        "minLand": 0.92,
+        "minTrees": 0,
+        "maxTrees": 0.03,
+        "maxRelief": 28
+      },
+      "note": "sand, no trees, few animals, husks at night: wood is scarce"
+    },
+    "snowy-1": {
+      "name": "Snowy plains",
+      "biome": "minecraft:snowy_plains",
+      "seed": 4105,
+      "want": {
+        "minLand": 0.92,
+        "minTrees": 0,
+        "maxTrees": 0.05,
+        "maxRelief": 26
+      },
+      "note": "snow cover, strays at night, few trees"
+    }
+  }
+}
