@@ -8,6 +8,7 @@
 //   node tools/schematic.js design  --id chicago-design --out file [--ox -6018 --oz -2355 --dx -1 --dz 0 --yp 59]   the bots' own mob farm design (brain/mobfarm/geometry.js) as a schematic
 //   node tools/schematic.js hut     --out file                          the built-for-looks example (an oak hut in a fenced yard) as an aesthetic schematic
 //   node tools/schematic.js import  <file.schem> [--id x] [--name "..."] [--kind house] [--category Builds] [--tags a,b] [--mode aesthetic|functional] [--scenery dirt,grass_block] [--purpose "..."] [--out file]   a Sponge .schem (WorldEdit / Litematica) as format 2; default out: brain/schematic/library/<id>.json
+//   node tools/schematic.js world   <id | file.json | file.schem> [--name "Test - ..."] [--kind grass|void] [--saves <saves dir>] [--overwrite] [--surface N [--rock viewer.html]] [--x X --y Y --z Z]   the build as a creative superflat test world (a 1.21.6 save, region files written directly)
 //   node tools/schematic.js hoppers --save <World folder> --x X --z Z [--r 48]          where the hoppers and chests are near a point (to find a farm)
 'use strict'
 const fs = require('fs')
@@ -66,6 +67,21 @@ else if (cmd === 'diff') {
     const out = opt('out', path.join(__dirname, '..', 'brain', 'schematic', 'library', `${s.id}.json`)); fs.writeFileSync(out, JSON.stringify(s))
     console.log(`wrote ${out}: ${s.size.join('x')}, ${s.palette.length - 1} kinds of block, ${fs.statSync(out).size} bytes`)
   }).catch(e => { console.error('import failed: ' + e.message); process.exit(1) })
+} else if (cmd === 'world') {
+  // a catalog schematic (by id, or a path to a .json / a .schem) as a creative test world in the Minecraft saves folder
+  const T = require('../brain/schematic/testworld'), St = require('../brain/schematic/store')
+  const load = async () => {
+    if (!positional) throw new Error('usage: node tools/schematic.js world <schematic id | file.json | file.schem> [--name "Test - ..."] [--kind grass|void] [--saves <saves dir>] [--overwrite] [--surface N (underground build: layer N is the first above ground)] [--rock viewer.html (which air is solid rock, from the generator viewer page)] [--x X --y Y --z Z (min corner)]')
+    if (/\.schem$/i.test(positional)) return T.readSchemRaw(positional)   // the file as it is, every block property kept
+    if (fs.existsSync(positional)) return JSON.parse(fs.readFileSync(positional, 'utf8'))
+    const hit = St.list(St.dirsFor({})).find(x => x.schematic.id === positional)
+    if (!hit) throw new Error(`no schematic "${positional}" in the catalog (brain/schematic/library or bot-shared/schematics)`)
+    return hit.schematic
+  }
+  load().then(s => {
+    const r = T.buildWorld(s, { name: opt('name'), kind: opt('kind', 'grass'), savesDir: opt('saves'), surface: opt('surface') != null ? +opt('surface') : undefined, rock: opt('rock') ? T.readRockMask(opt('rock'), s.raw ? s.raw.W * s.raw.H * s.raw.D : s.size[0] * s.size[1] * s.size[2]) : undefined, overwrite: argv.includes('--overwrite'), x: opt('x') != null ? +opt('x') : undefined, y: opt('y') != null ? +opt('y') : undefined, z: opt('z') != null ? +opt('z') : undefined })
+    console.log(`wrote ${r.saveDir}\n  ${r.chunks} chunks, ${r.placed} blocks of "${s.id}" (${r.size.join('x')}) placed with its min corner at ${r.origin.join(',')}, ${r.settled} states settled (fences, walls, leaves, lanterns)${r.carved ? `, ${r.carved} cells of rooms cut out of the stone` : ''}\n  spawn ${r.spawn.join(',')} (north of the build, facing it), creative, daytime, ${r.kind} superflat\n  open Minecraft 1.21.6 > Singleplayer > "${r.name}"`)
+  }).catch(e => { console.error('world failed: ' + e.message); process.exit(1) })
 } else if (cmd === 'hoppers') {
   const w = W.openSave(opt('save')), x = +opt('x'), z = +opt('z'), r = +opt('r', 48), out = []
   for (let cz = (z - r) >> 4; cz <= (z + r) >> 4; cz++) for (let cx = (x - r) >> 4; cx <= (x + r) >> 4; cx++) for (const b of w.blockEntities(cx, cz)) if (/hopper|chest/.test(b.id) && Math.hypot(b.x - x, b.z - z) <= r) out.push(`${b.id.replace('minecraft:', '')} ${b.x},${b.y},${b.z} items=${(b.Items || []).length}`)
