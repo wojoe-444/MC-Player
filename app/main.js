@@ -8,6 +8,7 @@ const { startDashboard } = require('./lib/dashboard-process')
 const { TriggerManager } = require('./lib/triggers')
 const { createReviewTrigger, listReviews } = require('./lib/review')
 const { UpdateManager } = require('./lib/updater')
+const { loopState, loadLib, JOB_IDS } = require('./lib/loop')
 
 // Packaged: electron-builder copies dashboard/ into resources/. From source: the repo root is one level up.
 const REPO_ROOT = app.isPackaged ? process.resourcesPath : path.join(__dirname, '..')
@@ -15,6 +16,8 @@ const REPO_ROOT = app.isPackaged ? process.resourcesPath : path.join(__dirname, 
 const REVIEWER_DIR = app.isPackaged ? path.join(process.resourcesPath, 'reviewer') : path.join(__dirname, '..', 'reviewer')
 let schedule = null
 try { schedule = require(path.join(REVIEWER_DIR, 'lib', 'schedule')) } catch (e) { console.log('reviewer not available:', e.message) }
+// The memory loop (docs/MEMORY-LOOP.md): its jobs are other entry points of the same reviewer package, each with its own Task Scheduler entry.
+const loopLib = loadLib(REVIEWER_DIR)
 const ICON = path.join(__dirname, 'build', 'icon.ico')
 let config, dash, triggers, reviewsDir
 let mainWin = null
@@ -35,9 +38,9 @@ function lockDown(win, allowOrigin) {
   })
 }
 
-// One window with a tab bar (Dashboard | Claude reviews | Settings). Each tab is its own web view, so the dashboard keeps its state while you look at another tab.
+// One window with a tab bar (Dashboard | Claude reviews | Memory loop | Settings). Each tab is its own web view, so the dashboard keeps its state while you look at another tab.
 const TAB_H = 42
-const TABS = [['dashboard', 'Dashboard'], ['reviews', 'Claude reviews'], ['settings', 'Settings']]
+const TABS = [['dashboard', 'Dashboard'], ['reviews', 'Claude reviews'], ['loop', 'Memory loop'], ['settings', 'Settings']]
 let tabsView = null, views = {}, activeTab = 'dashboard'
 
 function tabsState() {
@@ -72,11 +75,12 @@ function openMain(tab) {
   const mk = (webPreferences) => { const v = new WebContentsView({ webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, ...webPreferences } }); v.setBackgroundColor('#0b0d10'); mainWin.contentView.addChildView(v); return v }
   views.dashboard = mk({})
   views.reviews = mk({ preload })
+  views.loop = mk({ preload })
   views.settings = mk({ preload })
   tabsView = mk({ preload })
   lockDown(views.dashboard, dash.url)
   views.dashboard.webContents.loadURL(dash.url)
-  for (const id of ['reviews', 'settings']) { lockDown(views[id], 'file://'); views[id].webContents.loadFile(path.join(__dirname, 'renderer', id + '.html')) }
+  for (const id of ['reviews', 'loop', 'settings']) { lockDown(views[id], 'file://'); views[id].webContents.loadFile(path.join(__dirname, 'renderer', id + '.html')) }
   lockDown(tabsView, 'file://')
   tabsView.webContents.loadFile(path.join(__dirname, 'renderer', 'tabs.html'))
   mainWin.on('resize', layoutTabs)
@@ -111,6 +115,23 @@ function runReviewerNow() {
   return true
 }
 
+// ---- memory loop tab: Task Scheduler jobs (install, remove, run now), work orders, each bot's memory, the run log ----
+const loopBots = () => { const d = config.data.dashboard; return [{ id: 'ozo', name: 'OzoGo444', dir: d.ozoDir }, { id: 'smeo', name: 'Smeo444', dir: d.smeoDir }] }
+const loopDir = () => loopLib.config.loopDirOf()                      // the same folder the scheduled job resolves: beside this app's settings
+const loopRunning = {}
+const getLoopState = () => loopState({ lib: loopLib, loopDir: loopLib ? loopDir() : null, bots: loopBots(), status: (job) => loopLib.schedule.status(undefined, job), running: loopRunning })
+function runLoopJob(id) {
+  if (!loopLib || !JOB_IDS.includes(id) || loopRunning[id]) return false
+  loopRunning[id] = true
+  const d = config.data.dashboard
+  const child = spawn(process.execPath, [path.join(REVIEWER_DIR, 'run.js'), ...loopLib.schedule.JOBS[id].args, '--force'], {
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', BOT_OZO_DIR: d.ozoDir, BOT_SMEO_DIR: d.smeoDir, LOOP_DIR: loopDir() }, windowsHide: true, stdio: 'ignore',
+  })
+  const done = () => { loopRunning[id] = false; getLoopState().then(s => sendTo('loop', 'loop', s)) }
+  child.once('exit', done); child.once('error', done)
+  return true
+}
+
 function snapshot() {
   return { triggers: triggers.list(), reviews: listReviews(reviewsDir), dashboard: { url: dash.url, attached: dash.attached }, claude: config.data.claude }
 }
@@ -122,7 +143,8 @@ function buildMenu() {
     { label: 'App', submenu: [
       { label: 'Dashboard', accelerator: 'CmdOrCtrl+1', click: () => openMain('dashboard') },
       { label: 'Claude reviews', accelerator: 'CmdOrCtrl+2', click: openReviews },
-      { label: 'Settings', accelerator: 'CmdOrCtrl+3', click: openSettings },
+      { label: 'Memory loop', accelerator: 'CmdOrCtrl+3', click: () => openMain('loop') },
+      { label: 'Settings', accelerator: 'CmdOrCtrl+4', click: openSettings },
       { label: 'Open dashboard in browser', click: () => shell.openExternal(dash.url) },
       { type: 'separator' }, { role: 'quit' },
     ] },
@@ -168,6 +190,20 @@ app.whenReady().then(async () => {
     return { ...r, state: await reviewerState() }
   })
   ipcMain.handle('reviewer:uninstall', async () => (schedule ? { ...(await schedule.uninstall()), state: await reviewerState() } : { ok: false }))
+
+  ipcMain.handle('loop:state', () => getLoopState())
+  ipcMain.handle('loop:run', (_e, id) => runLoopJob(String(id)))
+  ipcMain.handle('loop:install', async (_e, id, minutes) => {
+    if (!loopLib || !JOB_IDS.includes(String(id))) return { ok: false, error: 'the reviewer folder was not found next to the app' }
+    const job = loopLib.schedule.JOBS[String(id)]
+    fs.mkdirSync(loopDir(), { recursive: true })
+    const r = await loopLib.schedule.install({ scriptPath: path.join(REVIEWER_DIR, 'run.js'), minutes: Number(minutes) || job.minutes, job })
+    return { ...r, state: await getLoopState() }
+  })
+  ipcMain.handle('loop:uninstall', async (_e, id) => {
+    if (!loopLib || !JOB_IDS.includes(String(id))) return { ok: false }
+    return { ...(await loopLib.schedule.uninstall(undefined, loopLib.schedule.JOBS[String(id)])), state: await getLoopState() }
+  })
 
   // Updates: only the installed (packaged) app can update itself; from source the page says to use git pull.
   let autoUpdater = null

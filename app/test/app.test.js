@@ -161,3 +161,27 @@ test('updater: check and download errors are reported in plain words and can be 
   await u.install() // retry from the error state
   assert.ok(au.calls.includes('install:true,true'))
 })
+
+test('memory loop tab: jobs, ranked work orders, each bot\'s memory and last check, and the run log, all read from this computer', async () => {
+  const { loopState, loadLib, JOB_IDS } = require('../lib/loop')
+  const lib = loadLib(path.join(__dirname, '..', '..', 'reviewer'))
+  assert.ok(lib && lib.schedule.JOBS.dream, 'the reviewer package is next to the app')
+  assert.deepStrictEqual(await loopState({ lib: null }), { available: false })
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loop-')), loopDir = path.join(root, 'loop'), ozo = path.join(root, 'ozo'), mem = path.join(ozo, 'brain', 'state', 'memory')
+  fs.mkdirSync(path.join(mem, 'dream'), { recursive: true })
+  fs.writeFileSync(path.join(mem, 'global.md'), '# Now\nSmelt iron.\n')
+  fs.writeFileSync(path.join(mem, 'brief.json'), JSON.stringify({ at: '2026-11-10T22:31:00Z', day: 55, intent: 'Iron today.', focus: ['iron-smelt'], holds: [], freeTime: { choice: 'vantage', note: '' }, ask: 'A chest of my own?', until: 1 }))
+  fs.writeFileSync(path.join(mem, 'dream', 'last.json'), JSON.stringify({ at: '2026-11-10T22:55:00Z', memory: { changes: [{ step: 'cut', op: 'remove', from: 'x', why: 'y', cites: [] }] }, calls: [{ step: 'cut', ok: true }], skippedSteps: { demote: 'short' }, costUsd: 0.01, dropped: [] }))
+  const cand = (key, costMin) => ({ key, type: 'step', step: key, costMin, counts: {}, line: key, evidence: [] })
+  lib.orders.sync(loopDir, { bot: 'ozo', cands: [cand('step-a', 3), cand('step-b', 9)], decided: { 'step-a': { isBug: true, title: 'A', problem: 'p' }, 'step-b': { isBug: true, title: 'B', problem: 'p' } }, now: Date.parse('2026-11-10T22:55:00Z') })
+  lib.runs.append({ loopDir }, 'dream', { ok: true, summary: 'OzoGo444: 2 calls' }, Date.parse('2026-11-10T22:56:00Z'))
+  const asked = []
+  const s = await loopState({ lib, loopDir, bots: [{ id: 'ozo', name: 'OzoGo444', dir: ozo }, { id: 'smeo', name: 'Smeo444', dir: path.join(root, 'none') }], status: async (j) => { asked.push(j.name); return { installed: j.id === 'review' } }, running: { dream: true } })
+  assert.strictEqual(s.available, true); assert.deepStrictEqual(asked, ['MC-Player Bot Dream', 'MC-Player Bot Reviewer'])
+  assert.deepStrictEqual(s.jobs.map(j => [j.id, j.taskName, j.minutes, j.running, j.task.installed]), [['dream', 'MC-Player Bot Dream', 120, true, false]]); assert.deepStrictEqual(JOB_IDS, ['dream'])
+  assert.strictEqual(s.reviewTask.task.installed, true)
+  assert.deepStrictEqual(s.orders.map(o => [o.key, o.costMin, o.title]), [['step-b', 9, 'B'], ['step-a', 3, 'A']])
+  assert.strictEqual(s.runs[0].summary, 'OzoGo444: 2 calls')
+  assert.strictEqual(s.bots[0].memory, '# Now\nSmelt iron.\n'); assert.strictEqual(s.bots[0].brief.ask, 'A chest of my own?'); assert.strictEqual(s.bots[0].lastCheck.changes.length, 1)
+  assert.deepStrictEqual([s.bots[1].memory, s.bots[1].brief, s.bots[1].lastCheck], [null, null, null])
+})

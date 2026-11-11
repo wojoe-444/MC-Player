@@ -8,30 +8,47 @@
 //   --model ID --effort LEVEL       default claude-haiku-5-5 at xhigh
 //   node run.js --brief-only        answer the bots' dawn brief requests and stop (every normal pass does this first; --no-brief skips it)
 //   node run.js --brief-dry-run     print the brief prompts that would be sent; no model call
+//   node run.js --dream             the dream job (lib/dream.js): check each bot's memory against its journal, open and update work orders.
+//                                   Its own Task Scheduler entry, every 2 h: --install-task --dream (--minutes N), --uninstall-task --dream, --task-status --dream
+//   node run.js --dream --force     dream even when the journal has nothing new      --dream-dry-run   print the prompts and the candidates; no model call
+//   node run.js --orders            print the work orders, most costly first
+//   --loop DIR                      where work orders and run logs live (default: beside the Bot Dashboard app's settings)
 const path = require('path')
 const { resolveConfig } = require('./lib/config')
 const { runReview, logLine } = require('./lib/review')
 const { runBriefs } = require('./lib/brief')
 const { askClaude } = require('./lib/claude')
 const schedule = require('./lib/schedule')
+const runs = require('./lib/runs')
 
 async function main() {
   const cfg = resolveConfig({ argv: process.argv.slice(2) })
   const f = cfg.args.flags
+  const job = schedule.JOBS[f.has('dream') ? 'dream' : 'review']
   if (f.has('install-task')) {
-    const r = await schedule.install({ scriptPath: path.resolve(__filename), outDir: cfg.outDir, minutes: cfg.minutes })
-    console.log(r.ok ? `Installed Task Scheduler job "${schedule.TASK_NAME}": every ${cfg.minutes} min while you are logged in, hidden window, runs ${r.nodeExe} ${__filename}` : `Could not install: ${r.error}`)
+    const r = await schedule.install({ scriptPath: path.resolve(__filename), outDir: cfg.outDir, minutes: cfg.args.opts.minutes ? cfg.minutes : job.minutes, job })
+    console.log(r.ok ? `Installed Task Scheduler job "${job.name}": every ${r.minutes} min while you are logged in, hidden window, runs ${r.nodeExe} ${__filename} ${job.args.join(' ')}` : `Could not install: ${r.error}`)
     return r.ok ? 0 : 1
   }
-  if (f.has('uninstall-task')) { const r = await schedule.uninstall(); console.log(r.ok ? 'Removed the Task Scheduler job.' : `Could not remove: ${r.error}`); return r.ok ? 0 : 1 }
-  if (f.has('task-status')) { console.log(JSON.stringify(await schedule.status(), null, 1)); return 0 }
+  if (f.has('uninstall-task')) { const r = await schedule.uninstall(undefined, job); console.log(r.ok ? `Removed the Task Scheduler job "${job.name}".` : `Could not remove: ${r.error}`); return r.ok ? 0 : 1 }
+  if (f.has('task-status')) { console.log(JSON.stringify(await schedule.status(undefined, job), null, 1)); return 0 }
+  if (f.has('orders')) { const { list, toMarkdown } = require('./lib/orders'); console.log(toMarkdown(list(cfg.loopDir), new Date().toISOString())); return 0 }
+  if (f.has('dream') || f.has('dream-dry-run')) {
+    const { runDream } = require('./lib/dream')
+    const d = await runDream(cfg, { ask: askClaude, force: f.has('force'), dryRun: f.has('dream-dry-run'), log: (m) => logLine(cfg, m, Date.now()) })
+    if (d.dryRun) { for (const b of d.bots) { console.log(`=== ${b.bot}: ${b.skipped || `${(b.candidates || []).length} candidates`} ===`); for (const c of b.candidates || []) console.log(`  ${c.costMin} min  ${c.key}: ${c.line}`); for (const p of b.prompts || []) console.log(`\n--- ${p.bot} ${p.step}: system ---\n${p.system}\n\n--- ${p.bot} ${p.step}: prompt ---\n${p.prompt}`) } return 0 }
+    console.log(JSON.stringify({ ok: d.ok, skipped: d.skipped, bots: d.bots.map(b => ({ bot: b.bot, ok: b.ok, skipped: b.skipped, summary: b.summary, error: b.error })) }))
+    return d.ok ? 0 : 1
+  }
   // the dawn briefs first: a bot is waiting on its plan for the day (lib/brief.js); a failure here never stops the review
   if (f.has('brief-dry-run')) { const b = await runBriefs(cfg, { dryRun: true }); for (const p of b.prompts) console.log(`--- ${p.bot}: system ---\n${p.system}\n\n--- ${p.bot}: prompt ---\n${p.prompt}\n`); if (!b.prompts.length) console.log('no bot has a brief request waiting'); return 0 }
   let briefs = null
   if (!f.has('dry-run') && !f.has('no-brief')) { try { briefs = await runBriefs(cfg, { ask: askClaude, log: (m) => logLine(cfg, m, Date.now()) }) } catch (e) { logLine(cfg, 'brief job failed: ' + (e && e.message || e), Date.now()) } }
+  for (const b of (briefs && briefs.briefs) || []) runs.append(cfg, 'brief', { bot: b.bot, ok: b.ok, summary: b.ok ? `answered ${b.id}` : `failed: ${b.error}`, costUsd: b.costUsd, durationMs: b.durationMs })
   if (f.has('brief-only')) { console.log(JSON.stringify(briefs)); return briefs && briefs.ok ? 0 : 1 }
   const r = await runReview(cfg, { ask: askClaude, force: f.has('force'), dryRun: f.has('dry-run') })
   if (r.dryRun) { console.log('--- system prompt ---\n' + r.system + '\n\n--- user prompt ---\n' + r.prompt); return 0 }
+  if (!r.skipped) runs.append(cfg, 'review', { ok: r.ok, summary: r.ok ? `reviewed ${(r.reviewed || []).join(' and ')}` : `failed: ${r.error}`, costUsd: r.costUsd, durationMs: r.durationMs })
   console.log(JSON.stringify(r))
   return r.ok ? 0 : 1
 }

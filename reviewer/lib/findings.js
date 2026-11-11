@@ -28,8 +28,26 @@ function detectorFindings(bot, flags, covered) {
   return out
 }
 
+// Why a finding closed (docs/MEMORY-LOOP.md, phase 2: a finding closes with a reason, it does not just go quiet). Pure.
+//   fixed               its work order was fixed by a named PR
+//   quiet-after-deploy  it stopped after the bot moved to new code: the likeliest cause, named so a person can check it (a correlation, not a proof)
+//   reviewer            the reviewer closed it: gone, or merged into another finding
+//   quiet               it stopped with no code change in between
+// ctx: { commits: [{ at, commit, subject }] oldest first (the code the bot ran), orders: [work order] }
+const SOON_MS = 15 * 60000        // a deploy this shortly before the last sighting still counts: the review that saw it was reading minutes from before
+function closeReason(f, how, ctx = {}) {
+  const order = (ctx.orders || []).find(o => o && Array.isArray(o.findings) && o.findings.includes(f.key))
+  if (order && order.status === 'fixed' && order.pr) return { why: `fixed by PR #${order.pr} (work order ${order.key})`, reason: { code: 'fixed', pr: order.pr, order: order.key } }
+  const last = Date.parse(f.lastSeen) || 0, first = Date.parse(f.firstSeen) || 0
+  const c = (ctx.commits || []).filter(c => { const t = Date.parse(c.at); return t > first && t > last - SOON_MS }).pop()
+  const sub = c ? String(c.subject || '').replace(/\s+/g, ' ').trim() : ''
+  if (c) return { why: `went quiet after the bot moved to ${String(c.commit).slice(0, 9)}${sub ? ` "${sub.length > 90 ? sub.slice(0, 89) + '…' : sub}"` : ''}${how === 'reviewer' ? ' (closed by the reviewer)' : ''}`, reason: { code: 'quiet-after-deploy', commit: c.commit, order: order ? order.key : undefined } }
+  if (how === 'reviewer') return { why: 'closed by the reviewer: gone, or merged into another finding', reason: { code: 'reviewer', order: order ? order.key : undefined } }
+  return { why: `went quiet: not seen in the last ${MAX_MISSED} reviews, with no code change in between`, reason: { code: 'quiet', order: order ? order.key : undefined } }
+}
+
 // merge one run's answer for one bot into the stored state; pure (returns the new state)
-function merge(prev, bot, answer, { now, run, evidence, age = true }) {
+function merge(prev, bot, answer, { now, run, evidence, age = true, context = {} }) {
   const at = new Date(now).toISOString()
   const open = new Map(((prev && prev.open) || []).map(f => [f.key, f]))
   const resolved = [...((prev && prev.recentlyResolved) || [])]
@@ -40,16 +58,17 @@ function merge(prev, bot, answer, { now, run, evidence, age = true }) {
     // a key that comes back after being resolved is the same problem returning: keep its history instead of starting at "seen in 1 run"
     let old = open.get(f.key)
     if (!old) { const i = resolved.findIndex(r => r.key === f.key); if (i >= 0) { const r = resolved[i]; resolved.splice(i, 1); old = { firstSeen: r.firstSeen, seenRuns: r.seenRuns || 0 } } }
-    open.set(f.key, { source: 'model', ...f, firstSeen: old ? old.firstSeen : at, lastSeen: at, seenRuns: (old ? old.seenRuns : 0) + 1, missedRuns: 0 })
+    const order = (context.orders || []).find(o => o && (o.status === 'open' || o.status === 'parked') && Array.isArray(o.findings) && o.findings.includes(f.key))
+    open.set(f.key, { source: 'model', ...f, firstSeen: old ? old.firstSeen : at, lastSeen: at, seenRuns: (old ? old.seenRuns : 0) + 1, missedRuns: 0, ...(order ? { workOrder: order.key } : {}) })
   }
   for (const key of answer.resolved || []) {
     const old = open.get(key)
-    if (old && !seen.has(key)) { open.delete(key); resolved.unshift({ ...old, resolvedAt: at, why: 'closed by the reviewer: gone, or merged into another finding' }) }
+    if (old && !seen.has(key)) { open.delete(key); resolved.unshift({ ...old, resolvedAt: at, ...closeReason(old, 'reviewer', context) }) }
   }
   for (const [key, f] of [...open]) {
     if (seen.has(key) || !age) continue
     const missed = (f.missedRuns || 0) + 1
-    if (missed >= MAX_MISSED) { open.delete(key); resolved.unshift({ ...f, resolvedAt: at, why: 'not seen in the last runs' }) } else open.set(key, { ...f, missedRuns: missed })
+    if (missed >= MAX_MISSED) { open.delete(key); resolved.unshift({ ...f, resolvedAt: at, ...closeReason(f, 'quiet', context) }) } else open.set(key, { ...f, missedRuns: missed })
   }
   return {
     bot: bot.name, id: bot.id, updatedAt: at, status: open.size ? 'issues' : 'ok', summary: answer.summary || '',
@@ -71,7 +90,7 @@ function toMarkdown(s, { model } = {}) {
     'Written by the spectator reviewer (reviewer/). Read by the driver thread and shown in the Bot Dashboard app. Never posted to game chat.', '']
   if (!s.open.length) L.push(s.status === 'offline' ? '_Bot looks offline; nothing reviewed._' : '_No open findings._', '')
   for (const f of s.open) {
-    L.push(`## [${f.severity.toUpperCase()}] ${f.title}`, `\`${f.key}\` · ${f.kind} · confidence ${f.confidence} · first seen ${f.firstSeen} · seen in ${f.seenRuns} run(s)${f.source === 'detector' ? ' · detector only' : ''}`, '',
+    L.push(`## [${f.severity.toUpperCase()}] ${f.title}`, `\`${f.key}\` · ${f.kind} · confidence ${f.confidence} · first seen ${f.firstSeen} · seen in ${f.seenRuns} run(s)${f.source === 'detector' ? ' · detector only' : ''}${f.workOrder ? ` · work order \`${f.workOrder}\`` : ''}`, '',
       `**Evidence:** ${f.evidence}`, '', `**Suggestion:** ${f.suggestion}`, '')
   }
   if ((s.detectorEvents || []).length) {
@@ -102,4 +121,4 @@ function trimHistory(bot) {
   try { if (fs.statSync(f).size > 512 * 1024) fs.writeFileSync(f, fs.readFileSync(f, 'utf8').split('\n').filter(Boolean).slice(-400).join('\n') + '\n') } catch {}
 }
 
-module.exports = { load, save, merge, offlineState, toMarkdown, detectorFindings, fileOf, dirOf, MAX_MISSED }
+module.exports = { load, save, merge, offlineState, toMarkdown, detectorFindings, closeReason, fileOf, dirOf, MAX_MISSED }

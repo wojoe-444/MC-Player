@@ -85,6 +85,7 @@ module.exports = function register(api) {
       id, at: new Date(t).toISOString(), reason, bot: bot.username || null, role: g.role || 'hillclimber', day: day(), timeOfDay: bot.time ? bot.time.timeOfDay : null,
       steps: stepIds(), state: stateLine(), rules, global: store.readGlobal(), notes: store.notes(), since: sinceRollup(since),
       lastBrief: last, refused: st.refused || [], findings: findings(), roadmap: roadmap(),
+      lastCheck: B.checkSummary(readJson(path.join(dir, 'dream', 'last.json')), (last && Date.parse(last.at)) || 0),
     })
     writeJson(reqFile, req)
     st.lastReqAt = t; st.lastReqDay = day(); st.lastReqId = id; save()

@@ -7,14 +7,21 @@ const path = require('path')
 const { execFile } = require('child_process')
 
 const TASK_NAME = 'MC-Player Bot Reviewer'
+// Every scheduled job of the memory loop is one entry here: its Task Scheduler name, its launcher file, what it passes to run.js and how often it runs.
+// The Bot Dashboard app installs and removes them by id; nothing else on the computer is touched.
+const JOBS = {
+  review: { id: 'review', name: TASK_NAME, vbs: 'launch-reviewer.vbs', args: ['--once'], minutes: 10, maxMinutes: 120, title: 'Review and dawn briefs' },
+  dream: { id: 'dream', name: 'MC-Player Bot Dream', vbs: 'launch-dream.vbs', args: ['--dream'], minutes: 120, maxMinutes: 720, title: 'Dream: check memory against the journal, open work orders' },
+}
+const jobOf = (job) => (typeof job === 'string' ? JOBS[job] : job) || JOBS.review
 
 const vbsQuote = (s) => '"' + String(s).replace(/"/g, '""') + '"'
 
 // nodeExe: path to node.exe, or Electron's exe with electronAsNode = true (the packaged app has no separate node)
-function launcherVbs({ nodeExe, scriptPath, workDir, electronAsNode = false }) {
+function launcherVbs({ nodeExe, scriptPath, workDir, electronAsNode = false, args = ['--once'] }) {
   const lines = ['Set sh = CreateObject("WScript.Shell")', `sh.CurrentDirectory = ${vbsQuote(workDir)}`]
   if (electronAsNode) lines.push('sh.Environment("Process")("ELECTRON_RUN_AS_NODE") = "1"')
-  lines.push(`sh.Run ${vbsQuote(vbsQuote(nodeExe) + ' ' + vbsQuote(scriptPath) + ' --once')}, 0, False`)
+  lines.push(`sh.Run ${vbsQuote([vbsQuote(nodeExe), vbsQuote(scriptPath), ...args.map(a => String(a).replace(/[^A-Za-z0-9_=.-]/g, ''))].join(' '))}, 0, False`)
   return lines.join('\r\n') + '\r\n'
 }
 
@@ -40,9 +47,9 @@ const sh = (args, run = execFile) => new Promise((resolve) => {
   run('schtasks', args, { windowsHide: true, timeout: 30000 }, (err, stdout, stderr) => resolve({ ok: !err, out: String(stdout || ''), err: String(stderr || (err && err.message) || '').trim() }))
 })
 
-async function status(run) {
+async function status(run, job) {
   if (process.platform !== 'win32') return { installed: false, unsupported: true }
-  const r = await sh(queryArgs(), run)
+  const r = await sh(queryArgs(jobOf(job).name), run)
   return r.ok ? parseQuery(r.out) : { installed: false }
 }
 
@@ -57,20 +64,22 @@ function findNode(run = execFile) {
   })
 }
 
-async function install({ scriptPath, outDir = path.join(os.homedir(), '.mc-player', 'reviewer'), minutes = 10, run, node } = {}) {
+async function install({ scriptPath, outDir = path.join(os.homedir(), '.mc-player', 'reviewer'), minutes, run, node, job } = {}) {
+  const j = jobOf(job)
+  minutes = Math.min(j.maxMinutes, Math.max(1, Math.round(Number(minutes) || j.minutes)))
   if (process.platform !== 'win32') return { ok: false, error: 'Task Scheduler is Windows-only. On other systems run `node reviewer/run.js` from cron or launchd.' }
   const n = node || await findNode(run)
   fs.mkdirSync(outDir, { recursive: true })
-  const vbsPath = path.join(outDir, 'launch-reviewer.vbs')
-  fs.writeFileSync(vbsPath, launcherVbs({ nodeExe: n.nodeExe, scriptPath, workDir: path.dirname(scriptPath), electronAsNode: n.electronAsNode }))
-  const r = await sh(createArgs({ vbsPath, minutes }), run)
-  return r.ok ? { ok: true, vbsPath, nodeExe: n.nodeExe, minutes, status: await status(run) } : { ok: false, error: r.err || r.out }
+  const vbsPath = path.join(outDir, j.vbs)
+  fs.writeFileSync(vbsPath, launcherVbs({ nodeExe: n.nodeExe, scriptPath, workDir: path.dirname(scriptPath), electronAsNode: n.electronAsNode, args: j.args }))
+  const r = await sh(createArgs({ vbsPath, minutes, name: j.name }), run)
+  return r.ok ? { ok: true, vbsPath, nodeExe: n.nodeExe, minutes, name: j.name, status: await status(run, j) } : { ok: false, error: r.err || r.out }
 }
-async function uninstall(run) {
+async function uninstall(run, job) {
   if (process.platform !== 'win32') return { ok: false, error: 'Windows-only' }
-  const r = await sh(deleteArgs(), run)
+  const r = await sh(deleteArgs(jobOf(job).name), run)
   return { ok: r.ok || /cannot find|does not exist/i.test(r.err), error: r.ok ? undefined : r.err }
 }
-async function runNow(run) { const r = await sh(runArgs(), run); return { ok: r.ok, error: r.ok ? undefined : r.err } }
+async function runNow(run, job) { const r = await sh(runArgs(jobOf(job).name), run); return { ok: r.ok, error: r.ok ? undefined : r.err } }
 
-module.exports = { TASK_NAME, launcherVbs, createArgs, deleteArgs, queryArgs, runArgs, parseQuery, status, install, uninstall, runNow, findNode }
+module.exports = { TASK_NAME, JOBS, launcherVbs, createArgs, deleteArgs, queryArgs, runArgs, parseQuery, status, install, uninstall, runNow, findNode }
