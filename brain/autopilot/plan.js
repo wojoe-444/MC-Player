@@ -1426,6 +1426,17 @@ module.exports = function plan(G, S, M, api, log) {
     let tn = 0
     for (const p of extraTorches().slice(0, 30)) { if (bot.findBlocks({ matching: ids(/^(torch|wall_torch)$/), maxDistance: 3, count: 4, point: p }).filter(o => !o.equals(p)).length === 0) continue; const tb = S.block(p); if (tb && await S.mine(tb, { dig: false })) tn++ }
     if (tn) note('tidy: removed ' + tn + ' crowded torches')
+    // trees cut part of the way up: finish them (the engine climbs, cuts the limbs, clears the canopy and comes down again). Before the scaffold pass:
+    // that pass walks to blocks it cannot reach and can use up the step's budget, and a StepTimeout ends the step there, so the trees were never reached.
+    let finished = 0
+    const tf = api.treefarm && api.treefarm.engine
+    if (tf && typeof tf.finishRemnant === 'function') for (const t of treeJobs().slice(0, 2)) {
+      if (S.isNight()) break
+      const r = await tf.finishRemnant(S.ctx, v(t.pos[0], t.pos[1], t.pos[2]), { logs: t.logs }).catch(e => { if (S.isAbort(e)) throw e; return { status: 'error', why: e.message } })
+      note(`tidy: half-felled ${t.species || ''} tree at ${t.pos.join(',')}: ${r.status}, cut ${r.logs || 0}, left ${r.left || 0}${r.noScaffold ? ', no dirt to climb with' : ''}`)
+      if (r.status === 'done' && !r.left) finished++
+      else { st.remnantFail = st.remnantFail || {}; st.remnantFail[t.id] = Date.now() + (r.status === 'danger' || r.status === 'busy' ? 10 : 90) * 60000 }       // not finished: leave it a while, the detector keeps it on the record
+    }
     // scaffold: the list is recomputed between rounds, because taking the top block off a column makes the next one down eligible
     const tried = new Set(), stuck = [], stuckSet = new Set()
     for (let round = 0; round < 4; round++) {
@@ -1445,16 +1456,6 @@ module.exports = function plan(G, S, M, api, log) {
       if (!did) break
     }
     st.placed = (st.placed || []).filter(q => { const b = S.block(v(q[0], q[1], q[2])); return !b || !S.isAir(b) })
-    // trees cut part of the way up: finish them (the engine climbs, cuts the limbs, clears the canopy and comes down again)
-    let finished = 0
-    const tf = api.treefarm && api.treefarm.engine
-    if (tf && typeof tf.finishRemnant === 'function') for (const t of treeJobs().slice(0, 2)) {
-      if (S.isNight()) break
-      const r = await tf.finishRemnant(S.ctx, v(t.pos[0], t.pos[1], t.pos[2]), { logs: t.logs }).catch(e => { if (S.isAbort(e)) throw e; return { status: 'error', why: e.message } })
-      note(`tidy: half-felled ${t.species || ''} tree at ${t.pos.join(',')}: ${r.status}, cut ${r.logs || 0}, left ${r.left || 0}${r.noScaffold ? ', no dirt to climb with' : ''}`)
-      if (r.status === 'done' && !r.left) finished++
-      else { st.remnantFail = st.remnantFail || {}; st.remnantFail[t.id] = Date.now() + (r.status === 'danger' || r.status === 'busy' ? 10 : 90) * 60000 }       // not finished: leave it a while, the detector keeps it on the record
-    }
     G.save(); note('tidy: took down ' + n + ' scaffold blocks' + (stuck.length ? ` (${stuck.length} out of reach: ${stuck.slice(0, 3).join(' ')})` : '') + (finished ? `, finished ${finished} tree(s)` : '')); return n > 0 || finished > 0 } })
 
   // ---- supply trips (Walter: going 200-300 blocks by day for resources is normal): when nothing usable is remembered, walk out on land in a new
