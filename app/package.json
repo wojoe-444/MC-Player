@@ -43,7 +43,11 @@
       },
       {
         "from": "../reviewer/node_modules",
-        "to": "reviewer/node_modules"
+        "to": "reviewer/node_modules",
+        "filter": [
+          "**/*",
+          "!@anthropic-ai/claude-agent-sdk-*/**"
+        ]
       },
       {
         "from": "../brain/telemetry",

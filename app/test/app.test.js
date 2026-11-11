@@ -137,7 +137,7 @@ test('updater: newer version is offered, then downloaded, dashboard stopped, and
   au.calls.length = 0
   au.quitAndInstall = (...a) => order.push('install:' + a.join(','))
   s = await u.install()
-  assert.deepStrictEqual(order, ['stop', 'install:true,true'])
+  assert.deepStrictEqual(order, ['stop', 'install:false,true'])
   assert.deepStrictEqual(au.calls, ['download'])
   assert.ok(seen.includes('downloading') && seen.includes('ready'))
   await u.install() // already ready: no second install
@@ -159,7 +159,7 @@ test('updater: check and download errors are reported in plain words and can be 
   assert.ok(!au.calls.some(c => c.startsWith('install')))
   o.downloadError = null
   await u.install() // retry from the error state
-  assert.ok(au.calls.includes('install:true,true'))
+  assert.ok(au.calls.includes('install:false,true'))
 })
 
 // ---- local control endpoint ----
