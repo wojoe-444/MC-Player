@@ -53,7 +53,7 @@ function CodeRow({ code }: { code: NonNullable<LoopState["code"]> }) {
 }
 
 // The fixer's own settings and state: what it does with a checked fix, whether it could reach GitHub on its last run, where its copy of the code is.
-const FIX_MODES: [FixMode, string][] = [["merge", "open the pull request and merge it when every check passes"], ["pr", "open the pull request, I merge it"], ["local", "keep the fix on this computer"]]
+const FIX_MODES: [FixMode, string][] = [["merge", "open the pull request and merge it"], ["pr", "open the pull request, I merge it"], ["local", "keep it on this computer"]]
 function FixRow({ fix }: { fix: LoopFix }) {
   const { saveFixMode } = useApp()
   const gh = fix.gh ? (fix.gh.ok ? "GitHub CLI was logged in on the last run." : `GitHub: ${fix.gh.note}`) : "It has not tried to reach GitHub yet. It needs the GitHub CLI logged in once (gh auth login, then gh auth setup-git)."
