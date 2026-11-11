@@ -12,7 +12,7 @@ import { CastView, type CastColor, type CastViewHandle } from "@/components/Cast
 import type { BaseSummary, CastData, CastPart } from "@/lib/cast/types"
 import { cn } from "@/lib/utils"
 
-function useJson<T>(url: string | null, everyMs: number, sig?: (d: T) => string) {
+export function useJson<T>(url: string | null, everyMs: number, sig?: (d: T) => string) {
   const [data, setData] = useState<T | null>(null)
   const [state, setState] = useState<"loading" | "ok" | "failed" | "missing">("loading")
   useEffect(() => {
@@ -31,9 +31,9 @@ function useJson<T>(url: string | null, everyMs: number, sig?: (d: T) => string)
   return { data, state }
 }
 
-const KIND_DOT: Record<CastPart["kind"], string> = { shaft: "#d9d9d9", room: "#e8b04a", mobfarm: "#d9625b", farm: "#79b86a", tunnel: "#6fa8dc", cave: "#8d96a0" }
+export const KIND_DOT: Record<CastPart["kind"], string> = { shaft: "#d9d9d9", room: "#e8b04a", mobfarm: "#d9625b", farm: "#79b86a", tunnel: "#6fa8dc", cave: "#8d96a0" }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+export function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="flex flex-col gap-0.5" title={hint}>
       <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</span>
@@ -42,7 +42,7 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
   )
 }
 
-function PartRow({ p, active, onPick, tinted }: { p: CastPart; active: boolean; onPick: () => void; tinted: boolean }) {
+export function PartRow({ p, active, onPick, tinted }: { p: CastPart; active: boolean; onPick: () => void; tinted: boolean }) {
   return (
     <button
       type="button"
@@ -65,7 +65,7 @@ function PartRow({ p, active, onPick, tinted }: { p: CastPart; active: boolean; 
 // the same cast again (the page polls) must not rebuild the mesh
 const castSig = (d: CastData) => `${d.stats.cells}:${d.stats.recorded}:${d.stats.digsRecorded}:${d.markers.length}:${d.parts.map((p) => p.id + p.cells).join(",")}`
 
-function CastLoading() {
+export function CastLoading() {
   return (
     <Card className="overflow-hidden py-0" role="status" aria-live="polite">
       <div className="dark flex h-[34rem] flex-col items-center justify-center gap-3 bg-zinc-950 text-zinc-400 xl:h-[40rem]">

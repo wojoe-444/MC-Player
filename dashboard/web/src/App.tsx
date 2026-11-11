@@ -24,6 +24,8 @@ import { ThemeProvider, ThemeSelect, useTheme } from "@/components/ThemePicker"
 // three.js is large: the Bases page loads on first visit
 const Bases = lazy(() => import("@/pages/Bases").then((m) => ({ default: m.Bases })))
 
+const Schematics = lazy(() => import("@/pages/Schematics").then((m) => ({ default: m.Schematics })))
+
 // Shown while the Bases page chunk downloads (heading first, so the page never sits empty)
 function BasesFallback() {
   return (
@@ -92,6 +94,7 @@ function Shell() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/progress" element={<Progress />} />
             <Route path="/bases" element={<Suspense fallback={<BasesFallback />}><Bases /></Suspense>} />
+            <Route path="/schematics" element={<Suspense fallback={<BasesFallback />}><Schematics /></Suspense>} />
             <Route path="/logs" element={<Logs />} />
             <Route path="/live" element={<Live />} />
             <Route path="/inventory" element={<Inventory />} />

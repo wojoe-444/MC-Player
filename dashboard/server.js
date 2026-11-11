@@ -395,6 +395,7 @@ function progress() {
 // Item icons: the prismarine-viewer texture pack for 1.21.6 already on disk (read-only), items first, then block faces.
 // Bases page: the ant-farm cast of a base (dashboard/basecast.js). The base list and the dug-block log live next to the registry in bot-shared/.
 const basecast = require('./basecast');
+const schematiccast = require('./schematiccast');
 const castCache = new Map();
 function castOpts() { return { sharedDir: path.dirname(REGISTRY), registryFile: REGISTRY, botDirs: Object.values(BOTS), codeDir: CODE }; }
 function castCached(id, fn) {
@@ -460,6 +461,11 @@ http.createServer((req, res) => {
   if ((sm = p.match(/^\/api\/bases\/([\w.-]+)$/))) {
     const cast = castCached('base:' + sm[1], () => basecast.baseCast(castOpts(), sm[1]));
     return cast ? send(res, 200, JSON.stringify(cast), 'application/json') : send(res, 404, 'no such base');
+  }
+  if (p === '/api/schematics') return send(res, 200, JSON.stringify(castCached('schematics', () => schematiccast.index(castOpts()))), 'application/json');
+  if ((sm = p.match(/^\/api\/schematics\/([\w.-]+)$/))) {
+    const sc = castCached('schematic:' + sm[1], () => schematiccast.cast(castOpts(), sm[1]));
+    return sc ? send(res, 200, JSON.stringify(sc), 'application/json') : send(res, 404, 'no such schematic');
   }
   if (p === '/api/progress') return send(res, 200, JSON.stringify(progress()), 'application/json');
   if (p === '/api/acquired') return send(res, 200, JSON.stringify(acquired(u.searchParams.get('window'))), 'application/json');

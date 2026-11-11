@@ -20,6 +20,10 @@ export type CastData = {
   markers: CastMarker[]
   notes: string[]
   stats: { cells: number; recorded: number; derived: number; digsRecorded: number; placedInBase: number; minY: number | null; maxY: number | null; truncated: boolean }
+  schematic?: SchematicInfo
   sources: { registry: boolean; placed: boolean; dugLog: boolean; world: { save: string; savedAt: number; chunks: number; openCells: number } | null }
 }
 export type BaseSummary = { id: string; name: string; x: number; y: number; z: number; radius: number; source: string }
+export type SchematicLegend = { index: number; role: string; label: string; needs: string; cells: number; sources: { block: string; cells: number }[] }
+export type SchematicInfo = { id: string; name: string; kind: string; purpose: string; size: number[]; origin: number[]; source: { world?: string; capturedAt?: string; by?: string }; legend: SchematicLegend[] }
+export type SchematicSummary = { id: string; name: string; kind: string; purpose: string; size: number[]; origin: number[]; world: string | null; capturedAt: string | null; by: string | null }

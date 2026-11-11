@@ -51,13 +51,16 @@ function columnsLoaded(bot, box, margin = 0) {
   }
   return true
 }
-const PROPS = ['level', 'facing', 'type', 'waterlogged', 'half']
+const PROPS = ['level', 'facing', 'type', 'waterlogged', 'half', 'open', 'axis', 'hinge', 'face', 'attached', 'shape']
+// properties are read for every block that is not air and not a plain solid cube (water levels, hoppers, slabs, trapdoors, ladders ...): the exact check
+// (brain/inspect/exact.js) needs them, and plain rock has none that matter
+const PLAIN = /^(air|cave_air|void_air|stone|cobblestone|deepslate|cobbled_deepslate|dirt|grass_block|tuff|granite|diorite|andesite|gravel|sand|netherrack|[a-z_]+_ore|bedrock)$/
 function liveBlockAt(bot) {
   const Vec3 = require('vec3').Vec3
   return (x, y, z) => {
     const b = bot.blockAt(new Vec3(x, y, z)); if (!b) return null
     let p = null
-    if (b.name === 'water' || b.name === 'hopper' || b.name === 'chest') { try { const all = b.getProperties ? b.getProperties() : {}; p = {}; for (const k of PROPS) if (all[k] !== undefined) p[k] = String(all[k]) } catch { p = null } }
+    if (!PLAIN.test(b.name)) { try { const all = b.getProperties ? b.getProperties() : {}; p = {}; for (const k of PROPS) if (all[k] !== undefined) p[k] = String(all[k]) } catch { p = null } }
     return { name: b.name, props: p }
   }
 }
@@ -80,4 +83,4 @@ function fromFixture(f) {
   return g
 }
 
-module.exports = { makeGrid, fromFunction, fromBot, fromFixture, columnsLoaded, key, AIR, TRANSPARENT, EMIT, LIGHT_SOURCE }
+module.exports = { makeGrid, fromFunction, fromBot, fromFixture, columnsLoaded, liveBlockAt, key, AIR, TRANSPARENT, EMIT, LIGHT_SOURCE }
