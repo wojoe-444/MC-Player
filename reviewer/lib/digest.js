@@ -61,7 +61,7 @@ function buildDigest({ now = Date.now(), bots = [], orders: all = [], ledger = [
     : '- None in the last 24 hours.', '')
 
   const jobs = {}
-  for (const r of runRows.filter(r => Date.parse(r.at) >= since)) { const j = (jobs[r.job] = jobs[r.job] || { n: 0, failed: 0, cost: 0, last: null }); j.n++; if (r.ok === false) { j.failed++; j.last = j.last || r.summary } j.cost += r.costUsd || 0 }
+  for (const r of runRows.filter(r => Date.parse(r.at) >= since && !r.skipped)) { const j = (jobs[r.job] = jobs[r.job] || { n: 0, failed: 0, cost: 0, last: null }); j.n++; if (r.ok === false) { j.failed++; j.last = j.last || r.summary } j.cost += r.costUsd || 0 }
   L.push('## Jobs', '')
   if (!Object.keys(jobs).length) L.push('- No job ran in the last 24 hours. Check the Memory loop tab: a job may not be installed.')
   for (const [name, j] of Object.entries(jobs).sort()) L.push(`- ${name}: ${plural(j.n, 'run')}${j.failed ? `, ${j.failed} failed (${cut(j.last, 140)})` : ''}${j.cost ? `, about $${j.cost.toFixed(2)}` : ''}`)

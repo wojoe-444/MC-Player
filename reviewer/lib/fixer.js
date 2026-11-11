@@ -557,6 +557,26 @@ async function runFix(cfg, { agent = null, ask = null, run = sh, now = Date.now(
   } finally { if (!dryRun) { try { fs.unlinkSync(lock) } catch { /* gone */ } } }
 }
 
+// A scheduled run works through the open orders instead of taking one and sleeping for three hours (Walter 2026-11-11: "make sure the fixer runs until it is caught up").
+// Each order starts from main as the last merged fix left it. It stops when nothing is left to take (none open, or each waits on a pull request, a deploy verdict
+// or a person), when another run holds the lock, when a run breaks for a reason that is not the order's (the model was never heard, the copy would not commit),
+// after MAX_PER_RUN orders, or when the time is up. A fix that gave up or failed its checks is an attempt on that order and the loop goes on to the next.
+// deps: the same as runFix, plus fix (the function to call, for tests) and now (a function)
+const MAX_PER_RUN = 6, RUN_BUDGET_MS = 4 * 3600000
+async function runFixUntilCaughtUp(cfg, deps = {}, { maxOrders = MAX_PER_RUN, budgetMs = RUN_BUDGET_MS } = {}) {
+  const fix = deps.fix || runFix, clock = typeof deps.now === 'function' ? deps.now : Date.now, t0 = clock(), results = []
+  for (let i = 0; i < maxOrders; i++) {
+    const r = await fix(cfg, { ...deps, fix: undefined, now: clock() })
+    results.push(r)
+    if (!r.ok || r.skipped || r.dryRun || deps.only) break
+    if (clock() - t0 > budgetMs) break
+  }
+  const last = results[results.length - 1] || {}
+  const taken = results.filter(r => r.order)
+  return { ok: results.every(r => r.ok), results, orders: taken.map(r => r.order), prs: taken.filter(r => r.pr).map(r => r.pr), caughtUp: !!(last.skipped === true), skipped: results.length === 1 ? last.skipped : undefined,
+    summary: taken.length ? `${taken.length} order(s): ${taken.map(r => `${r.order} ${r.outcome || ''}${r.pr ? ` #${r.pr}` : ''}`.trim()).join('; ')}${last.skipped === true ? '; caught up' : ''}` : (last.summary || String(last.skipped || 'nothing to do')) }
+}
+
 // what the app's tab shows about the fixer, read from files only
 function fixState(cfg) {
   const s = readJson(stateFile(cfg), {}), dir = workDir(cfg)
@@ -565,4 +585,4 @@ function fixState(cfg) {
     orders: Object.fromEntries(list.map(o => { const p = progress(o); return [o.key, { attempts: p.attempts.length, waiting: p.waiting, ready: p.ready ? { branch: p.ready.branch, why: p.ready.why } : null }] })) }
 }
 
-module.exports = { dropLink, runFix, sh, shAsync, pick, progress, prepare, writeEvidence, gateFor, toolsFor, check, diffOf, leaks, privateWords, publish, prBody, taskPrompt, fixState, cleanEnv, mayChange, repoSlug, ghReady, workDir, fixDir, SYSTEM, SCHEMA, LIMITS, MAX_ATTEMPTS, ALLOWED, PROTECTED, REPO }
+module.exports = { dropLink, runFix, runFixUntilCaughtUp, MAX_PER_RUN, sh, shAsync, pick, progress, prepare, writeEvidence, gateFor, toolsFor, check, diffOf, leaks, privateWords, publish, prBody, taskPrompt, fixState, cleanEnv, mayChange, repoSlug, ghReady, workDir, fixDir, SYSTEM, SCHEMA, LIMITS, MAX_ATTEMPTS, ALLOWED, PROTECTED, REPO }

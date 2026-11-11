@@ -67,8 +67,19 @@ function buildRequest({ id, at, reason, bot, role, day, timeOfDay, steps = [], s
   }
 }
 
+// The same question asked again is not a new question. Walter is not watching: on 2026-11-11 two bots put 19 questions to him in a day, most of them the same
+// one reworded ("why does tool-kit make nothing"), and each one was a plan that waited on an answer. A question that matches the one asked in the last ASK_QUIET_MS is
+// dropped, and the bot is told so at its next brief. Words of four letters or more, compared as sets.
+const ASK_QUIET_MS = 12 * 3600000
+const askWords = (s) => new Set(String(s || '').toLowerCase().match(/[a-z][a-z-]{3,}/g) || [])
+function similarAsk(a, b) {
+  const x = askWords(a), y = askWords(b); if (!x.size || !y.size) return false
+  let both = 0; for (const w of x) if (y.has(w)) both++
+  return both / (x.size + y.size - both) >= 0.3
+}
+
 // The model's answer -> { brief, edits, dropped }. `steps` is the list the picker really has; anything else is dropped with a reason the next brief is shown.
-function validate(answer, { steps = [], day = 0, now = Date.now(), id = null, model = null } = {}) {
+function validate(answer, { steps = [], day = 0, now = Date.now(), id = null, model = null, lastAsk = null } = {}) {
   const a = answer && typeof answer === 'object' ? answer : {}
   const known = new Set(steps), dropped = []
   const focus = []
@@ -91,12 +102,17 @@ function validate(answer, { steps = [], day = 0, now = Date.now(), id = null, mo
   const ft = a.freeTime && typeof a.freeTime === 'object' ? a.freeTime : {}
   const choice = Object.prototype.hasOwnProperty.call(WHIMSY, ft.choice) ? ft.choice : 'none'
   if (ft.choice && choice !== ft.choice) dropped.push(`free time "${cut(ft.choice, 40)}": not one of ${Object.keys(WHIMSY).join(', ')}`)
+  let ask = a.ask ? cut(a.ask, 240) : null
+  if (ask && lastAsk && lastAsk.text && now - (Number(lastAsk.at) || 0) < ASK_QUIET_MS && similarAsk(ask, lastAsk.text)) {
+    dropped.push(`ask "${cut(ask, 60)}": you asked this at ${new Date(Number(lastAsk.at)).toISOString().slice(11, 16)}Z and Walter has not answered. Do not ask it again: take the sensible default, do it yourself, and say what you decided in your plan`)
+    ask = null
+  }
   const m = a.memory && typeof a.memory === 'object' ? a.memory : {}
   return {
     brief: {
       v: 1, id, at: new Date(now).toISOString(), until: now + LIMITS.ttlMs, day, model,
       intent: cut(a.intent, LIMITS.intent), focus, holds,
-      freeTime: { choice, note: cut(ft.note, 200) }, ask: a.ask ? cut(a.ask, 240) : null, dropped,
+      freeTime: { choice, note: cut(ft.note, 200) }, ask, dropped,
     },
     edits: {
       now: typeof m.now === 'string' ? m.now : (a.intent ? String(a.intent) : ''), projects: typeof m.projects === 'string' ? m.projects : null,
@@ -115,4 +131,4 @@ function active(brief, { now = Date.now(), day = null } = {}) {
   return { id: brief.id || null, focus, holds, held: new Set(holds.map(h => h.step)), freeTime: { choice, note: (brief.freeTime && brief.freeTime.note) || '' } }
 }
 
-module.exports = { buildRequest, digest, validate, active, clock, checkSummary, SURVIVAL, UNHOLDABLE, WHIMSY, LIMITS }
+module.exports = { similarAsk, ASK_QUIET_MS, buildRequest, digest, validate, active, clock, checkSummary, SURVIVAL, UNHOLDABLE, WHIMSY, LIMITS }

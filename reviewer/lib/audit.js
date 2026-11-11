@@ -50,7 +50,7 @@ function gather(cfg, now, task = {}) {
     jobs[id] = {
       title: j.title, everyMin: j.minutes, installed: task[id] ? !!task[id].installed : null,
       lastAt: mine[0] ? mine[0].at : null, lastOk: mine[0] ? mine[0].ok !== false : null, lastSummary: mine[0] ? cut(mine[0].summary, 160) : null,
-      runs24h: day.length, failed24h: day.filter(r => r.ok === false).length,
+      runs24h: day.filter(r => !r.skipped).length, skips24h: day.filter(r => r.skipped).reduce((n, r) => n + (r.n || 1), 0), lastSkip: mine[0] && mine[0].skipped ? cut(mine[0].summary, 140) : null, failed24h: day.filter(r => r.ok === false).length,
     }
   }
   const bots = cfg.bots.map(b => ({ name: b.name, silentMin: (() => { const a = journalAge(b, now); return a == null ? null : mins(a) })(), asks24h: asksOf(b, now) }))
