@@ -1600,5 +1600,7 @@ module.exports = function plan(G, S, M, api, log) {
     const lu = require('./lightup')(G, S, M, api, log); const li = G.steps.findIndex(x => x.id === 'mob-farm-build'); G.steps.splice(li >= 0 ? li + 1 : G.steps.length, 0, lu)
   } catch (e) { log('PLAN', 'lightup not loaded: ' + e.message) }
   try { delete require.cache[require.resolve('./pursue')]; G.steps.push(require('./pursue')(G, S, M, api, log, { daylightOk: () => true })) } catch (e) { log('PLAN', 'pursue not loaded: ' + e.message) }
+  // the bot's own time: what it does there is chosen in its dawn brief (brain/memory); last in the list, the picker gives it its slot once a day
+  try { delete require.cache[require.resolve('./whimsy')]; G.steps.push(require('./whimsy')(G, S, M, api, log)) } catch (e) { log('PLAN', 'whimsy not loaded: ' + e.message) }
   log('PLAN', 'survival processes loaded: ' + G.steps.map(s => s.id).join(' > '))
 }

@@ -68,6 +68,18 @@ Remove it with `node run.js --uninstall-task` or the **Remove task** button. Not
 
 Setup once: `cd reviewer && npm install`.
 
+## 5. The dawn brief (`lib/brief.js`, docs/MEMORY-LOOP.md job 3)
+
+The same Task Scheduler entry answers the bots' brief requests before it reviews. A bot with the brief on (`planner.brief` in its profile; default on for the hillclimber) writes `brain/state/memory/brief-request.json` at an in-game dawn, at most once an hour, and after a respawn. `lib/brief.js` answers each fresh, unanswered request with one call (same model and effort as the review, no tools, JSON schema) and writes `brief-answer.json` beside it, plus one line in `brief-history.jsonl`. The bot checks the answer in code before any of it counts (`brain/memory/brief.js`): real step names only, no hold on a survival step or on free time, the memory caps.
+
+```
+node run.js --brief-only        answer waiting requests and stop
+node run.js --brief-dry-run     print the prompts that would be sent
+node run.js --no-brief          a review pass without the briefs
+```
+
+Every call now runs with ambient memory shut out (`settings: { autoMemoryEnabled: false }`, and `CLAUDE_*MEMORY*` variables removed from the child's environment), so a job judges from its prompt alone.
+
 ## Prompt tuning (2026-11-10)
 The first live run (OzoGo444 and Smeo444, 04:43Z) mostly restated detector flags under `<bot>-detector-<kind>` keys, rated six things high, read lifetime hurt totals as live evidence and an old window as the present, and said nothing about armor or progress. `lib/prompt.js` now orders attention (rules, loops and stalls, progress, mess, code faults in logs), lists the rules in force and the roadmap phases, asks for one finding per root cause with at most 2 high and 5 total, and says what not to trust. The model also gets `previousReview` (last summary and bag) and the bag and worn armor in `telemetrySummary.now`, so it can judge progress. `examples/replay-before.json` and `replay-after.json` are the old and new prompt run on the same reconstructed 04:48Z input.
 

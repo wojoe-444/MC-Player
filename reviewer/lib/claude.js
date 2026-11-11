@@ -7,6 +7,9 @@ async function loadSdk() { return import('@anthropic-ai/claude-agent-sdk') }
 function childEnv(env = process.env) {
   const e = { ...env }
   for (const k of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX']) delete e[k]
+  // no ambient memory either: these jobs must judge from the evidence in their prompt alone. A trial brief on 2026-11-11 quoted a rule that was only in
+  // the surrounding Claude session's memory, never in its prompt. (autoMemoryEnabled: false in the call's settings covers Claude Code's own memory folder.)
+  for (const k of Object.keys(e)) if (/^CLAUDE_(COWORK_)?MEMORY/.test(k)) delete e[k]
   e.CLAUDE_AGENT_SDK_CLIENT_APP = 'mc-player-reviewer/0.1.0'
   return e
 }
@@ -22,7 +25,7 @@ async function askClaude(opts) {
       prompt: opts.prompt,
       options: {
         model: opts.model, effort: opts.effort, systemPrompt: opts.systemPrompt,
-        tools: [], allowedTools: [], settingSources: [], persistSession: false, maxTurns: 4,
+        tools: [], allowedTools: [], settingSources: [], settings: { autoMemoryEnabled: false }, persistSession: false, maxTurns: 4,
         outputFormat: { type: 'json_schema', schema: opts.schema },
         cwd: opts.cwd, env: childEnv(opts.env), abortController: ac,
         ...(opts.claudePath ? { pathToClaudeCodeExecutable: opts.claudePath } : {}),
