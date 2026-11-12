@@ -228,7 +228,7 @@ module.exports = function ladder(bot, S, goals, v, log) {
     L.putShaft(sh)
     await S.goto(new goals.GoalBlock(entry.x, entry.y, entry.z), { dig: false, ms: 30000, escalate: false })
     if (S.flo(bot.entity.position).x !== entry.x || S.flo(bot.entity.position).z !== entry.z) { log('LADDER', 'could not stand on the shaft entry ' + entry); return null }
-    let y = entry.y, why = 'target'
+    let y = entry.y, why = 'target', laddered = entry.y
     for (let steps = 0; y > targetY && steps < 160; steps++) {
       S.check()
       if (ladders() < 2) { await L.ensureLadders(12); if (ladders() < 1) { why = 'no ladders'; break } }
@@ -246,18 +246,25 @@ module.exports = function ladder(bot, S, goals, v, log) {
       if (Math.floor(bot.entity.position.y) > y - 1) { why = 'did not drop'; break }
       y -= 1
       if (!(await hang(v(entry.x, y, entry.z), wall))) { why = 'ladder would not hang at y' + y; break }
+      laddered = y
       if (steps % 6 === 5) await S.pickup(3, 1500).catch(() => {})
     }
-    sh.bottom = [entry.x, y, entry.z]; sh.digging = false; sh.end = why; sh.at = Date.now()
+    // the bottom is the last cell that has a ladder: when the ladder would not hang at the next level, the bot dropped into an air cell there,
+    // and a walk to that cell never ends (the iron step stalled on it at y-5, work order step-iron)
+    const bottom = laddered
+    sh.bottom = [entry.x, bottom, entry.z]; sh.digging = false; sh.end = why; sh.at = Date.now()
     L.putShaft(sh)
-    if (into) sh.levels = (sh.levels || []).concat([y])
-    log('LADDER', `shaft ${sh.id}: from y${entry.y} down to y${y} (${why})`)
+    if (into) sh.levels = (sh.levels || []).concat([bottom])
+    log('LADDER', `shaft ${sh.id}: from y${entry.y} down to y${bottom} (${why})`)
     return sh
   }
 
+  // the cell a ride down walks to: the recorded bottom, or the ladder above it when the bottom is an air cell (a failed hang left it). Nothing
+  // holds the bot in an air cell, so a walk to it never ends (work order step-iron: the iron goal waited on it at y-5 for 45 s)
+  L.rideBottom = (sh) => { const b = v(...sh.bottom), c = S.block(b); return c && /^(air|cave_air)$/.test(c.name) ? b.offset(0, 1, 0) : b }
   // ride a shaft: down to its bottom or up to its entry (the pathfinder climbs ladders; a plain walk only, never escalation)
   L.down = async (sh) => {
-    const e = v(...sh.entry), b = v(...sh.bottom)
+    const e = v(...sh.entry), b = L.rideBottom(sh)
     await S.goto(new goals.GoalNear(e.x, e.y, e.z, 1), { dig: false, ms: 90000, escalate: false })
     const r = await S.goto(new goals.GoalBlock(b.x, b.y, b.z), { dig: false, ms: 90000, escalate: false })
     return r.ok || S.dist(b.offset(0.5, 0, 0.5)) < 2
