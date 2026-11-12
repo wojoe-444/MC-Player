@@ -1316,7 +1316,11 @@ module.exports = function plan(G, S, M, api, log) {
     // A column comes down top first, so a block qualifies when what sits on it is passable (air, a torch, a plant) or is itself on the list. The old rule (nothing at all on
     // top) took one block off each pillar per pass and the rest stayed for good (Walter's screenshot, 2026-11-11).
     // (leaves and logs above do not hold a block up, as the cover check above counts them: a block under a canopy was never listed and stood for good)
-    return require('../leftovers/lib').topFirst(eligible, (x, y, z) => { const a = S.block(v(x, y, z)); return !a || a.boundingBox !== 'block' || /_leaves$|_log$/.test(a.name) })
+    const out = require('../leftovers/lib').topFirst(eligible, (x, y, z) => { const a = S.block(v(x, y, z)); return !a || a.boundingBox !== 'block' || /_leaves$|_log$/.test(a.name) })
+    // a column whose top was walked to and not taken down goes to the back of the list: the walk to a block out of reach uses the step's budget, and
+    // the reachable blocks behind it never got a turn (the same tops came first on every visit, 2026-11-11). Whole columns move, so top first still holds.
+    const back = new Set(out.filter(p => st.tidyStuck && st.tidyStuck[kk(p)]).map(p => p.x + ',' + p.z))
+    return out.filter(p => !back.has(p.x + ',' + p.z)).concat(out.filter(p => back.has(p.x + ',' + p.z)))
   }
   tidyList.force = (p) => { for (const c of leftScaffold()) if ((c.cells || []).some(q => q[0] === p.x && q[1] === p.y && q[2] === p.z)) return true; return false }      // ledger-proven: ours, filler, placed by a bot (never anything a player placed)
   // over-lighting: the top-down map showed 240 torches in a tight grid around home. A torch the bot placed with another one within 3 blocks goes.
@@ -1451,7 +1455,9 @@ module.exports = function plan(G, S, M, api, log) {
         const k = p.x + ',' + p.y + ',' + p.z
         // a column whose top could not be reached stays whole: taking the lower blocks out from under it would only leave the top floating
         if (stuckSet.has(p.x + ',' + (p.y + 1) + ',' + p.z)) { stuckSet.add(k); continue }
-        if (await S.mine(b, { dig: false, force: tidyList.force(p) })) { n++; did++ } else { stuck.push(k); stuckSet.add(k) }
+        // remembered before the walk, so a walk that the budget cuts short is still known on the next visit; forgotten once the block is down
+        st.tidyStuck = st.tidyStuck || {}; st.tidyStuck[k] = 1
+        if (await S.mine(b, { dig: false, force: tidyList.force(p) })) { n++; did++; delete st.tidyStuck[k] } else { stuck.push(k); stuckSet.add(k) }
       }
       if (!did) break
     }
