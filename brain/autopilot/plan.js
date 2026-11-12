@@ -614,6 +614,8 @@ module.exports = function plan(G, S, M, api, log) {
       }
       if (y > 56 && st.mine && st.mine.ladder) {
         const sh = ladderShaft()
+        // a block that ended up in the shaft column (a dirt plug) stops the ride, so it is dug out first, as pursue does (bot-asks, 2026-11-11)
+        await LD.clearPlug(sh).catch(() => 0)
         if (!(await LD.down(sh))) { st.mine.fails = (st.mine.fails || 0) + 1; G.save(); note('mine: could not ride the ladder down (' + st.mine.fails + ')'); await LD.up(sh); if (st.mine.fails >= 3) { st.mine = null; G.save() } return false }
         st.mine.fails = 0; note('mine: down the ladder to y' + Math.floor(bot.entity.position.y))
       }
