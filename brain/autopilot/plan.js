@@ -1130,7 +1130,8 @@ module.exports = function plan(G, S, M, api, log) {
   bot._shelterMissing = () => { const pl = shelterPlan(); return pl ? missingShelter(pl).map(p => [p.x, p.y, p.z]) : null }   // for the live pilot
   const shelterTorch = (pl) => bot.findBlocks({ matching: ids(/^(torch|wall_torch)$/), point: pl.inside, maxDistance: 3, count: 3 }).some(p => p.x >= pl.box.x0 && p.x <= pl.box.x1 && p.z >= pl.box.z0 && p.z <= pl.box.z1)
   const doorIn = (pl) => (pl.doors || [pl.door]).every(d => /door/.test((S.block(d) || {}).name || ''))
-  const shelterTodo = (pl) => missingShelter(pl).length + (!shelterTorch(pl) && cnt('torch') > 0 ? 1 : 0) + (!doorIn(pl) && S.items().some(i => /_door$/.test(i.name)) ? 1 : 0)
+  // (the door counts when need() wants one: a door in the bag, or planks for one; a door that cannot be made must count for the stuck pause too)
+  const shelterTodo = (pl) => missingShelter(pl).length + (!shelterTorch(pl) && cnt('torch') > 0 ? 1 : 0) + (!doorIn(pl) && (S.items().some(i => /_door$/.test(i.name)) || S.planks() + S.logs() * 4 >= 6) ? 1 : 0)
   steps.push({ id: 'shelter', budget: 240000, cool: 600000, need: () => {
       if (G.role === 'assistant' || S.isNight() || !home() || Date.now() < (st.shelterPauseUntil || 0)) return false
       if (Date.now() - (st._shelterAt || 0) < 120000) return !!st._shelterNeed
@@ -1203,7 +1204,11 @@ module.exports = function plan(G, S, M, api, log) {
     if (todo > 0 && todo >= before) { st.shelterStuck = (st.shelterStuck || 0) + 1; if (st.shelterStuck >= 3) { st.shelterPauseUntil = Date.now() + 3600000; st.shelterStuck = 0 } } else st.shelterStuck = 0
     note(`shelter: ${placed} placed, ${left} wall/roof blocks still missing, door ${doorIn(pl) ? 'in' : 'open'}, torch ${shelterTorch(pl) ? 'in' : 'missing'}`)
     st._shelterAt = 0
-    return placed > 0 } })
+    // a finished shelter is a success even when this pass placed nothing: every wall, roof and floor cell is in and the torch is in (or none is
+    // carried). A door that cannot go in does not fail it (work order step-shelter: the failure cooled the step down and the bot went off to
+    // light-home and iron); the stuck rule above still pauses a step that finds the same thing three passes running
+    const finished = left === 0 && (shelterTorch(pl) || !cnt('torch'))
+    return placed > 0 || finished } })
 
   // ---- the home bed is a fixed point (Walter 2026-11-04: if the base blows up, use commands to put a bed back and reset the spawn). When the
   // bed block at home is gone, a bed is given if none is carried, set down at the same spot and the respawn point is set there again. ----
