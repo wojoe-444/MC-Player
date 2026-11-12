@@ -323,6 +323,9 @@ module.exports = function plan(G, S, M, api, log) {
       // 32 by day (64 and then 40 still took 230 s on this machine with the server alongside and the watchdog reset the bot mid-step,
       // 01:02 and 05:59), 24 near dusk
       // (st._lightCenter: the light-mine step runs this same pass around the far mine's entry)
+      // a pass that the budget or a walk cuts short rests five minutes (set now; the end of a full pass sets its own rest below): without one the step
+      // was due again at once from the same spot and timed out the same way, 2026-11-11
+      if (!st._lightCenter) st.lightAt = Date.now() + 5 * 60000
       const h = (st._lightCenter && v(...st._lightCenter)) || home(), GRID = 10, R = st._lightCenter ? 24 : (daylightLeft() > 2500 ? 32 : 24)
       const torchIds = ids(/^(torch|wall_torch)$/)
       // the walkable top of a column (not on leaves, not in water), or null
@@ -346,11 +349,17 @@ module.exports = function plan(G, S, M, api, log) {
           const p = surface(h.x + dx + ox, h.z + dz + oz); if (p && !avoid(p)) { spot = p; break } }
         if (spot) grid.push(spot)
       }
-      const missing = grid.filter(p => !torchNear(p, 2)).sort((a, b) => S.dist(a) - S.dist(b))
+      // a site is marked in st.lightStuck before its walk (so a walk that the budget cuts short is still known on the next pass) and unmarked when the
+      // walk arrives; marked sites go after the others. Nearest-first sent every pass to the same unreachable site first, and the budget ran out before
+      // the reachable sites got a turn (the same fix as tidyStuck, 2026-11-11)
+      const stuck = st.lightStuck = st.lightStuck || {}, sk = (p) => p.x + ',' + p.y + ',' + p.z
+      const missing = grid.filter(p => !torchNear(p, 2)).sort((a, b) => (!!stuck[sk(a)] - !!stuck[sk(b)]) || S.dist(a) - S.dist(b))
       let placed = 0
       for (const p of missing) {
         if (placed >= 16 || cnt('torch') < 14 || (R > 24 && daylightLeft() < 1500)) break   // (12 stay for the mine: lighting at dawn used them all and the iron step, which needs 12, never ran, 2026-11-09)
+        stuck[sk(p)] = 1
         const r = await S.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { dig: false, ms: 20000, escalate: false }); if (!r.ok) continue
+        delete stuck[sk(p)]
         const g = S.block(p.offset(0, -1, 0)), b = S.block(p)
         if (g && b && S.isAir(b) && await S.placeAgainst(g, v(0, 1, 0), 'torch')) placed++
       }
@@ -373,10 +382,12 @@ module.exports = function plan(G, S, M, api, log) {
         if (outdoorCell(p)) { seenCell.add(k); surfaceCells.push(p) } }
       const dark = surfaceCells.filter(p => lm.spawnable(p) && !avoid(p))
       let filled = 0; const lit = []
-      if (placed === missing.length) for (const p of dark.sort((a, b) => S.dist(a) - S.dist(b))) {
+      if (placed === missing.length) for (const p of dark.sort((a, b) => (!!stuck[sk(a)] - !!stuck[sk(b)]) || S.dist(a) - S.dist(b))) {
         if (filled >= 8 || cnt('torch') < 14) break
         if (lit.some(q => q.distanceTo(p) < 8)) continue
+        stuck[sk(p)] = 1
         const r = await S.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { dig: false, ms: 20000, escalate: false }); if (!r.ok) continue
+        delete stuck[sk(p)]
         const g = S.block(p.offset(0, -1, 0))
         if (g && await S.placeAgainst(g, v(0, 1, 0), 'torch')) { filled++; lit.push(p) }
       }
