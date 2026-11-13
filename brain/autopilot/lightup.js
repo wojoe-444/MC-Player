@@ -204,7 +204,16 @@ module.exports = function lightup(G, S, M, api, log) {
   const approved = () => process.env.LIGHTUP_XRAY_OK === '1' || require('fs').existsSync(require('path').join(process.env.BOT_RUNTIME_DIR || process.cwd(), 'brain', 'state', 'lightup-approved.json'))
   const NEEDS_OK = { ok: false, why: 'the light-up scan reads dark cells through rock; it stays off until Walter approves that exception (lightup-approved.json)' }
   const guarded = (fn) => async (...a) => approved() ? fn(...a) : NEEDS_OK
-  G.lightUp = { run: guarded(run), scan: guarded(scan), status, DEFAULTS, approved }
+  // a run the scheduler ends halfway (preempted, watchdog kick) used to write no line: the journal showed the step as aborted and nothing about how
+  // long it had run, what it had placed, or why it gave way. It still ends the same way; the line is the only addition.
+  async function runNoted(opts) {
+    const t0 = Date.now()
+    try { return await run(opts) } catch (e) {
+      if (e && (e.name === 'AbortError' || (S.isAbort && S.isAbort(e)))) note(`light-up: aborted (${e.reason || 'no reason'}) after ${Math.round((Date.now() - t0) / 1000)} s, ${(U().torches || []).filter(x => x.t >= t0).length} torches placed`)
+      throw e
+    }
+  }
+  G.lightUp = { run: guarded(runNoted), scan: guarded(scan), status, DEFAULTS, approved }
 
   return {
     id: 'mob-farm-light', budget: DEFAULTS.ms + 120000, cool: 300000,
