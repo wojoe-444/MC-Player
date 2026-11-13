@@ -1481,7 +1481,9 @@ module.exports = function plan(G, S, M, api, log) {
         if (stuckSet.has(p.x + ',' + (p.y + 1) + ',' + p.z)) { stuckSet.add(k); continue }
         // remembered before the walk, so a walk that the budget cuts short is still known on the next visit; forgotten once the block is down
         st.tidyStuck = st.tidyStuck || {}; st.tidyStuck[k] = 1
-        if (await S.mine(b, { dig: false, force: tidyList.force(p) })) { n++; did++; delete st.tidyStuck[k] } else { stuck.push(k); stuckSet.add(k) }
+        // plain walks only (escalate: false, as torch-spacing has since #343): an escalating walk to a cell out of reach digs and builds for up to
+        // two minutes per go-to, so one such cell used the whole step budget and the reachable ones behind it never got a turn (work order step-tidy)
+        if (await S.mine(b, { dig: false, escalate: false, force: tidyList.force(p) })) { n++; did++; delete st.tidyStuck[k] } else { stuck.push(k); stuckSet.add(k) }
       }
       if (!did) break
     }
