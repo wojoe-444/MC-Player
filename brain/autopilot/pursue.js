@@ -96,7 +96,7 @@ module.exports = function pursue(G, S, M, api, log, helpers) {
         if (sh && sh.bottom) {
           const bottom = v(...sh.bottom)
           await M.LD.clearPlug(sh).catch(() => 0)
-          if (Math.floor(bot.entity.position.y) > sh.bottom[1] + 1) await M.LD.down(sh).catch(() => false)
+          if (Math.floor(bot.entity.position.y) > sh.bottom[1] + 1) { const ride = await M.LD.down(sh).catch(() => false); note(`pursue: ride to the shaft bottom y${sh.bottom[1]} ${ride ? 'reached' : 'not reached'} from y${Math.floor(bot.entity.position.y)}`) }
           if (S.dist(bottom.offset(0.5, 0, 0.5)) < 4) { const d = await M.LD.dig(bottom, src.y, { into: sh }); note(`pursue: the shaft goes down to y${sh.bottom ? sh.bottom[1] : '?'} for ${next.name} (${d && d.end || 'done'})`) }
           else { note(`pursue ${goal.name}: could not reach the shaft bottom, no stairs`); G.cool.pursue = Date.now() + 10 * 60000; return false }
           if (Math.floor(bot.entity.position.y) > src.y + 6) { G.cool.pursue = Date.now() + 10 * 60000; return false }
@@ -107,10 +107,13 @@ module.exports = function pursue(G, S, M, api, log, helpers) {
       note(`pursue: tunnel ${t.len} for ${next.name}, +${cnt(next.name) - before} (${t.reason})`)
     } else if (src.mob) {
       const e = Object.values(bot.entities).filter(x => x && x.name && src.mob.test(x.name) && x.position.distanceTo(bot.entity.position) < 48).sort((a, b) => a.position.distanceTo(bot.entity.position) - b.position.distanceTo(bot.entity.position))[0]
-      if (!e) return false
-      await S.kill(e); await S.pickup(8, 4000)
+      // (the log says why a run ends here: no such mob in sight, or a chase that left it alive, e.g. a mob in a pen with no path to it)
+      if (!e) { note(`pursue ${goal.name}: no ${next.name} mob (${src.mob.source}) in sight within 48 blocks`); return false }
+      const t0 = Date.now(); await S.kill(e); await S.pickup(8, 4000)
+      note(`pursue ${goal.name}: ${e.name} ${bot.entities[e.id] ? 'still alive' : 'down'} after ${Math.round((Date.now() - t0) / 1000)} s, ${next.name} +${cnt(next.name) - before}`)
     } else if (src.plant) {
-      await S.gather(src.plant, next.n, { radius: 40, ms: 120000, filter: (b) => b.position.y > (st.home ? st.home[1] - 15 : 0) })
+      const got = await S.gather(src.plant, next.n, { radius: 40, ms: 120000, filter: (b) => b.position.y > (st.home ? st.home[1] - 15 : 0) })
+      note(`pursue ${goal.name}: gathered ${got} of ${next.n} ${next.name} within 40 blocks`)
       await S.pickup(8, 4000)
     }
     await craftUp(goal.name, goal.n)
