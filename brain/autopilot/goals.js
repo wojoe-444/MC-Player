@@ -234,7 +234,7 @@ module.exports = function makeGoals(S, M, api, log) {
         // out of the mine by its own stairs first: straight for home from y38 the escalating walk went under the sea at y48 (11:23-11:39,
         // 16 minutes, the same place it drowned at 06:55)
         if (S.dist(h) > 4 && G.role !== 'assistant' && bot.entity.position.y < h.y - 6 && !S.skyVisible() && M.goSurface) { const up = await M.goSurface(); note('nothing to do at night: up from the mine first (' + up + ')') }
-        if (S.dist(h) > 4) { note('nothing to do at night: going home'); await S.goto(new goals.GoalNear(h.x, h.y, h.z, 2), { dig: false, ms: 60000 }) }
+        if (S.dist(h) > 4) { note('nothing to do at night: going home'); const t0 = Date.now(); const w = await S.goto(new goals.GoalNear(h.x, h.y, h.z, 2), { dig: false, ms: 60000 }); stepEnd('home', w && w.ok ? 'ok' : 'fail', t0) }
         await S.wait(5000)
         return
       }
@@ -249,7 +249,7 @@ module.exports = function makeGoals(S, M, api, log) {
       let lhReady = false; if (lh && G.role !== 'assistant' && st.home) { try { lhReady = !!lh.need() } catch {} }
       if (lhReady && Date.now() - (G.idleLightAt || 0) > 60000) { G.idleLightAt = Date.now(); G.lastStep = 'light-home'; note('nothing to do: lighting more ground around home'); S.stepDeadline = Date.now() + 150000; try { await lh.run() } catch (e) { if (S.isAbort(e)) throw e } finally { S.stepDeadline = 0 } return }
       // random exploring kept walking it into the sea (drowned, 06:34) and caves: with a home, idle time is spent there, not wandering
-      if (st.home) { G.lastStep = 'home'; const h = v(st.home[0], st.home[1], st.home[2]); if (S.dist(h) > 6) { note('nothing to do: back home'); if (G.enterShelter && st.shelterDoor && G.role !== 'assistant') await G.enterShelter(); else await S.goto(new goals.GoalNear(h.x, h.y, h.z, 3), { dig: false, ms: 60000 }) } await S.wait(4000); return }
+      if (st.home) { G.lastStep = 'home'; const h = v(st.home[0], st.home[1], st.home[2]); if (S.dist(h) > 6) { note('nothing to do: back home'); const t0 = Date.now(); let w; if (G.enterShelter && st.shelterDoor && G.role !== 'assistant') w = await G.enterShelter(); else w = await S.goto(new goals.GoalNear(h.x, h.y, h.z, 3), { dig: false, ms: 60000 }); stepEnd('home', w && w.ok ? 'ok' : 'fail', t0) } await S.wait(4000); return }
       if (G.role === 'assistant') { G.lastStep = 'home'; await S.wait(5000); return }
       note('nothing to do: exploring')
       G.lastStep = 'explore'
