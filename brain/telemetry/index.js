@@ -125,6 +125,22 @@ module.exports = function register(api) {
   function recentIntent(L, kind, x, y, z) {
     try { const it = L && L._tick && L._tick.intents && L._tick.intents(); const v = it && it.get(`${kind}:${x},${y},${z}`); return !!v && now() - v.t < 6000 } catch { return false }
   }
+  // Facts that tell a landing from a plot that dried out on its own (vanilla FarmBlock.randomTick turns farmland to dirt when no water is within 4 blocks and no
+  // crop is on top): the moisture the block had, whether water is near, what sat on it, and where the bot last stood on the ground before it went airborne
+  // (cell, yaw, pitch). The label above does not say this: any jump in the last 1.5 s makes it "jump".
+  function plotFacts(oldB, newB, recent) {
+    const f = { moist: null, wet: null, above: null, takeoff: null }
+    try { const pr = oldB && oldB.getProperties ? oldB.getProperties() : null; if (pr && pr.moisture !== undefined) f.moist = Number(pr.moisture) } catch { /* not every block reports properties */ }
+    try {
+      let wet = false
+      for (let dx = -4; dx <= 4 && !wet; dx++) for (let dz = -4; dz <= 4 && !wet; dz++) for (let dy = 0; dy <= 1 && !wet; dy++) { const b = bot.blockAt(newB.position.offset(dx, dy, dz)); if (b && /water/.test(b.name)) wet = true }
+      f.wet = wet
+    } catch { /* ignore */ }
+    try { const up = bot.blockAt(newB.position.offset(0, 1, 0)); f.above = up ? up.name : null } catch { /* ignore */ }
+    const air0 = recent.findIndex(s => !s.g), tk = air0 > 0 ? recent[air0 - 1] : null
+    if (tk) f.takeoff = { x: tk.x, y: tk.y, z: tk.z, yaw: tk.yaw, pit: tk.pit, agoMs: Math.max(0, now() - tk.t) }
+    return f
+  }
   function onFarmUpdate(oldB, newB) {
     if (!oldB || !newB || oldB.name !== 'farmland' || newB.name !== 'dirt' || !newB.position) return
     const p = pos(); if (!p) return
@@ -152,10 +168,11 @@ module.exports = function register(api) {
     try { space = L && L.spaceAt ? L.spaceAt({ x, y, z }) : null } catch {}
     try { if (L && L.whoMade) { const w = L.whoMade({ x, y, z }, 'dirt'); ledger = { verdict: w.verdict, by: w.by || null } } } catch {}
     const step = (bot._ap && bot._ap.G && bot._ap.G.lastStep) || null
-    const ev = { k: 'trample', t, x, y, z, by, how, dist: +dh.toFixed(1), fall, space, step, tk: curTask || '' }
+    const facts = plotFacts(oldB, newB, recent)
+    const ev = { k: 'trample', t, x, y, z, by, how, dist: +dh.toFixed(1), fall, space, step, tk: curTask || '', ...facts }
     addEvent(ev)
     api.log('telemetry', `farmland at ${x},${y},${z} became dirt${by === 'bot' ? ` after a ${how}` : ' (not clearly the bot)'}${space ? ` in ${space}` : ''}`)
-    try { if (bot._journal && bot._journal.add) bot._journal.add('trample', { pos: [x, y, z], by, how, dist: ev.dist, fall, space, step, task: curTask || null, held: bot.heldItem ? bot.heldItem.name : null, ledger }, { sal: by === 'bot' }) } catch {}
+    try { if (bot._journal && bot._journal.add) bot._journal.add('trample', { pos: [x, y, z], by, how, dist: ev.dist, fall, space, step, task: curTask || null, held: bot.heldItem ? bot.heldItem.name : null, ledger, ...facts }, { sal: by === 'bot' }) } catch {}
     if (by === 'bot') { clearTimeout(trampleSoon); trampleSoon = setTimeout(() => { try { analyze() } catch {} }, 300) }       // the flag should not wait for the next 15 s pass
   }
   let trampleSoon = null

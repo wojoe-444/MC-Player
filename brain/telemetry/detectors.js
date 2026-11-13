@@ -4,7 +4,8 @@
 //   { k:'dig',  t, block, x,y,z, held, need, have, ok, harvestOk }       (a dig started on `block` with `held` in hand)
 //   { k:'place', t, block, x,y,z, sky, tk }
 //   { k:'fail', t, what, note }                                          (what: noPath | timeout | digAbort | taskFailed)
-//   { k:'trample', t, x,y,z, by, how, dist, fall, space, step, tk }       (farmland turned to dirt near the bot; by: 'bot' | 'unknown', how: jump | drop | hop | none)
+//   { k:'trample', t, x,y,z, by, how, dist, fall, space, step, tk, moist, wet, above, takeoff }   (farmland turned to dirt near the bot; by: 'bot' | 'unknown', how: jump | drop | hop | none;
+//     moist/wet/above: the block's moisture, water within 4 blocks, what sat on it; takeoff: { x,y,z,yaw,pit,agoMs } of the last ground sample before the air time)
 //   { k:'leftover', t, what, id, kind, n, h, leaves, x,y,z, standingMin } (brain/leftovers, each scan, per cluster that has stood 5+ min: what 'scaffold' | 'tree'; kind pillar | tower | stray | ungrounded)
 // The reviewer (reviewer/) reads the flags and counters; Haiku reasons over those plus a few raw excerpts, not over raw logs.
 
