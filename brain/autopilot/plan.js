@@ -246,7 +246,7 @@ module.exports = function plan(G, S, M, api, log) {
       return tier('pickaxe') >= 1 && !IRONKIT.wants(S) } },   // the kit still missing something it was asked for is a failed run, so the picker backs off instead of re-arming at once
 
     // ---- wood stock: logs feed charcoal -> torches -> the mine. With no logs the whole chain stopped and the bot wandered (and drowned exploring). ----
-    { id: 'wood-stock', budget: 300000, need: () => !S.isNight() && S.logs() * 4 + S.planks() < Math.max(48, (st.wantLogs || 0) * 4), cool: 90000,   // (more when the laddered shaft needs it)
+    { id: 'wood-stock', budget: 300000, need: () => !S.isNight() && S.logs() * 4 + S.planks() < Math.max(48, (st.mine && st.mine.ladder ? 0 : (st.wantLogs || 0)) * 4), cool: 90000,   // (more only while the laddered shaft is still to be dug: the mine sets wantLogs for that, and nothing clears it after the dig)
       run: async () => {
       // trees are a surface job: from the mine, walk home first (it kept failing from underground and marking every trunk unreachable)
       if (!S.skyVisible() && home()) { const h0 = home(); await S.goto(new goals.GoalNear(h0.x, h0.y, h0.z, 3), { dig: false, ms: 120000 }); st.badTrees = [] }
