@@ -453,11 +453,21 @@ module.exports = function plan(G, S, M, api, log) {
         }
         return out }
       let moved = 0
+      // telemetry (work order step-stash: 12 stalls in a day and the journal never said what the run was waiting on): a walk or a room call that
+      // holds the bot for 15 s or more is noted with its result. The value and any error pass through unchanged.
+      // (a function, not a promise: the clock must start before the walk does)
+      const slow = async (what, fn) => {
+        const t0 = Date.now(); let r = null, threw = false
+        try { r = await fn(); return r } catch (e) { threw = true; throw e } finally {
+          const s = Math.round((Date.now() - t0) / 1000)
+          if (s >= 15) note(`stash: ${what} took ${s} s (${threw ? 'threw' : r && r.ok === false ? 'failed ' + (r.err || '') : r === false ? 'false' : 'done'})`)
+        }
+      }
       // the storage room when there is one (Walter 2026-11-10: overflow from every task goes to central storage), else the home chests
       const room = G.storageRoom && G.storageRoom()
       // a new room starts with its first double chest, before anything is stored at home
-      if (room && !(room.chests || []).length && G.storageAddDouble) await G.storageAddDouble().catch(() => false)
-      else if (room && G.storageGo) await G.storageGo().catch(() => false)
+      if (room && !(room.chests || []).length && G.storageAddDouble) await slow('storage room: first double chest', () => G.storageAddDouble().catch(() => false))
+      else if (room && G.storageGo) await slow('storage room: walk in', () => G.storageGo().catch(() => false))
       const chests = room && (room.chests || []).length ? room.chests.map(q => v(...q)).filter(q => { const b = S.block(q); return !b || b.name === 'chest' })
         : bot.findBlocks({ matching: ids(/^chest$/), maxDistance: 12, count: 16, point: h }).filter(p => Math.abs(p.y - h.y) <= 1).slice(0, 12)   // (floor level only, as restock)
       if (room) note(`stash: to the storage room (${chests.length} chests)`)
@@ -469,19 +479,19 @@ module.exports = function plan(G, S, M, api, log) {
           // rubble was dropped on the ground (179 items at 13:25, against Walter's no-item-piles rule)
           let placed = null
           // the storage room grows by a double chest in its row first
-          if (room && G.storageAddDouble && await G.storageAddDouble()) { const nr = G.storageRoom(), last = nr && nr.chests.slice(-2); if (last && last.length) { pos = v(...last[0]); note('stash: the storage room grew by a double chest at ' + pos) } }
+          if (room && G.storageAddDouble && await slow('storage room: grow by a double chest', () => G.storageAddDouble())) { const nr = G.storageRoom(), last = nr && nr.chests.slice(-2); if (last && last.length) { pos = v(...last[0]); note('stash: the storage room grew by a double chest at ' + pos) } }
           if (!pos) {
             for (const [ox, oz] of [[0, 0], [6, 0], [-6, 0], [0, 6], [0, -6]]) {
               if (!S.has('chest') || placed) break
-              await S.goto(new goals.GoalNear(h.x + ox, h.y, h.z + oz, ox || oz ? 1 : 4), { dig: false, ms: 40000, escalate: false })
+              await slow(`walk to the house spot ${ox},${oz} from home`, () => S.goto(new goals.GoalNear(h.x + ox, h.y, h.z + oz, ox || oz ? 1 : 4), { dig: false, ms: 40000, escalate: false }))
               placed = await S.placeNear('chest')
             }
             if (!placed) { note('stash: chests full and no spot found for the new chest'); break }
             pos = placed.position; note('stash: new home chest at ' + pos)
           }
         }
-        const r = await S.goto(new goals.GoalLookAtBlock(pos, bot.world, { reach: 3.5 }), { dig: false, ms: 60000 }); if (!r.ok) continue
-        let c; S.closeWindows(); try { c = await bot.openContainer(bot.blockAt(pos)) } catch { continue }
+        const r = await slow('walk to the chest at ' + pos, () => S.goto(new goals.GoalLookAtBlock(pos, bot.world, { reach: 3.5 }), { dig: false, ms: 60000 })); if (!r.ok) continue
+        let c; S.closeWindows(); try { c = await slow('open the chest at ' + pos, () => bot.openContainer(bot.blockAt(pos))) } catch { continue }
         try { st.chestFree = st.chestFree || {}; st.chestFree[pos.toString()] = (c.inventoryStart || 27) - c.containerItems().length } catch {}
         try { for (const { it, n } of plan()) { try { await c.deposit(it.type, null, n); moved += n } catch { break } } } finally { try { st.chestFree[pos.toString()] = (c.inventoryStart || 27) - c.containerItems().length } catch {} try { if (room && G.storageObserve) G.storageObserve(pos, c.containerItems()) } catch {} try { c.close() } catch {} }
       }
