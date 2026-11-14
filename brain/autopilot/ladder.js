@@ -167,7 +167,7 @@ module.exports = function ladder(bot, S, goals, v, log) {
         await L.repair(sh).catch(() => 0)
         await bot.lookAt(v(sh.entry[0] + 0.5 + w[0], at() + 1.6, sh.entry[2] + 0.5 + w[1]), true)
         bot.setControlState('jump', true); bot.setControlState('forward', true)
-        let lastLog = Date.now(), y0 = at()
+        let lastLog = Date.now(), y0 = at(), idle = 0
         while (Date.now() - t0 < ms && at() < y + 0.05) {
           await sleep(50)
           // the keys are held again every tick: another layer clears the controls mid-climb (logged 05:23-05:24: 'keys ' empty, collided with
@@ -178,13 +178,16 @@ module.exports = function ladder(bot, S, goals, v, log) {
           if (Date.now() - lastLog > 5000) {
             lastLog = Date.now()
             if (at() - y0 < 0.5) {
+              // two checks in a row (10 s) with no height gained: the ride ends and the caller plans again. Holding jump with no rung to climb
+              // hops the bot on the spot until the budget runs out (40-90 s of jumps per ride, nothing placed)
+              if (++idle >= 2) { log('LADDER', 'climb stopped: no height gained in 10 s at y' + at().toFixed(2) + ' in ' + sh.id); break }
               const fb = S.block(bot.entity.position.floored()), cs = bot.controlState || {}
               log('LADDER', 'climb not rising at y' + at().toFixed(2) + ': feet ' + (fb && fb.name) + ', collidedH ' + !!bot.entity.isCollidedHorizontally + ', ground ' + bot.entity.onGround + ', keys ' + Object.keys(cs).filter(k => cs[k]).join('+') + ', yaw ' + bot.entity.yaw.toFixed(2))
               try {
                 if (!L.inColumn(sh) || Math.hypot(bot.entity.position.x - sh.entry[0] - 0.5, bot.entity.position.z - sh.entry[2] - 0.5) > 0.35) { bot.clearControlStates(); if (!(await L.enterColumn(sh))) break; await L.centre(sh) }
                 await bot.lookAt(v(sh.entry[0] + 0.5 + w[0], at() + 1.6, sh.entry[2] + 0.5 + w[1]), true); bot.setControlState('sneak', false); bot.setControlState('jump', true); bot.setControlState('forward', true)
               } catch {}
-            }
+            } else idle = 0
             y0 = at()
           }
         }
