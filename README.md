@@ -1,5 +1,7 @@
 # MC-Player
 
+**A primary purpose of this project is to derive great guides on how to build generic hillclimbers**: self-improving loops that get an agent or system better with nobody at the wheel. Minecraft is just a great place to learn what works. Start with [`docs/guides/hands-off-loop-guide.md`](docs/guides/hands-off-loop-guide.md): how to recreate the loop in any project, what went wrong building it, and what to study.
+
 Mineflayer bots that play survival Minecraft (Fabric 1.21.6, LAN world) as independent players. Read `CLAUDE.md` first: it explains who the bots are and the house rules they play by.
 
 ## Layout
@@ -15,6 +17,7 @@ Mineflayer bots that play survival Minecraft (Fabric 1.21.6, LAN world) as indep
 | `plugin-eval/` | Experiments with mineflayer plugins (statemachine, pvp, collectblock). |
 | `test/` | Unit tests for brain modules (`node --test test/`). |
 | `tools/` | Offline helpers. |
+| `docs/` | Design docs: `MEMORY-LOOP.md`, `DEPLOYER.md`, `HILLCLIMB-INSIGHTS.md`, and `guides/` (the generic hillclimber guides). |
 | `vendor/` | Dependency manifest for two optional plugins (armor manager, auto-eat). |
 | `legacy/minecraft-agent/` | What survives only from the older base-world bot; everything else there was identical to or older than the current code. |
 | Root `*.md` | Notes: `HANDOFF.md`, `BRAIN.md`, `FEATURE-REQUESTS.md`, `XAERO.md`, `TOWER-PLAN.md`, `SURVIVAL-RESULTS.md`. Root `probe*.js`, `explore.js`, `xaero*.js`, `pov.js` are old standalone helpers. |
