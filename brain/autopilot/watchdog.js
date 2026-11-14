@@ -12,7 +12,7 @@ module.exports = function watchdog(ap, api, log) {
   const dir = path.dirname(api.statePath('x'))
   const jsonFile = path.join(dir, 'scoreboard.json'), logFile = path.join(dir, 'scoreboard.log')
   const alertFile = path.join(dir, 'idle-alert.json')
-  const WAIT_STEPS = { 'iron-smelt': 150000 }    // steps that legitimately stand still (furnace wait): longer fuse, no cooldown
+  const WAIT_STEPS = { 'iron-smelt': 150000, torches: 150000 }    // steps that legitimately stand still (furnace wait): longer fuse, no cooldown (torches smelts charcoal: six logs take ~60 s)
   const W = { alarms: [], alarmSecs: 0, alarm: null, episodes: [], cur: null, startedAt: Date.now(), samples: 0, active: 0, idle: 0, causes: {}, deaths: 0, kicks: 0, lastActiveAt: Date.now(), idleLog: [], window: { samples: 0, active: 0, causes: {} } }
   const totalsFile = path.join(dir, 'scoreboard-totals.json')
   let C = ap.WCarry
