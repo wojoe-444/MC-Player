@@ -888,7 +888,8 @@ module.exports = function plan(G, S, M, api, log) {
 
   // ---- fishing: an island is surrounded by fish. Diving for kelp drowned the bot (13:33); casting from the shore is safe and renewable. ----
   // string comes from spiders (they spawn around the island at night and the combat reflex kills them anyway) or from cobwebs.
-  steps.push({ id: 'string', budget: 90000, need: () => !S.has('fishing_rod') && cnt('string') < 2 && S.hostilesNear(20).some(e => e.name === 'spider' || e.name === 'cave_spider'), cool: 30000, run: async () => {
+  // (the health rule is also in need(): a run that refuses at once is a failure, and the picker kept re-picking it across goals)
+  steps.push({ id: 'string', budget: 90000, need: () => !S.has('fishing_rod') && cnt('string') < 2 && bot.health >= 12 && S.hostilesNear(20).some(e => e.name === 'spider' || e.name === 'cave_spider'), cool: 30000, run: async () => {
     const sp = S.hostilesNear(20).filter(e => e.name === 'spider' || e.name === 'cave_spider')[0]; if (!sp) return false
     if (bot.health < 12) return false
     await S.kill(sp); await S.pickup(8, 4000)
