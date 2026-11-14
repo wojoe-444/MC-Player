@@ -4,7 +4,8 @@ const mineflayer = require('mineflayer')
 // for that account (MC_FRESH_MCA_TOKEN=1), fetch a fresh one each start from the cached Xbox tokens (no new sign-in)
 if (!process.env.MC_EMAIL) { console.error('MC_EMAIL is not set (the Microsoft account email for this bot; see bots/README.md)'); process.exit(1) }
 if (process.env.MC_FRESH_MCA_TOKEN) { try { for (const f of require('fs').readdirSync('auth-cache')) if (/_mca-cache\.json$/.test(f)) require('fs').unlinkSync('auth-cache/' + f) } catch {} }
-const LAN_PORT = Number(process.env.MC_PORT) || (() => { try { return parseInt(require('fs').readFileSync('lan-port.txt', 'utf8'), 10) } catch { return 0 } })() || 56585
+// lan-port.txt wins over MC_PORT: scripts/lan-watch.js keeps it current from Minecraft's own LAN announcement, and this file is read again each time the supervisor restarts us
+const LAN_PORT = (() => { try { return parseInt(require('fs').readFileSync('lan-port.txt', 'utf8'), 10) } catch { return 0 } })() || Number(process.env.MC_PORT) || 56585
 const bot = mineflayer.createBot({
   // MC_EMAIL: a second bot account runs this same code from its own folder (cwd = its state, logs and auth cache)
   host: 'localhost', port: LAN_PORT, username: process.env.MC_EMAIL,
