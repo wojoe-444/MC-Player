@@ -260,6 +260,9 @@ module.exports = function site(G, S, M, api, log) {
     id: 'site-work', budget: 900000, cool: 180000,
     // hungry with nothing to eat: food first (Smeo444 starved mid-shift at 00:42 with berries ripe next to the bed)
     need: () => { const cfg = read(); if (!cfg || S.isNight()) return false
+      // the way in is the gate: when the work zone refuses it from here (skills.js S.zoneRefuses), the site is no goal to pick. Every run used to end
+      // in "could not get in through the gate" (5 of 5 in 24 hours); a note says so at most every ten minutes
+      if (cfg.gate && S.zoneRefuses({ x: cfg.gate[0], z: cfg.gate[2] })) { if (Date.now() - (st._siteZoneAt || 0) > 600000) { st._siteZoneAt = Date.now(); note(`${cfg.name}: the work zone refuses the gate at ${cfg.gate}, the site is not picked`) } return false }
       if (bot.food < 16 && S.foodPoints() < 4 && st._siteNoFoodAt && Date.now() - st._siteNoFoodAt < 600000) return false
       if (Date.now() - (st._siteAt || 0) > 30000) { st._siteAt = Date.now(); st._siteTrees = trees(cfg).length; st._siteSaplingSpots = bareSpots(cfg).length }
       return st._siteTrees >= 3 || st._siteSaplingSpots > 0 || S.items().some(i => /_log$/.test(i.name) && S.count(i.name) >= 32) },
