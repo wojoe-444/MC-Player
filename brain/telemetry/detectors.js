@@ -191,7 +191,7 @@ function leftoverFlags(events, now, cfg) {
   return out
 }
 
-function oscillationFlag(samples, now, cfg) {
+function oscillationFlag(samples, events, now, cfg) {
   const w = cfg.osc.windowS * 1000, t0 = now - w
   const ss = since(samples, t0)
   if (!covers(ss, w)) return null
@@ -208,8 +208,11 @@ function oscillationFlag(samples, now, cfg) {
   const byPath = path >= cfg.osc.minPath && ext <= cfg.osc.maxExtent
   const byRev = rev >= cfg.osc.reversals && ext <= cfg.osc.reversalExtent
   if (!byPath && !byRev) return null
+  // what the hands did in the same window: a walk alone cannot tell pacing from work done in place (digging, placing, swinging, a container open),
+  // and the 1- and 10-minute counters cannot be cut down to this 30 s window
+  const work = { digs: evSince(events, t0, 'dig').length, places: evSince(events, t0, 'place').length, busy: +(ss.filter(s => s.act || s.dg).length / ss.length).toFixed(2) }
   return { kind: 'oscillating', sev: 'high', t0, t1: now,
-    msg: `walked ${path.toFixed(0)} blocks in ${cfg.osc.windowS}s but never left a ${ext.toFixed(1)}-block area (${rev} direction reversals)`, data: { path: +path.toFixed(1), extent: +ext.toFixed(1), reversals: rev } }
+    msg: `walked ${path.toFixed(0)} blocks in ${cfg.osc.windowS}s but never left a ${ext.toFixed(1)}-block area (${rev} direction reversals; in the window ${work.digs} digs, ${work.places} places, ${Math.round(work.busy * 100)}% of samples busy)`, data: { path: +path.toFixed(1), extent: +ext.toFixed(1), reversals: rev, work } }
 }
 
 function stuckFlag(samples, now, cfg) {
@@ -422,7 +425,7 @@ function chatFlag(events, now, cfg) {
 function analyze(samples, events, now, over, state) {
   const cfg = merge(DEFAULTS, over)
   const flags = [
-    ...jumpFlags(samples, events, now, cfg), pillarFlag(samples, events, now, cfg), ladderBobFlag(samples, events, now, cfg), oscillationFlag(samples, now, cfg), stuckFlag(samples, now, cfg), idleFlag(samples, events, now, cfg),
+    ...jumpFlags(samples, events, now, cfg), pillarFlag(samples, events, now, cfg), ladderBobFlag(samples, events, now, cfg), oscillationFlag(samples, events, now, cfg), stuckFlag(samples, now, cfg), idleFlag(samples, events, now, cfg),
     wrongToolFlag(events, now, cfg), stairsFlag(events, now, cfg), placementFlag(events, now, cfg), torchFlag(events, now, cfg), lavaFlag(samples, now, cfg), armorFlag(state, now), armorCarriedFlag(state, now), tierFlag(events, now, cfg), chatFlag(events, now, cfg), farmlandFlag(events, now, cfg),
     ...leftoverFlags(events, now, cfg), ...toolFlags(events, now), ...failFlags(events, now, cfg),
   ].filter(Boolean)
