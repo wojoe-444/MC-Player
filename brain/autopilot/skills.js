@@ -200,6 +200,8 @@ module.exports = function makeSkills({ bot, api, log }) {
   S.zone = () => { if (Date.now() - zoneAt > 10000) { zoneAt = Date.now(); try { zoneCache = JSON.parse(require('fs').readFileSync(api.statePath('zone.json'), 'utf8')) } catch { zoneCache = null } } return zoneCache }
   const goalXZ = (g) => { if (!g) return null; if (g.pos && g.pos.x != null) return { x: g.pos.x, z: g.pos.z }; if (g.x != null && g.z != null) return { x: g.x, z: g.z }; return null }
   S.inZone = (p) => { const z = S.zone(); if (!z || !z.workZone) return true; const w = z.workZone; return Math.hypot(p.x - w.x, p.z - w.z) <= w.r }
+  // the zone refuses a goal outside it that is not closer to its centre than we are (S.goto below); callers that pick a goal ask here first
+  S.zoneRefuses = (tg) => { const z = S.zone(); if (!z || !z.workZone || S.inZone(tg)) return false; const w = z.workZone, me = bot.entity.position; return Math.hypot(tg.x - w.x, tg.z - w.z) >= Math.hypot(me.x - w.x, me.z - w.z) }
   // zone.json allow: [{ x0, x1, y0, y1, z0, z1, blocks: 'regex' }]: a job site inside a no-dig area where only those blocks may be broken
   // (Walter 2026-11-04: Smeo444 harvests his birch farm, logs and leaves only)
   // mobs inside one of Walter's mob farms (zone.json ignoreMobs boxes) are contained: not a threat for the reflexes unless one is
@@ -216,11 +218,8 @@ module.exports = function makeSkills({ bot, api, log }) {
     return z.noDig.some(c => Math.hypot(p.x - c.x, p.z - c.z) <= c.r) }
   const gotoBase = S.goto
   S.goto = async (goal, o = {}) => {
-    const tg = goalXZ(goal), z = S.zone()
-    if (tg && z && z.workZone && !S.inZone(tg)) {
-      const w = z.workZone, me = bot.entity.position
-      if (Math.hypot(tg.x - w.x, tg.z - w.z) >= Math.hypot(me.x - w.x, me.z - w.z)) { log('ZONE', 'refused goto outside the work zone ' + Math.round(tg.x) + ',' + Math.round(tg.z)); return { ok: false, why: 'outside work zone' } }
-    }
+    const tg = goalXZ(goal)
+    if (tg && S.zoneRefuses(tg)) { log('ZONE', 'refused goto outside the work zone ' + Math.round(tg.x) + ',' + Math.round(tg.z)); return { ok: false, why: 'outside work zone' } }
     // out of the hillclimber's shelter through a doorway first, and never an escalating go-to from inside it: at 00:45 a no-path to the mine
     // escalated and dug through the north wall (plan.js defines S.inShelter / S.shelterOut)
     if (S.inShelter && !o._leaving && S.inShelter(bot.entity.position)) {
