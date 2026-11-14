@@ -15,6 +15,7 @@ const HOSTILE = /^(zombie|skeleton|creeper|spider|cave_spider|husk|drowned|witch
 const CHEST_NAMES = new Set(['chest', 'trapped_chest', 'barrel'])
 const AXE_RANK = ['netherite', 'diamond', 'iron', 'stone', 'golden', 'wooden']
 const plainSleep = (ms) => new Promise(r => setTimeout(r, ms))
+const PLAIN_WALK = { escalate: false }      // a walk to a spot of the farm: one plain attempt, never a dig (nav escalates by default; fix-step-grove)
 const key = T.key
 const isItem = (e) => !!e && (e.name === 'item' || e.displayName === 'Item')
 
@@ -47,10 +48,10 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
   const guard = () => { const d = danger(); if (d) throw new Danger(d) }
 
   // ---------- movement (abortable; the hand is made safe first) ----------
-  async function goto(ctx, goal, label, ms = 30000) {
+  async function goto(ctx, goal, label, ms = 30000, opts = null) {
     ctx && ctx.checkpoint()
     await safehand.ensureSafeForMove()
-    const work = Promise.resolve(tryGoto(goal, label, ms))
+    const work = Promise.resolve(tryGoto(goal, label, ms, opts))
     let res
     if (ctx) {
       let dispose
@@ -62,9 +63,9 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
     } else res = await work
     return res || { ok: false, err: 'no result' }
   }
-  async function near(ctx, pos, radius, label, ms = 60000) {
+  async function near(ctx, pos, radius, label, ms = 60000, opts = null) {
     await safehand.ensureSafeForMove()
-    return (gotoNear || ((o) => util.gotoNear({ bot, goals, tryGoto, stop: stopNav, ...o })))({ pos, radius, label, ctx, ms })
+    return (gotoNear || ((o) => util.gotoNear({ bot, goals, tryGoto, stop: stopNav, ...o })))({ pos, radius, label, ctx, ms, ...(opts || {}) })
   }
   // A view of the block: walks to a spot with a clear ray (never digs). While standing on the pillar we do not walk anywhere.
   async function see(ctx, block, label) {
@@ -166,7 +167,7 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
   }
 
   // ---------- drops ----------
-  async function collectDrops(ctx, center, radius = 8, max = 14, extra = null) {
+  async function collectDrops(ctx, center, radius = 8, max = 14, extra = null, opts = null) {
     const ignore = new Set()
     for (let i = 0; i < max; i++) {
       ctx.checkpoint()
@@ -174,7 +175,7 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
       const it = bot.nearestEntity(e => isItem(e) && !ignore.has(e.id) && (T.WANTED_DROP(T.droppedName(e)) || (!!extra && extra.includes(T.droppedName(e)))) && e.position.distanceTo(center) <= radius)
       if (!it) return
       ignore.add(it.id)
-      await goto(ctx, new goals.GoalNear(it.position.x, it.position.y, it.position.z, 0.7), 'a drop', 5000)
+      await goto(ctx, new goals.GoalNear(it.position.x, it.position.y, it.position.z, 0.7), 'a drop', 5000, opts)
     }
   }
 
@@ -269,12 +270,12 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
     return !!pickSapling(species, strict)
   }
   // Stand next to the soil under `p` (never inside the cell we plant in).
-  async function standNear(ctx, p) {
-    if (!(await near(ctx, p.offset(0, -1, 0), 3, 'a sapling spot', 60000))) return false
+  async function standNear(ctx, p, opts = null) {
+    if (!(await near(ctx, p.offset(0, -1, 0), 3, 'a sapling spot', 60000, opts))) return false
     const f = bot.entity.position.floored()
     if (f.x === p.x && f.z === p.z && Math.abs(f.y - p.y) <= 1) {
       for (const [dx, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2]]) {
-        const r = await goto(ctx, new goals.GoalNear(p.x + dx, p.y, p.z + dz, 1), 'a sapling spot', 15000)
+        const r = await goto(ctx, new goals.GoalNear(p.x + dx, p.y, p.z + dz, 1), 'a sapling spot', 15000, opts)
         const g = bot.entity.position.floored()
         if (r.ok && !(g.x === p.x && g.z === p.z)) return true
       }
@@ -283,11 +284,11 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
     return true
   }
   // Plant `species` (or any sapling we have) on the soil under p. true | false | 'nosapling'
-  async function plantAt(ctx, p, species, { strict = false } = {}) {
+  async function plantAt(ctx, p, species, { strict = false, plain = false } = {}) {
     if (!(await ensureSapling(ctx, species, strict))) return 'nosapling'
     const floor = bot.blockAt(p.offset(0, -1, 0))
     if (!floor || !T.isSoil(floor)) { log(`plant ${key(p)}: floor is ${floor && floor.name}`); return false }
-    if (!(await standNear(ctx, p))) { log(`plant ${key(p)}: no standing place (${bot._lastGotoErr || 'no path'}; bot at ${bot.entity.position.floored()})`); return false }
+    if (!(await standNear(ctx, p, plain ? PLAIN_WALK : null))) { log(`plant ${key(p)}: no standing place (${bot._lastGotoErr || 'no path'}; bot at ${bot.entity.position.floored()})`); return false }
     for (let i = 0; i < C.replantTries; i++) {
       ctx.checkpoint()
       const cur = bot.blockAt(p)

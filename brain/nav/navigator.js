@@ -384,7 +384,7 @@ class Navigator extends EventEmitter {
     return out.sort((a, b) => a.d - b.d).slice(0, max)
   }
   // Walk to a place from which the block at `pos` can be used. Returns { label, ok, secs, err, stand }.
-  async approachBlock(pos, { label = 'the block', reach = 4.2, ms = 60000, isAborted = null } = {}) {
+  async approachBlock(pos, { label = 'the block', reach = 4.2, ms = 60000, isAborted = null, escalate } = {}) {
     if (!this.attached) this.attach()
     const { Vec3 } = require('vec3')
     pos = new Vec3(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z))
@@ -393,16 +393,16 @@ class Navigator extends EventEmitter {
     const cells = this.standCells(pos, { reach })
     if (!cells.length) return { label, ok: false, secs: 0, err: 'no spot within reach with a clear view of it' }
     const g = new this.goals.GoalCompositeAny(cells.map(c => new this.goals.GoalBlock(c.x, c.y, c.z)))
-    const r = await this.goto(g, { label, ms, isAborted })
+    const r = await this.goto(g, { label, ms, isAborted, escalate })
     const p = this.bot.entity.position
     const near = this.eyeTo(pos, p) <= reach + 0.3 && this.visibleFrom(p.offset(0, 1.62, 0), pos)
     if (r.ok && !near) return { ...r, ok: false, err: 'arrived but cannot use the block from here' }
     return { ...r, ok: r.ok || near, stand: { x: p.x, y: p.y, z: p.z }, via: 'moved' }
   }
   // Same signature as brain/util.js gotoNear({ pos, ctx, label, ms }): true when the block can be used from where the bot ends up.
-  async gotoNear({ pos, ctx = null, label = 'there', ms = 60000 }) {
+  async gotoNear({ pos, ctx = null, label = 'there', ms = 60000, escalate }) {
     if (ctx) ctx.checkpoint()
-    const r = await this.approachBlock(pos, { label, ms, isAborted: ctx ? () => ctx.aborted : null })
+    const r = await this.approachBlock(pos, { label, ms, escalate, isAborted: ctx ? () => ctx.aborted : null })
     if (ctx) ctx.checkpoint()
     this.lastApproach = r
     return !!r.ok

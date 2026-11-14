@@ -28,6 +28,9 @@ const DEFAULTS = {
   tendMinutes: 15
 }
 const GRASS = /^(short_grass|tall_grass|fern|large_fern)$/
+// the walks to a spot of the farm (a torch cell, a sapling, a leaf, a drop, the farm itself during a build): one plain attempt each. nav's go-to
+// escalates by default and digs for minutes at a spot no plain path reaches (the grove step's two-minute stalls, fix-step-grove)
+const PLAIN = { escalate: false }
 
 module.exports = function createFarm({ bot, say, goals, config: C, state: S, save, now, log, torches, T, L, Danger, eng }) {
   const F = () => ({ ...DEFAULTS, ...(C.farm || {}) })
@@ -150,15 +153,15 @@ module.exports = function createFarm({ bot, say, goals, config: C, state: S, sav
       ctx.checkpoint(); eng.guard()
       let b = bot.blockAt(b0.position)
       if (!T.naturalLeaves(b)) continue
-      if (!inReach(b)) { if (!(await eng.near(ctx, b.position, 3, 'a leaf', 40000))) continue; b = bot.blockAt(b0.position); if (!T.naturalLeaves(b)) continue }
+      if (!inReach(b)) { if (!(await eng.near(ctx, b.position, 3, 'a leaf', 40000, PLAIN))) continue; b = bot.blockAt(b0.position); if (!T.naturalLeaves(b)) continue }
       if (!inReach(b) || !(await eng.see(ctx, b, 'a leaf'))) continue
       try { if (bot.heldItem) await bot.unequip('hand') } catch { /* keep what is in hand */ }
       try { await bot.dig(b, true) } catch (e) { ctx.checkpoint(); log(`leaf ${b.position}: ${e.message}`); continue }
       res.broken++; S.stats.leavesBroken = (S.stats.leavesBroken || 0) + 1
-      if (res.broken % 6 === 0) await eng.collectDrops(ctx, bot.entity.position, 6, 10)
+      if (res.broken % 6 === 0) await eng.collectDrops(ctx, bot.entity.position, 6, 10, null, PLAIN)
     }
     await ctx.sleep(C.dropWaitMs ?? 350)
-    await eng.collectDrops(ctx, bot.entity.position, 8, 14)
+    await eng.collectDrops(ctx, bot.entity.position, 8, 14, null, PLAIN)
     res.got = bagSaplings(f) - start
     save()
     return res
@@ -167,7 +170,7 @@ module.exports = function createFarm({ bot, say, goals, config: C, state: S, sav
   async function saplings(ctx, f, want, { deadline = null, leaves = true } = {}) {
     const out = { have: bagSaplings(f), want, sources: [], hint: null }
     if (out.have >= want) return out
-    await eng.collectDrops(ctx, bot.entity.position, 12, 8)
+    await eng.collectDrops(ctx, bot.entity.position, 12, 8, null, PLAIN)
     out.have = bagSaplings(f)
     if (out.have >= want) { out.sources.push('ground'); return out }
     if (await eng.fetch(ctx, n => n === sapName(f), want - out.have, `sapling:${f.species}`)) out.sources.push('chest')
@@ -206,7 +209,7 @@ module.exports = function createFarm({ bot, say, goals, config: C, state: S, sav
         if (!eng.pickSapling(f.species, true)) { res.noSapling = true; break }
         if (bagSaplings(f) <= keep) break                                      // the rest is kept for the trees about to be felled
         if (s.lift && !(await liftSoil(ctx, s))) { again.push(s); continue }
-        const r = await eng.plantAt(ctx, new Vec3(s.x, s.y, s.z), f.species, { strict: true })
+        const r = await eng.plantAt(ctx, new Vec3(s.x, s.y, s.z), f.species, { strict: true, plain: true })
         if (r === true) res.planted++
         else if (r === 'nosapling') { res.noSapling = true; break }
         else again.push(s)
@@ -223,13 +226,13 @@ module.exports = function createFarm({ bot, say, goals, config: C, state: S, sav
   async function approach(ctx, cell, label) {
     const me = bot.entity.position
     if (Math.hypot(me.x - (cell.x + 0.5), me.z - (cell.z + 0.5)) > 2.8 || Math.abs(me.y - cell.y) > 2) {
-      const r = await eng.goto(ctx, new goals.GoalNear(cell.x, cell.y, cell.z, 2), label, 40000)       // not eng.near: that one stops at 4.6 blocks, too far to place from
+      const r = await eng.goto(ctx, new goals.GoalNear(cell.x, cell.y, cell.z, 2), label, 40000, PLAIN)       // not eng.near: that one stops at 4.6 blocks, too far to place from
       if (!r.ok) return false
     }
     const f = bot.entity.position.floored()
     if (f.x === cell.x && f.z === cell.z && Math.abs(f.y - cell.y) <= 1) {
       for (const [dx, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2]]) {
-        const r = await eng.goto(ctx, new goals.GoalNear(cell.x + dx, cell.y, cell.z + dz, 1), label, 15000)
+        const r = await eng.goto(ctx, new goals.GoalNear(cell.x + dx, cell.y, cell.z + dz, 1), label, 15000, PLAIN)
         const g = bot.entity.position.floored()
         if (r.ok && !(g.x === cell.x && g.z === cell.z)) return true
       }
@@ -311,7 +314,7 @@ module.exports = function createFarm({ bot, say, goals, config: C, state: S, sav
     out.farm = f.id
     const c = centreVec(f)
     if (bot.entity.position.distanceTo(c) > 14) {
-      const r = await eng.goto(ctx, new goals.GoalNear(c.x, c.y, c.z, 6), 'the tree farm', 120000)
+      const r = await eng.goto(ctx, new goals.GoalNear(c.x, c.y, c.z, 6), 'the tree farm', 120000, PLAIN)
       if (!r.ok) return { ...out, why: `cannot reach the farm (${r.err || 'no path'})` }
     }
     // saplings for the first planting; later ones come from the farm itself
