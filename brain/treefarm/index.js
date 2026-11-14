@@ -53,7 +53,7 @@ function register(api) {
   }
 
   const engine = createEngine({
-    bot: api.bot, say, goals: api.goals, tryGoto: api.tryGoto, safehand: api.safehand, stopNav: api.stopNav, gotoNear: api.gotoNear,
+    bot: api.bot, say, goals: api.goals, tryGoto: (goal, label, ms, opts) => (opts && api.nav ? api.nav.goto(goal, { label, ms, ...opts }) : api.tryGoto(goal, label, ms)), safehand: api.safehand, stopNav: api.stopNav, gotoNear: api.gotoNear,
     canSee: api.canSee, ensureLineOfSight: api.ensureLineOfSight, depositSmeltables: api.depositSmeltables,
     requestChest: () => !!(api.commands && api.commands.dispatch && api.commands.dispatch(api.ownerName, 'make a chest')),      // the crafting module makes it (own scheduler task)
     config, state, save, sitesFn, now: api.now, log
