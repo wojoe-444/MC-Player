@@ -458,8 +458,16 @@ module.exports = function makeSkills({ bot, api, log }) {
   }
 
   // ---------- placing ----------
-  // torches: at least two blocks between any two (Walter 2026-11-10: torch-air-air-torch is the closest allowed spacing)
-  S.torchCrowded = (p) => { try { return bot.findBlocks({ matching: (b) => b && /^(torch|wall_torch)$/.test(b.name), point: p, maxDistance: 4, count: 12 }).some(t => !t.equals(p) && Math.abs(t.x - p.x) <= 2 && Math.abs(t.y - p.y) <= 2 && Math.abs(t.z - p.z) <= 2) } catch { return false } }
+  // torches: at least two blocks between any two (Walter 2026-11-10: torch-air-air-torch is the closest allowed spacing). Read cell by cell: findBlocks
+  // returns the first `count` matches in its own search order, not the nearest, so a count cut can leave out the torch two blocks away.
+  S.torchCrowded = (p) => { try {
+    for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) for (let dz = -2; dz <= 2; dz++) {
+      if (!dx && !dy && !dz) continue
+      const b = bot.blockAt(v(p.x + dx, p.y + dy, p.z + dz))
+      if (b && /^(torch|wall_torch)$/.test(b.name)) return true
+    }
+    return false
+  } catch { return false } }
   S.placeAgainst = async (ref, face, itemName, opts = {}) => {
     if (/^torch$/.test(itemName || '') && ref && ref.position && face && S.torchCrowded(ref.position.plus(face))) return false
     if (/^torch$/.test(itemName || '') && ref && ref.position && face && S.isShaftCell && S.isShaftCell(ref.position.plus(face))) return false

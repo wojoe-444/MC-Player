@@ -266,7 +266,7 @@ module.exports = function createFarm({ bot, say, goals, config: C, state: S, sav
       const t = left.shift(), cell = new Vec3(t.x, t.y, t.z)
       const there = bot.blockAt(cell), floor = bot.blockAt(cell.offset(0, -1, 0))
       if (!there || !floor) { res.failed++; continue }
-      if (torches.torchNear(cell, 1)) continue                                   // somebody's torch is right here already
+      if (torches.torchNear(cell, 2)) continue                                   // somebody's torch is within two blocks (torch-air-air-torch) already
       if (!(await approach(ctx, cell, 'a torch spot'))) { res.failed++; continue }
       if (!(await clearGrass(ctx, cell))) { res.failed++; continue }
       if (!(await eng.see(ctx, floor, 'a torch spot'))) { res.failed++; continue }
