@@ -809,8 +809,10 @@ module.exports = function plan(G, S, M, api, log) {
       } catch (e) { if (e && /Abort|StepTimeout/.test(String(e.name))) throw e }
       // 20 blocks, not 40: the walk back to the shaft stays in its own tunnels. A bottom 45 blocks off its entry sent the pathfinder
       // through the deep caves, and zombies killed the bot at y-8 (00:17)
+      // (no nextGearCost stop here: with no shield it is 1, so the stop was already true and the trip rode down and up with nothing dug, flag-custom-shaft-round-trip.
+      // The climb after the tunnel still banks the iron and goes up.)
       const t = await M.tunnel(st.mineDir, (st.mine && (st.mine.path || []).length > 3) ? 32 : 20, {   // (32 with recorded stairs: iron came at 0-2 a day from 20-block tunnels on the Earth map, 2026-11-09)
-       targets: /^(deepslate_)?(iron|coal|copper|gold|diamond|redstone|lapis)_ore$/, torchEvery: 6, stop: () => S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 || (farMine() && daylightLeft() < 2600) || (nextGearCost() != null && ironUnits() >= nextGearCost()) })
+       targets: /^(deepslate_)?(iron|coal|copper|gold|diamond|redstone|lapis)_ore$/, torchEvery: 6, stop: () => S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 || (farMine() && daylightLeft() < 2600) })
       note(`mine: tunnel ${t.len} blocks, mined ${t.mined}, iron +${ironUnits() - before} (${t.reason})`)
       G.dayCount('iron', Math.max(0, ironUnits() - before)); G.dayCount('tunnels', 1)
       if (ironUnits() - before >= 3) st.mineDeaths = 0   // a good haul: the shaft is worth keeping
