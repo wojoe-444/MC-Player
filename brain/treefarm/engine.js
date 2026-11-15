@@ -378,7 +378,7 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
       if (T.isAir(b)) continue
       if (b && b.name === tree.logName && seeNow(b) && await digLog(ctx, b.position)) continue
       if (b && T.naturalLeaves(b) && inReach(b.position) && seeNow(b)) {            // the tree's own canopy in the way of the jump
-        try { await equipAxe(); await bot.dig(b, true); sum.leaves++; continue } catch (e) { ctx.checkpoint(); log(`leaf above ${key(b.position)}: ${e.message}`) }
+        try { await equipLeafTool(); await bot.dig(b, true); sum.leaves++; continue } catch (e) { ctx.checkpoint(); log(`leaf above ${key(b.position)}: ${e.message}`) }
       }
       return false
     }
@@ -408,7 +408,7 @@ module.exports = function createEngine({ bot, say, goals, tryGoto, safehand, sto
     for (const p of cands) {
       const b = firstBlockTo(p)
       if (!b || !T.naturalLeaves(b) || !inReach(b.position) || !seeNow(b)) continue
-      try { await equipAxe(); await bot.dig(b, true) } catch (e) { ctx.checkpoint(); log(`leaf ${key(b.position)}: ${e.message}`); continue }
+      try { await equipLeafTool(); await bot.dig(b, true) } catch (e) { ctx.checkpoint(); log(`leaf ${key(b.position)}: ${e.message}`); continue }
       return true
     }
     return false
