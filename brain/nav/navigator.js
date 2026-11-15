@@ -310,7 +310,7 @@ class Navigator extends EventEmitter {
     this.stuck.removeListener('stuck-fail', c.onStuck)
     if (c.onLoop) this.stuck.removeListener('ladder-loop', c.onLoop)
     if (this.current === c) this.current = null
-    if (!res.ok || bot.pathfinder.goal === c.goal) { if (!this.guard.escaping && !this.stuck.maneuvering) bot.pathfinder.setGoal(null) }
+    if (!res.ok || bot.pathfinder.goal === c.goal) { if (!this.guard.escaping) { if (this.stuck.maneuvering) this.stuck.dropResume(); else bot.pathfinder.setGoal(null) } }
     const out = { label: c.label, ok: !!res.ok, secs: +(((this.t - c.startTick) * TICK_MS) / 1000).toFixed(1) }
     if (!res.ok) out.err = res.err
     this.lastGoto = { ...out, at: Date.now() }
