@@ -353,9 +353,15 @@ module.exports = function plan(G, S, M, api, log) {
       // walk arrives; marked sites go after the others. Nearest-first sent every pass to the same unreachable site first, and the budget ran out before
       // the reachable sites got a turn (the same fix as tidyStuck, 2026-11-11)
       const stuck = st.lightStuck = st.lightStuck || {}, sk = (p) => p.x + ',' + p.y + ',' + p.z
-      const missing = grid.filter(p => !torchNear(p, 2)).sort((a, b) => (!!stuck[sk(a)] - !!stuck[sk(b)]) || S.dist(a) - S.dist(b))
+      const missing = grid.filter(p => !torchNear(p, 2))
+      // the next site is the one nearest to where the bot stands now, picked again on every walk (sites marked stuck go last). Sorting the list once, from
+      // the spot the pass started at, sent the bot to the site nearest that spot, then to the nearest one on the far side of home, and back: walks across
+      // the same 30-50 blocks with no digs or places (flag-custom-horizontal-shuttle, 2026-11-15)
+      const nextSite = (list) => { const cmp = (a, b) => (!!stuck[sk(a)] - !!stuck[sk(b)]) || S.dist(a) - S.dist(b); let bi = 0; for (let i = 1; i < list.length; i++) if (cmp(list[i], list[bi]) < 0) bi = i; return list.splice(bi, 1)[0] }
+      const todo = missing.slice()
       let placed = 0
-      for (const p of missing) {
+      while (todo.length) {
+        const p = nextSite(todo)
         if (placed >= 16 || cnt('torch') < 14 || (R > 24 && daylightLeft() < 1500)) break   // (12 stay for the mine: lighting at dawn used them all and the iron step, which needs 12, never ran, 2026-11-09)
         stuck[sk(p)] = 1
         const r = await S.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { dig: false, ms: 20000, escalate: false }); if (!r.ok) continue
@@ -382,7 +388,8 @@ module.exports = function plan(G, S, M, api, log) {
         if (outdoorCell(p)) { seenCell.add(k); surfaceCells.push(p) } }
       const dark = surfaceCells.filter(p => lm.spawnable(p) && !avoid(p))
       let filled = 0; const lit = []
-      if (placed === missing.length) for (const p of dark.sort((a, b) => (!!stuck[sk(a)] - !!stuck[sk(b)]) || S.dist(a) - S.dist(b))) {
+      const unlit = dark.slice()
+      if (placed === missing.length) while (unlit.length) { const p = nextSite(unlit)
         if (filled >= 8 || cnt('torch') < 14) break
         if (lit.some(q => q.distanceTo(p) < 8)) continue
         stuck[sk(p)] = 1
