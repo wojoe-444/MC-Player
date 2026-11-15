@@ -149,6 +149,8 @@ class StuckMonitor extends require('events') {
         this.log('stuck: giving up')
         this.level = 0
         this.emit('stuck-fail', { pos: p.clone(), next: next ? next.clone() : null })
+        // giving up means nothing keeps pushing at the obstacle (a go-to that listens has already cleared its goal; a bare goal would be pushed at again)
+        bot.pathfinder.setGoal(null); bot.clearControlStates()
     }
   }
 
@@ -191,13 +193,15 @@ class StuckMonitor extends require('events') {
   applyControls(c) {
     for (const k of ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak']) this.bot.setControlState(k, !!c[k])
   }
+  // the go-to that owns this goal ended while the maneuver ran (stop, abort, timeout): it must not be resumed when the maneuver is over
+  dropResume() { if (this.action) this.action.dropped = true }
   runAction() {
     const a = this.action
     if (--a.left > 0) { this.applyControls(a.controls); return }
     this.bot.clearControlStates()
     this.action = null
     this.hist.length = 0
-    if (a.goal && !this.goal) this.bot.pathfinder.setGoal(a.goal, a.dynamic)    // resume (re-plans from where we are now)
+    if (a.goal && !this.goal && !a.dropped) this.bot.pathfinder.setGoal(a.goal, a.dynamic)    // resume (re-plans from where we are now)
   }
 }
 
