@@ -23,6 +23,8 @@ const PASSIVE_FOOD = { cow: 'beef', pig: 'porkchop', sheep: 'mutton', chicken: '
 
 module.exports = function makeSkills({ bot, api, log }) {
   const mcData = require('minecraft-data')(bot.version)
+  const { Recipe } = require('prismarine-recipe')(bot.version)
+  const { withPlankVariants } = require('./plankvariants')
   const S = { bot, ctx: null, mcData, consts: { LOG_RE, PLANK_RE, ORE_RE, FOOD_VALUE, HOSTILE, PASSIVE_FOOD, RAW_MEAT, SMELT_OF }, blacklist: new Map(), stats: { dug: 0, crafted: 0, killed: 0, goto: 0, gotoFail: 0 } }
   const sleepRaw = (ms) => new Promise(r => setTimeout(r, ms))
   const now = () => Date.now()
@@ -553,7 +555,7 @@ module.exports = function makeSkills({ bot, api, log }) {
     if (S.count(name) >= count) return true
     if (depth > 4) return false
     const need = count - S.count(name)
-    const recipes = bot.recipesAll(item.id, null, !noTable)
+    const recipes = withPlankVariants(bot.recipesAll(item.id, null, !noTable), item, mcData, Recipe)   // stripped logs and woods make planks too (plankvariants.js)
     if (!recipes.length) return false
     const have = (id) => bot.inventory.count(id, null)
     const scored = recipes.map(r => {
