@@ -1441,10 +1441,14 @@ module.exports = function plan(G, S, M, api, log) {
     // crowded torches came first on every pass, so an unreachable one used the budget again and the reachable ones behind it never got a turn
     // (the same fault as the light-home sites and tidyStuck, 2026-11-11)
     const stuck = st.torchStuck = st.torchStuck || {}
+    // a torch is walked to three times at most (torchTries). Left alone for 20 minutes between walks, a torch that stayed out of reach was walked to
+    // again all day, each walk timing out on path searches (the repeated_failure flag, 2026-11-14); after the third try it is released
+    const tries = st.torchTries = st.torchTries || {}
     for (const { t } of torchPairs()) {
       if (removed >= 10) break
       if (gone.has(k(t))) continue
       if ((stuck[k(t)] || 0) > Date.now()) continue
+      if ((tries[k(t)] || 0) >= 3) continue
       // still crowded after what this pass took out?
       if (!bot.findBlocks({ matching: ids(/^(torch|wall_torch)$/), point: t, maxDistance: 4, count: 12 }).some(o => !o.equals(t) && !gone.has(k(o)) && Math.abs(o.x - t.x) <= 2 && Math.abs(o.y - t.y) <= 2 && Math.abs(o.z - t.z) <= 2)) continue
       const without = await L.compute(t, 12, 8, { exclude: new Set([...gone, k(t)]) }), withIt = await L.compute(t, 12, 8, { exclude: gone })
@@ -1453,7 +1457,8 @@ module.exports = function plan(G, S, M, api, log) {
       if (dark) { kept++; continue }
       const b = S.block(t); if (!b || !/torch/.test(b.name)) continue
       stuck[k(t)] = Date.now() + 20 * 60000                    // set before the walk, so a walk that the budget cuts short is still remembered
-      if (await S.mine(b, { dig: false, force: true, escalate: false })) { removed++; gone.add(k(t)); delete stuck[k(t)] }
+      tries[k(t)] = (tries[k(t)] || 0) + 1                     // counted there too
+      if (await S.mine(b, { dig: false, force: true, escalate: false })) { removed++; gone.add(k(t)); delete stuck[k(t)]; delete tries[k(t)] }
     }
     if (removed) await S.pickup(6, 3000)
     st.torchSpaceAt = Date.now() + (removed ? 20 : 60) * 60000; G.save()
