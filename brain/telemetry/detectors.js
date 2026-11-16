@@ -1,7 +1,7 @@
 // brain/telemetry/detectors: pure functions over the telemetry ring. No bot, no clock, no files, so they are unit-testable with synthetic data.
 // A sample is a 4 Hz snapshot { t, x, y, z, g, vy, yaw, h, mv, act, dg, tk, hp } (see index.js); an event is one of
 //   { k:'jump', t }
-//   { k:'dig',  t, block, x,y,z, held, need, have, ok, harvestOk }       (a dig started on `block` with `held` in hand)
+//   { k:'dig',  t, block, x,y,z, held, need, have, ok, harvestOk, needsTool }       (a dig started on `block` with `held` in hand; needsTool: the block has a harvestTools list)
 //   { k:'place', t, block, x,y,z, sky, tk }
 //   { k:'fail', t, what, note }                                          (what: noPath | timeout | digAbort | taskFailed)
 //   { k:'trample', t, x,y,z, by, how, dist, fall, space, step, tk, moist, wet, above, takeoff }   (farmland turned to dirt near the bot; by: 'bot' | 'unknown', how: jump | drop | hop | none;
@@ -96,13 +96,15 @@ function toolCheck(block, held, inventory, harvestNames) {
   const heldClass = toolClass(held && held.name)
   const ok = instant || !allowed.length || allowed.includes(heldClass)
   const have = !!allowed.length && (inventory || []).some(n => allowed.includes(toolClass(n)))
+  // needsTool: the block drops only with an item on its harvestTools list (stone, ores); dirt, leaves and logs have none and break by hand
+  const needsTool = !!(block && block.harvestTools && Object.keys(block.harvestTools).length)
   let harvestOk = true
-  if (block && block.harvestTools && Object.keys(block.harvestTools).length) harvestOk = !!(held && block.harvestTools[held.type])
+  if (needsTool) harvestOk = !!(held && block.harvestTools[held.type])
   // overTier: a stone-or-better-than-needed tool is held although a tool of the same class at or above the needed tier but lower than the held one is in the bag
   const ht = tierOf(held && held.name), need = neededTier(harvestNames)
   let overTier = false
   if (!instant && ok && ht !== null && ht > need && heldClass) overTier = (inventory || []).some(n => n !== (held && held.name) && n.endsWith('_' + heldClass) && tierOf(n) !== null && tierOf(n) >= need && tierOf(n) < ht)
-  return { need: instant ? null : (allowed[0] || null), allowed, ok, have, harvestOk, overTier, tier: ht, needTier: need }
+  return { need: instant ? null : (allowed[0] || null), allowed, ok, have, harvestOk, overTier, tier: ht, needTier: need, needsTool }
 }
 
 // ---- individual detectors: each returns a flag or null ----
@@ -294,7 +296,8 @@ function wrongToolFlag(events, now, cfg) {
     return { kind: 'wrong_tool', sev: 'med', t0, t1: now,
       msg: `${wrong.length} of ${digs.length} digs in 5 min used an item that is not whitelisted for the block although a ${last.need} was in the bag: ${tally(wrong)}`, data: { wrong: wrong.length, digs: digs.length, example: last } }
   }
-  const noTool = digs.filter(d => !d.ok && !d.have)
+  // no_tool: a block that needs a tool to drop (harvestTools) and no tool of its class in the bag. Dirt, leaves and logs break by hand and never count.
+  const noTool = evSince(events, t0, 'dig').filter(d => d.need && d.needsTool && !d.ok && !d.have)
   if (noTool.length >= cfg.tool.minNoTool) {
     const last = noTool[noTool.length - 1]
     return { kind: 'no_tool', sev: 'low', t0, t1: now, msg: `${noTool.length} digs in 5 min with no suitable tool in the bag at all: ${tally(noTool)}`, data: { n: noTool.length, example: last } }
