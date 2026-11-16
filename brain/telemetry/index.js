@@ -63,7 +63,7 @@ module.exports = function register(api) {
     let hn = null
     try { if (block.harvestTools && bot.registry && bot.registry.items) hn = Object.keys(block.harvestTools).map(id => bot.registry.items[id] && bot.registry.items[id].name).filter(Boolean) } catch {}
     const c = D.toolCheck(block, bot.heldItem, invNames(), hn)
-    addEvent({ k: 'dig', t, block: block.name, x: block.position.x, y: block.position.y, z: block.position.z, held: bot.heldItem ? bot.heldItem.name : '', need: c.need, have: c.have, ok: c.ok, harvestOk: c.harvestOk, overTier: c.overTier })
+    addEvent({ k: 'dig', t, block: block.name, x: block.position.x, y: block.position.y, z: block.position.z, held: bot.heldItem ? bot.heldItem.name : '', need: c.need, have: c.have, ok: c.ok, harvestOk: c.harvestOk, needsTool: c.needsTool, overTier: c.overTier })
   }
 
   // the column above a placement is empty up to the sky: that block sits in the open
