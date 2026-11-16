@@ -239,7 +239,7 @@ function idleFlag(samples, events, now, cfg) {
     const ss = since(samples, t0)
     if (!covers(ss, w)) continue
     if (ss.some(s => s.act)) continue
-    if (extent(ss) >= c.maxExtent) continue
+    if (hExtent(ss) >= c.maxExtent) continue          // a hold on one tile: a climb that turns back on the spot (up and down, no ground covered) is still standing
     if (evSince(events, t0).some(e => e.k === 'dig' || e.k === 'place' || e.k === 'work')) continue
     if (new Set(ss.map(s => s.st || '')).size > 1) continue              // the autopilot went from one step to another: it is deciding things
     return { kind: 'idle', sev, t0, t1: now,
