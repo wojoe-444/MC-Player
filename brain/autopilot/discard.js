@@ -24,12 +24,19 @@ module.exports = function discard(G, S, M, api, log) {
     return out
   }
   const LD = () => M.LD
+  // walk to within reach of a cell first: the server refuses a place or an open farther off than about 4.5 blocks. The room is walked into at its
+  // first slice, but the junk spot can be any open cell of the room (singleSpot), and a room the bot is already in is not walked again
+  // (addDouble in storage.js walks the same way)
+  async function nearCell(c) { if (S.dist(c) > 3.5) await S.goto(new goals.GoalNear(c.x, c.y, c.z, 2), { dig: false, ms: 15000, escalate: false }) }
+  // an open that gets no answer is an error after 8 s: the step's time budget is only checked between awaits, so a bare open could wait forever
+  function openBounded(blk) { let t; return Promise.race([bot.openContainer(blk), new Promise((_, rej) => { t = setTimeout(() => rej(new Error('no window in 8 s')), 8000) })]).finally(() => clearTimeout(t)) }
   // the junk chest's spot: a single-chest spot of the room (brain/storage-model.js singleSpot), spots where opening failed are skipped (room.junkBad)
   async function junkChest(room, P) {
     if (room.junk) { const b = S.block(v(...room.junk)); if (b && b.name === 'chest') return b }
     const c = SM.singleSpot(P, (q) => S.block(q), (room.junkBad || []).concat(room.reset ? [room.reset] : [])); if (!c) return null
     if (!S.has('chest')) await S.craft('chest', 1).catch(() => false)
     if (!S.has('chest')) return null
+    await nearCell(c)
     const g = S.block(c.offset(0, -1, 0))
     if (!(await S.placeAgainst(g, v(0, 1, 0), 'chest').catch(() => false))) return null
     SM.setJunk(room, c); LD().putRoom(room)
@@ -44,9 +51,10 @@ module.exports = function discard(G, S, M, api, log) {
       if (!(await G.storageGo())) { note('discard: could not get into the storage room'); return false }
       const ch = await junkChest(room, P); if (!ch) { note('discard: no junk chest (no chest to place, or no spot)'); return false }
       let n = 0
+      await nearCell(ch.position)
       if (G.storageClearAbove) await G.storageClearAbove(ch.position).catch(() => false)
       try {
-        const w = await bot.openContainer(S.block(ch.position) || ch)
+        const w = await openBounded(S.block(ch.position) || ch)
         for (const it of S.junk()) { try { await w.deposit(it.type, null, it.count); n += it.count } catch {} }
         w.close()
       } catch (e) {
