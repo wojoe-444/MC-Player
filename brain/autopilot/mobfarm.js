@@ -20,6 +20,9 @@ module.exports = function mobfarm(G, S, M, api, log) {
   // a stone sword (Walter); a wooden one only until there is cobblestone for the stone one (its chests and stores had none, 02:55)
   const sword = () => S.items().find(i => i.name === 'stone_sword') || S.items().find(i => i.name === 'wooden_sword')
   const chestFull = () => !!st.mobChestFull
+  // telemetry (work order finding-ozo-mobfarm-overdue): the outcome check reports "no kills", but nothing said whether a mob ever reached the kill pocket,
+  // so "none fell in" and "they fell in and were not killed" read the same. need() looks at the pocket each time the scheduler asks: keep when mobs were there.
+  const sawMobs = (n) => { const s = st.mobSeen = st.mobSeen || { first: 0, last: 0, max: 0 }; const t = Date.now(); if (!s.first) s.first = t; s.last = t; s.max = Math.max(s.max || 0, n) }
 
   // cobblestone from its own smooth stone: set a stone block down at stoneSpot and mine it back (used for the sword here and the birch
   // farm's stone axe: G.makeCobble)
@@ -143,6 +146,7 @@ module.exports = function mobfarm(G, S, M, api, log) {
       // after a pass that hit nothing (mobs still falling, or out of reach above the slabs) wait a minute before the next one, unless a
       // new mob has dropped in: back-to-back empty passes thrashed between the farm and home (05:01, 8 switches in 2 min)
       const vs = victims(c)
+      if (vs.length) sawMobs(vs.length)
       if (Date.now() < (st.mobIdleUntil || 0) && vs.every(e => (st.mobIdleIds || []).includes(e.id))) return chestFull() && Date.now() - (st.mobChestAt || 0) > 120000
       return vs.length > 0 || (chestFull() && Date.now() - (st.mobChestAt || 0) > 120000)
     }, run: async () => {
