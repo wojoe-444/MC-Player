@@ -157,6 +157,9 @@ module.exports = function plan(G, S, M, api, log) {
   const NO_ARMOR = true
   const nextGearCost = () => { if (!hasShield()) return 1; if (NO_ARMOR) return null; const a = ARMOR.find(([n, c, sl]) => !S.has(n) && !(worn(sl) && worn(sl).name === n)); return a ? a[1] : null }
   const hasShield = () => S.has('shield') || (worn('off-hand') && worn('off-hand').name === 'shield')
+  // the next gear is in hand when its own step can make it: the shield also needs its wood (the shield step's need: 6 planks, or the logs for them). With no
+  // wood, iron alone sent the trip up after every tunnel to make a shield it could not make (finding-ozo-iron-goal-shaft-shuttle)
+  const gearWithin = () => nextGearCost() != null && ironUnits() >= nextGearCost() && (hasShield() || S.logs() * 4 + S.planks() >= 6)
 
   const steps = [
     { id: 'night-home', budget: 660000, need: () => S.isNight() && !bot.isSleeping && !!home() && Date.now() > (st.noSleepUntil || 0) && Math.floor(bot.entity.position.y) > 50 && (!st.waitBedForOthers || othersAsleep()), cool: 30000, run: async () => {
@@ -837,7 +840,7 @@ module.exports = function plan(G, S, M, api, log) {
       }
       // blocked tunnels (water, lava): just branch another way next time, from the same shaft bottom; no new surface breach
       if (t.len === 0 && /water|lava|hazard|clear-fail|blocked/.test(String(t.reason))) { st.mineBlocked = (st.mineBlocked || 0) + 1; G.save() } else st.mineBlocked = 0
-      if (S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 || ironUnits() >= 24 || (nextGearCost() != null && ironUnits() >= nextGearCost())) { const up = await M.goSurface(); note('mine: back up ' + up + (nextGearCost() != null && ironUnits() >= nextGearCost() ? ' (iron for the next armor piece: ' + ironUnits() + ')' : '')) }
+      if (S.freeSlots() <= 4 || cnt('torch') < 4 || bot.food <= 8 || ironUnits() >= 24 || gearWithin()) { const up = await M.goSurface(); note('mine: back up ' + up + (gearWithin() ? ' (iron for the next armor piece: ' + ironUnits() + ')' : '')) }
       else if (farMine() && daylightLeft() < 2600) {
         const up = await M.goSurface(); const h = home()
         note('mine: dusk, heading home from the far mine (' + up + ')')
