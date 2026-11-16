@@ -233,12 +233,13 @@ module.exports = function makeSkills({ bot, api, log }) {
     if (S.noDigAt(bot.entity.position) || (tg && S.noDigAt({ x: tg.x, y: 64, z: tg.z }))) o = { ...o, escalate: false }
     let r = await gotoBase(goal, o)
     // like a player: when the exact path fails, get roughly close first (the new view often shows the way: a door, a gap), then try the exact goal once more
+    // the hop keeps the bot's own height: GoalNearXZ is met at any height, so it rode a shaft down to a tunnel under the goal, and the retry climbed back (finding-smeo-light-walk-nopath)
     if (!r.ok && tg && !o._closer) {
       const d = Math.hypot(tg.x - bot.entity.position.x, tg.z - bot.entity.position.z)
       if (d > 5 && d < 200) {
         const me = bot.entity.position, f = Math.max(0, (d - 4) / d)
         const mid = { x: Math.round(me.x + (tg.x - me.x) * f), z: Math.round(me.z + (tg.z - me.z) * f) }
-        const r1 = await gotoBase(new goals.GoalNearXZ ? new goals.GoalNearXZ(mid.x, mid.z, 3) : new goals.GoalXZ(mid.x, mid.z), { ...o, ms: Math.min(o.ms || 45000, 45000) })
+        const r1 = await gotoBase(new goals.GoalNear(mid.x, Math.floor(me.y), mid.z, 3), { ...o, ms: Math.min(o.ms || 45000, 45000) })
         if (r1.ok || Math.hypot(tg.x - bot.entity.position.x, tg.z - bot.entity.position.z) < d - 2) r = await gotoBase(goal, { ...o, _closer: true })
       }
     }
