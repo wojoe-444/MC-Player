@@ -39,6 +39,12 @@ const GATES = {
   pen: [],
 }
 
+// what the kill routine recorded of the farm's kill pocket (build.seen: undefined for a build that has no pocket to watch)
+function seenWhy(seen) {
+  if (seen && seen.max > 0) return `mobs were in its kill pocket (up to ${seen.max} at once, last ${new Date(seen.last).toISOString().slice(0, 16).replace('T', ' ')}), so they reached it and none was killed`
+  return 'no mob recorded in its kill pocket: none fell in, or the kill check never saw one (no record is not proof)'
+}
+
 function evaluate(build, env = {}, opt = {}) {
   const spec = SPECS[build.kind]
   if (!spec) return { id: build.id, kind: build.kind, state: 'unknown', why: [`no expectation is defined for builds of kind "${build.kind}"`] }
@@ -62,7 +68,7 @@ function evaluate(build, env = {}, opt = {}) {
   if (build.shadedFrac != null && build.shadedFrac >= 0.5) v.notes = [`the bot stood where it blocks the build (inside 24 blocks of half the spawn pads or more) ${Math.round(build.shadedFrac * 100)}% of the time it was in range`]
   if (liveH < graceH) { v.why = [`${v.liveH} of ${graceH} h of grace used`]; return v }
   const want = spec.perHour * liveH
-  if (got <= 0) { v.state = 'overdue'; v.why = [`${spec.label} could have worked for ${v.liveH} h and produced no ${spec.unit} (expected at least ${Math.max(1, Math.round(want))})`] }
+  if (got <= 0) { v.state = 'overdue'; v.why = [`${spec.label} could have worked for ${v.liveH} h and produced no ${spec.unit} (expected at least ${Math.max(1, Math.round(want))})`]; if (build.seen !== undefined) v.why.push(seenWhy(build.seen)) }
   else if (got < want * 0.25) { v.state = 'overdue'; v.why = [`${spec.label} produced ${got} ${spec.unit} in ${v.liveH} h, a quarter of the ${Math.round(want)} the bar asks for`] }
   else { v.state = 'producing'; v.why = [`${got} ${spec.unit} in ${v.liveH} h`] }
   if (v.notes) v.why.push(...v.notes)
