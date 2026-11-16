@@ -127,7 +127,10 @@ module.exports = function plan(G, S, M, api, log) {
               // a shaft that failed recently is not tried again for 3 minutes (no fast loop of failed climbs)
               const failedAt = (bot._shaftFail || {})[sh.id] || 0
               if (Date.now() - failedAt > 180000 && S.dist(v(sh.entry[0], me.y, sh.entry[2])) < 24) {
-                const up = (await LD.enterColumn(sh)) && (await LD.up(sh))
+                // a goal inside the shaft is reached by riding to its level, as the ride down does: climbing to the top and walking back down the same
+                // ladder to a goal 12 blocks up was the shuttle (flag-custom-ladder-shuttle). Only a goal above the top is climbed out to the surface.
+                const inShaft = Math.floor(gy) < sh.entry[1]
+                const up = (await LD.enterColumn(sh)) && (inShaft ? await LD.rideTo(sh, Math.floor(gy)) : await LD.up(sh))
                 log('PLAN', 'up the laddered shaft before a go-to ' + Math.round(gy - me.y) + ' blocks up: ' + up)
                 if (!up) { bot._shaftFail = bot._shaftFail || {}; bot._shaftFail[sh.id] = Date.now() }
               }
